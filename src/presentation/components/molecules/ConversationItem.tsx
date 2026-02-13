@@ -14,7 +14,7 @@ export function ConversationItem({
     return (
         <button
             type="button"
-            className={`w-full rounded-xl p-3 text-left transition ${
+            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer ${
                 active
                     ? "bg-neutral-500/20"
                     : "bg-transparent ring-transparent hover:bg-neutral-800/70"

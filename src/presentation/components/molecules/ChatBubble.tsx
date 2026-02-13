@@ -2,11 +2,11 @@ import { Avatar } from "../atoms";
 
 type ChatBubbleProps = {
     author: "assistant" | "user";
-    text: string;
+    content: string;
     timestamp: string;
 };
 
-export function ChatBubble({ author, text, timestamp }: ChatBubbleProps) {
+export function ChatBubble({ author, content, timestamp }: ChatBubbleProps) {
     const isAssistant = author === "assistant";
 
     return (
@@ -21,7 +21,7 @@ export function ChatBubble({ author, text, timestamp }: ChatBubbleProps) {
                         : "bg-neutral-500/20 text-neutral-100 ring-neutral-300/30"
                 }`}
             >
-                <p>{text}</p>
+                <p>{content}</p>
                 <p className="mt-2 text-[11px] text-neutral-400">{timestamp}</p>
             </div>
             {!isAssistant && <Avatar label="YOU" tone="user" />}
