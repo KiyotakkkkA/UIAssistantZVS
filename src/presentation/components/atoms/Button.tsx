@@ -5,7 +5,7 @@ type ButtonShape = "rounded-md" | "rounded-lg" | "rounded-full";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     children: ReactNode;
-    label: string;
+    label?: string;
     variant?: ButtonVariants;
     shape?: ButtonShape;
     className?: string;

@@ -1,7 +1,10 @@
 import { Avatar } from "../atoms";
+import { MarkdownStaticContent } from "./render";
+
+import type { MessageRole } from "../../../types/Chat";
 
 type ChatBubbleProps = {
-    author: "assistant" | "user";
+    author: MessageRole;
     content: string;
     timestamp: string;
 };
@@ -15,13 +18,17 @@ export function ChatBubble({ author, content, timestamp }: ChatBubbleProps) {
         >
             {isAssistant && <Avatar label="AI" tone="assistant" />}
             <div
-                className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ring-1 ${
+                className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     isAssistant
-                        ? "bg-neutral-800/70 text-neutral-100 ring-neutral-300/20"
+                        ? " text-neutral-100"
                         : "bg-neutral-500/20 text-neutral-100 ring-neutral-300/30"
                 }`}
             >
-                <p>{content}</p>
+                {isAssistant ? (
+                    <MarkdownStaticContent content={content} />
+                ) : (
+                    <p>{content}</p>
+                )}
                 <p className="mt-2 text-[11px] text-neutral-400">{timestamp}</p>
             </div>
             {!isAssistant && <Avatar label="YOU" tone="user" />}

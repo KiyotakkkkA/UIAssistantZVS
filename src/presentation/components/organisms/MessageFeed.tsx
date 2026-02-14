@@ -1,12 +1,17 @@
 import { useEffect, useRef } from "react";
 import type { ChatMessage } from "../../../types/Chat";
+import { Loader } from "../atoms";
 import { ChatBubble } from "../molecules";
 
 interface MessageFeedProps {
     messages: ChatMessage[];
+    showLoader?: boolean;
 }
 
-export function MessageFeed({ messages }: MessageFeedProps) {
+export function MessageFeed({
+    messages,
+    showLoader = false,
+}: MessageFeedProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -22,6 +27,12 @@ export function MessageFeed({ messages }: MessageFeedProps) {
                         {...message}
                     />
                 ))}
+                {showLoader && (
+                    <div className="flex items-center gap-2 px-2 text-sm text-neutral-400">
+                        <Loader />
+                        <span>Модель печатает...</span>
+                    </div>
+                )}
                 <div ref={messagesEndRef} />
             </section>
         </>

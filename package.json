@@ -4,15 +4,20 @@
     "version": "0.0.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
+        "dev": "vite --host",
         "build": "tsc && vite build && electron-builder",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "preview": "vite preview"
     },
     "dependencies": {
         "@iconify/react": "^6.0.2",
+        "@tanstack/react-query": "^5.90.21",
+        "axios": "^1.13.5",
         "react": "^18.2.0",
-        "react-dom": "^18.2.0"
+        "react-dom": "^18.2.0",
+        "react-markdown": "^10.1.0",
+        "remark-gfm": "^4.0.1",
+        "shiki": "^3.22.0"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4",
