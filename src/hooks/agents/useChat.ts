@@ -2,11 +2,13 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChatParams } from "../useChatParams";
 import { useToasts } from "../useToasts";
+import { useUserProfile } from "../useUserProfile";
 import type { ChatDriver } from "../../types/App";
 import type { ChatDialog, ChatMessage } from "../../types/Chat";
 import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
 import { chatsStore } from "../../stores/chatsStore";
+import { Config } from "../../config";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {
@@ -18,11 +20,16 @@ const createMessageId = () => `msg_${crypto.randomUUID().replace(/-/g, "")}`;
 
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
+    const { userProfile } = useUserProfile();
     const toasts = useToasts();
 
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const messages = chatsStore.messages;
+    const visibleMessages = useMemo(
+        () => messages.filter((message) => message.author !== "system"),
+        [messages],
+    );
     const messagesRef = useRef<ChatMessage[]>(messages);
     const activeDialogRef = useRef<ChatDialog | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -129,7 +136,38 @@ export function useChat() {
             ensureDialog();
 
             const requestBaseHistory = [...messagesRef.current];
-            const historyForRequest = [...requestBaseHistory, userMessage];
+            const isFirstDialogMessage = requestBaseHistory.length === 0;
+
+            const initialSystemMessages: ChatMessage[] = isFirstDialogMessage
+                ? [
+                      {
+                          id: createMessageId(),
+                          author: "system",
+                          content: `SYSTEM_PROMPT:\n${Config.SYSTEM_PROMPT}`,
+                          timestamp: getTimeStamp(),
+                      },
+                      {
+                          id: createMessageId(),
+                          author: "system",
+                          content: [
+                              "USER_PROMPT:",
+                              `Имя пользователя: ${
+                                  userProfile.userName.trim() || "Пользователь"
+                              }`,
+                              userProfile.userPrompt.trim(),
+                          ]
+                              .filter(Boolean)
+                              .join("\n"),
+                          timestamp: getTimeStamp(),
+                      },
+                  ]
+                : [];
+
+            const historyForRequest = [
+                ...initialSystemMessages,
+                ...requestBaseHistory,
+                userMessage,
+            ];
             const nextMessages = [...historyForRequest, assistantMessage];
             commitMessages(nextMessages);
             setIsStreaming(true);
@@ -252,7 +290,7 @@ export function useChat() {
     };
 
     return {
-        messages,
+        messages: visibleMessages,
         sendMessage: sendMessageMutation.mutate,
         cancelGeneration,
         isStreaming,

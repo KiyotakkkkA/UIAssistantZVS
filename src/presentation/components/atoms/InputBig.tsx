@@ -16,7 +16,7 @@ export const InputBig = forwardRef<HTMLTextAreaElement, InputBigProps>(
                 ref={ref}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
-                className={`h-12 w-full px-14 resize-none rounded-full py-3 text-md ${className}`}
+                className={`h-12 w-full resize-none rounded-full py-3 text-md outline-none transition-colors  focus-visible:border-main-500/70 focus-visible:ring-2 focus-visible:ring-main-500/25 ${className}`}
                 {...props}
             />
         );

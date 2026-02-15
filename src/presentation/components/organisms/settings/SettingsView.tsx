@@ -7,10 +7,11 @@ import {
     type ReactNode,
 } from "react";
 import { Icon } from "@iconify/react";
-import { useChatParams } from "../../../../hooks";
+import { useChatParams, useUserProfile } from "../../../../hooks";
 import type { ChatDriver } from "../../../../types/App";
 import { SettingsChatPanel } from "./SettingsChatPanel";
 import { SettingsInterfacePanel } from "./SettingsInterfacePanel";
+import { SettingsProfilePanel } from "./SettingsProfilePanel";
 
 type SettingsRoute = "interface" | "chat" | "profile";
 
@@ -21,7 +22,7 @@ interface SettingsViewProps {
 }
 
 export type SettingsViewHandle = {
-    save: () => Promise<{ saved: boolean; scope: "chat" | "general" }>;
+    save: () => Promise<{ saved: boolean; scope: "chat" | "profile" | "general" }>;
 };
 
 type SettingsRouteItem = {
@@ -52,29 +53,13 @@ const settingsRoutes: SettingsRouteItem[] = [
     },
 ];
 
-const SettingsPlaceholderPanel = ({
-    title,
-    description,
-}: {
-    title: string;
-    description: string;
-}) => {
-    return (
-        <div className="rounded-2xl border border-main-700/60 bg-main-900/40 p-4">
-            <h4 className="text-sm font-semibold text-main-100">{title}</h4>
-            <p className="mt-2 text-xs leading-5 text-main-300">
-                {description}
-            </p>
-        </div>
-    );
-};
-
 export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
     ({ themePreference, themeOptions, setTheme }, ref) => {
         const [activeRoute, setActiveRoute] =
             useState<SettingsRoute>("interface");
         const { chatDriver, ollamaModel, ollamaToken, saveChatParams } =
             useChatParams();
+        const { userProfile, updateUserProfile } = useUserProfile();
 
         const [chatDraft, setChatDraft] = useState<{
             chatDriver: ChatDriver;
@@ -86,6 +71,14 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
             ollamaToken,
         });
 
+        const [profileDraft, setProfileDraft] = useState<{
+            userName: string;
+            userPrompt: string;
+        }>({
+            userName: userProfile.userName,
+            userPrompt: userProfile.userPrompt,
+        });
+
         useEffect(() => {
             setChatDraft({
                 chatDriver,
@@ -93,6 +86,13 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                 ollamaToken,
             });
         }, [chatDriver, ollamaModel, ollamaToken]);
+
+        useEffect(() => {
+            setProfileDraft({
+                userName: userProfile.userName,
+                userPrompt: userProfile.userPrompt,
+            });
+        }, [userProfile.userName, userProfile.userPrompt]);
 
         useImperativeHandle(
             ref,
@@ -103,10 +103,19 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                         return { saved: true, scope: "chat" };
                     }
 
+                    if (activeRoute === "profile") {
+                        await updateUserProfile({
+                            userName:
+                                profileDraft.userName.trim() || "Пользователь",
+                            userPrompt: profileDraft.userPrompt,
+                        });
+                        return { saved: true, scope: "profile" };
+                    }
+
                     return { saved: false, scope: "general" };
                 },
             }),
-            [activeRoute, chatDraft, saveChatParams],
+            [activeRoute, chatDraft, profileDraft, saveChatParams, updateUserProfile],
         );
 
         const renderedPanel: Record<SettingsRoute, ReactNode> = useMemo(
@@ -144,13 +153,25 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     />
                 ),
                 profile: (
-                    <SettingsPlaceholderPanel
-                        title="Профиль"
-                        description="Скоро здесь появятся персональные настройки текущего пользователя."
+                    <SettingsProfilePanel
+                        userName={profileDraft.userName}
+                        userPrompt={profileDraft.userPrompt}
+                        setUserName={(value) => {
+                            setProfileDraft((prev) => ({
+                                ...prev,
+                                userName: value,
+                            }));
+                        }}
+                        setUserPrompt={(value) => {
+                            setProfileDraft((prev) => ({
+                                ...prev,
+                                userPrompt: value,
+                            }));
+                        }}
                     />
                 ),
             }),
-            [chatDraft, setTheme, themeOptions, themePreference],
+            [chatDraft, profileDraft, setTheme, themeOptions, themePreference],
         );
 
         return (

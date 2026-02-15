@@ -5,6 +5,9 @@ export type UserProfile = {
     ollamaModel: string;
     ollamaToken: string;
     chatDriver: ChatDriver;
+    userName: string;
+    userPrompt: string;
+    activeDialogId: string;
 };
 
 export type ThemeData = {

@@ -11,6 +11,9 @@ class UserProfileStore {
         ollamaModel: DEFAULT_OLLAMA_MODEL,
         ollamaToken: "",
         chatDriver: "ollama",
+        userName: "Пользователь",
+        userPrompt: "",
+        activeDialogId: "",
     };
 
     private isInitializing = false;

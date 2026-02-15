@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
-import type { ChatMessage } from "../../../../types/Chat";
 import { Loader } from "../../atoms";
-import { ChatBubble } from "../../molecules";
+import {
+    ChatAssistantBubbleCard,
+    ChatUserBubbleCard,
+} from "../../molecules/cards";
+import type { ChatMessage } from "../../../../types/Chat";
 
 interface MessageFeedProps {
     messages: ChatMessage[];
@@ -22,7 +25,20 @@ export function MessageFeed({
         <>
             <section className="flex-1 space-y-4 overflow-y-auto rounded-2xl bg-main-900/55 p-2 ring-main-300/15">
                 {messages.map((message) => (
-                    <ChatBubble key={message.id} {...message} />
+                    <div key={message.id}>
+                        {message.author === "assistant" && (
+                            <ChatAssistantBubbleCard
+                                content={message.content}
+                                timestamp={message.timestamp}
+                            />
+                        )}
+                        {message.author === "user" && (
+                            <ChatUserBubbleCard
+                                content={message.content}
+                                timestamp={message.timestamp}
+                            />
+                        )}
+                    </div>
                 ))}
                 {showLoader && (
                     <div className="flex items-center gap-2 px-2 text-sm text-main-400">

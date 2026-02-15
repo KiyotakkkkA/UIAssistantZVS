@@ -7,7 +7,10 @@ const defaultProfile = {
   themePreference: "dark-main",
   ollamaModel: "gpt-oss:20b",
   ollamaToken: "",
-  chatDriver: "ollama"
+  chatDriver: "ollama",
+  userName: "Пользователь",
+  userPrompt: "",
+  activeDialogId: ""
 };
 const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
 const createDialogId = () => createPrefixedId("dialog");
@@ -208,12 +211,20 @@ class UserDataService {
     this.profilePath = path.join(this.resourcesPath, "profile.json");
   }
   getActiveDialog() {
+    const profile = this.readUserProfile();
     const dialogs = this.readDialogs();
+    if (profile.activeDialogId && dialogs.some((dialog) => dialog.id === profile.activeDialogId)) {
+      const activeDialog = dialogs.find((dialog) => dialog.id === profile.activeDialogId) ?? dialogs[0];
+      return activeDialog;
+    }
     if (dialogs.length > 0) {
-      return dialogs[0];
+      const fallbackActiveDialog = dialogs[0];
+      this.updateUserProfile({ activeDialogId: fallbackActiveDialog.id });
+      return fallbackActiveDialog;
     }
     const baseDialog = createBaseDialog();
     this.writeDialog(baseDialog);
+    this.updateUserProfile({ activeDialogId: baseDialog.id });
     return baseDialog;
   }
   getDialogsList() {
@@ -225,6 +236,7 @@ class UserDataService {
     const dialogs = this.readDialogs();
     const dialog = dialogs.find((item) => item.id === dialogId);
     if (dialog) {
+      this.updateUserProfile({ activeDialogId: dialog.id });
       return dialog;
     }
     return this.getActiveDialog();
@@ -232,6 +244,7 @@ class UserDataService {
   createDialog() {
     const baseDialog = createBaseDialog();
     this.writeDialog(baseDialog);
+    this.updateUserProfile({ activeDialogId: baseDialog.id });
     return baseDialog;
   }
   renameDialog(dialogId, nextTitle) {
@@ -256,6 +269,7 @@ class UserDataService {
       this.writeDialog(fallbackDialog);
       dialogs = [fallbackDialog];
     }
+    this.updateUserProfile({ activeDialogId: dialogs[0].id });
     return {
       dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
       activeDialog: dialogs[0]
@@ -273,6 +287,7 @@ class UserDataService {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(normalizedDialog);
+    this.updateUserProfile({ activeDialogId: normalizedDialog.id });
     return normalizedDialog;
   }
   getBootData() {
@@ -331,7 +346,10 @@ class UserDataService {
         ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
         ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
         ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
-        ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {}
+        ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
+        ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
+        ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
+        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
       };
       return normalized;
     } catch {

@@ -35,14 +35,29 @@ export class UserDataService {
     }
 
     getActiveDialog(): ChatDialog {
+        const profile = this.readUserProfile();
         const dialogs = this.readDialogs();
 
+        if (
+            profile.activeDialogId &&
+            dialogs.some((dialog) => dialog.id === profile.activeDialogId)
+        ) {
+            const activeDialog =
+                dialogs.find((dialog) => dialog.id === profile.activeDialogId) ??
+                dialogs[0];
+
+            return activeDialog;
+        }
+
         if (dialogs.length > 0) {
-            return dialogs[0];
+            const fallbackActiveDialog = dialogs[0];
+            this.updateUserProfile({ activeDialogId: fallbackActiveDialog.id });
+            return fallbackActiveDialog;
         }
 
         const baseDialog = createBaseDialog();
         this.writeDialog(baseDialog);
+        this.updateUserProfile({ activeDialogId: baseDialog.id });
         return baseDialog;
     }
 
@@ -57,6 +72,7 @@ export class UserDataService {
         const dialog = dialogs.find((item) => item.id === dialogId);
 
         if (dialog) {
+            this.updateUserProfile({ activeDialogId: dialog.id });
             return dialog;
         }
 
@@ -66,6 +82,7 @@ export class UserDataService {
     createDialog(): ChatDialog {
         const baseDialog = createBaseDialog();
         this.writeDialog(baseDialog);
+        this.updateUserProfile({ activeDialogId: baseDialog.id });
         return baseDialog;
     }
 
@@ -98,6 +115,8 @@ export class UserDataService {
             dialogs = [fallbackDialog];
         }
 
+        this.updateUserProfile({ activeDialogId: dialogs[0].id });
+
         return {
             dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
             activeDialog: dialogs[0],
@@ -124,6 +143,7 @@ export class UserDataService {
         };
 
         this.writeDialog(normalizedDialog);
+        this.updateUserProfile({ activeDialogId: normalizedDialog.id });
         return normalizedDialog;
     }
 
@@ -203,6 +223,15 @@ export class UserDataService {
                     : {}),
                 ...(isChatDriver(parsed.chatDriver)
                     ? { chatDriver: parsed.chatDriver }
+                    : {}),
+                ...(typeof parsed.userName === "string"
+                    ? { userName: parsed.userName }
+                    : {}),
+                ...(typeof parsed.userPrompt === "string"
+                    ? { userPrompt: parsed.userPrompt }
+                    : {}),
+                ...(typeof parsed.activeDialogId === "string"
+                    ? { activeDialogId: parsed.activeDialogId }
                     : {}),
             };
 

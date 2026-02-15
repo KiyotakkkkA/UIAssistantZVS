@@ -25,6 +25,14 @@ export function ChatHeader() {
             return;
         }
 
+        if (result.scope === "profile") {
+            toasts.success({
+                title: "Профиль сохранён",
+                description: "Пользовательские данные обновлены.",
+            });
+            return;
+        }
+
         toasts.info({
             title: "Изменений нет",
             description: "Для этой вкладки сохранение не требуется.",
