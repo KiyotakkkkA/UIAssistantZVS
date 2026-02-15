@@ -28,6 +28,11 @@ export type DeleteDialogResult = {
     activeDialog: ChatDialog;
 };
 
+export type DialogMessagePayload = {
+    dialogId: string;
+    messageId: string;
+};
+
 export interface OllamaMessage {
     role: MessageRole;
     content: string;

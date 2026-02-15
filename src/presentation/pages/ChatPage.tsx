@@ -25,6 +25,7 @@ export const ChatPage = observer(function ChatPage() {
                     <ChatHeader />
                     <MessageFeed
                         messages={messages}
+                        sendMessage={sendMessage}
                         showLoader={isAwaitingFirstChunk}
                     />
                     <MessageComposer

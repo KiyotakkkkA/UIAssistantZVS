@@ -33,6 +33,14 @@ declare global {
             createDialog: () => Promise<ChatDialog>;
             renameDialog: (dialogId: string, title: string) => Promise<ChatDialog>;
             deleteDialog: (dialogId: string) => Promise<DeleteDialogResult>;
+            deleteMessageFromDialog: (
+                dialogId: string,
+                messageId: string,
+            ) => Promise<ChatDialog>;
+            truncateDialogFromMessage: (
+                dialogId: string,
+                messageId: string,
+            ) => Promise<ChatDialog>;
             saveDialogSnapshot: (dialog: ChatDialog) => Promise<ChatDialog>;
         };
     }

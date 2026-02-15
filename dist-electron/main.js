@@ -275,6 +275,35 @@ class UserDataService {
       activeDialog: dialogs[0]
     };
   }
+  deleteMessageFromDialog(dialogId, messageId) {
+    const dialog = this.getDialogById(dialogId);
+    const nextMessages = dialog.messages.filter(
+      (message) => message.id !== messageId
+    );
+    const updatedDialog = {
+      ...dialog,
+      messages: nextMessages,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
+  truncateDialogFromMessage(dialogId, messageId) {
+    const dialog = this.getDialogById(dialogId);
+    const messageIndex = dialog.messages.findIndex(
+      (message) => message.id === messageId
+    );
+    if (messageIndex === -1) {
+      return dialog;
+    }
+    const updatedDialog = {
+      ...dialog,
+      messages: dialog.messages.slice(0, messageIndex),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
   saveDialogSnapshot(dialog) {
     const normalizedMessages = dialog.messages.map(
       (message) => this.normalizeMessage(message)
@@ -529,6 +558,14 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:delete-dialog",
     (_event, dialogId) => userDataService.deleteDialog(dialogId)
+  );
+  ipcMain.handle(
+    "app:delete-message-from-dialog",
+    (_event, dialogId, messageId) => userDataService.deleteMessageFromDialog(dialogId, messageId)
+  );
+  ipcMain.handle(
+    "app:truncate-dialog-from-message",
+    (_event, dialogId, messageId) => userDataService.truncateDialogFromMessage(dialogId, messageId)
   );
   ipcMain.handle(
     "app:save-dialog-snapshot",

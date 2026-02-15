@@ -32,5 +32,7 @@ electron.contextBridge.exposeInMainWorld("appApi", {
   createDialog: () => electron.ipcRenderer.invoke("app:create-dialog"),
   renameDialog: (dialogId, title) => electron.ipcRenderer.invoke("app:rename-dialog", dialogId, title),
   deleteDialog: (dialogId) => electron.ipcRenderer.invoke("app:delete-dialog", dialogId),
+  deleteMessageFromDialog: (dialogId, messageId) => electron.ipcRenderer.invoke("app:delete-message-from-dialog", dialogId, messageId),
+  truncateDialogFromMessage: (dialogId, messageId) => electron.ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
   saveDialogSnapshot: (dialog) => electron.ipcRenderer.invoke("app:save-dialog-snapshot", dialog)
 });

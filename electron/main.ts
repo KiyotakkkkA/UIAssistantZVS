@@ -101,6 +101,16 @@ app.whenReady().then(() => {
     ipcMain.handle("app:delete-dialog", (_event, dialogId: string) =>
         userDataService.deleteDialog(dialogId),
     );
+    ipcMain.handle(
+        "app:delete-message-from-dialog",
+        (_event, dialogId: string, messageId: string) =>
+            userDataService.deleteMessageFromDialog(dialogId, messageId),
+    );
+    ipcMain.handle(
+        "app:truncate-dialog-from-message",
+        (_event, dialogId: string, messageId: string) =>
+            userDataService.truncateDialogFromMessage(dialogId, messageId),
+    );
     ipcMain.handle("app:save-dialog-snapshot", (_event, dialog: ChatDialog) =>
         userDataService.saveDialogSnapshot(dialog),
     );

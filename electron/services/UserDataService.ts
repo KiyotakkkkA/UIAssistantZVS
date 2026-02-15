@@ -123,6 +123,43 @@ export class UserDataService {
         };
     }
 
+    deleteMessageFromDialog(dialogId: string, messageId: string): ChatDialog {
+        const dialog = this.getDialogById(dialogId);
+
+        const nextMessages = dialog.messages.filter(
+            (message) => message.id !== messageId,
+        );
+
+        const updatedDialog: ChatDialog = {
+            ...dialog,
+            messages: nextMessages,
+            updatedAt: new Date().toISOString(),
+        };
+
+        this.writeDialog(updatedDialog);
+        return updatedDialog;
+    }
+
+    truncateDialogFromMessage(dialogId: string, messageId: string): ChatDialog {
+        const dialog = this.getDialogById(dialogId);
+        const messageIndex = dialog.messages.findIndex(
+            (message) => message.id === messageId,
+        );
+
+        if (messageIndex === -1) {
+            return dialog;
+        }
+
+        const updatedDialog: ChatDialog = {
+            ...dialog,
+            messages: dialog.messages.slice(0, messageIndex),
+            updatedAt: new Date().toISOString(),
+        };
+
+        this.writeDialog(updatedDialog);
+        return updatedDialog;
+    }
+
     saveDialogSnapshot(dialog: ChatDialog): ChatDialog {
         const normalizedMessages = dialog.messages.map((message) =>
             this.normalizeMessage(message),

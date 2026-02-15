@@ -55,6 +55,16 @@ contextBridge.exposeInMainWorld("appApi", {
         ipcRenderer.invoke("app:rename-dialog", dialogId, title),
     deleteDialog: (dialogId: string): Promise<DeleteDialogResult> =>
         ipcRenderer.invoke("app:delete-dialog", dialogId),
+    deleteMessageFromDialog: (
+        dialogId: string,
+        messageId: string,
+    ): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:delete-message-from-dialog", dialogId, messageId),
+    truncateDialogFromMessage: (
+        dialogId: string,
+        messageId: string,
+    ): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
     saveDialogSnapshot: (dialog: ChatDialog): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:save-dialog-snapshot", dialog),
 });
