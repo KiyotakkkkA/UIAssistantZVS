@@ -263,6 +263,18 @@ class ChatsStore {
                               result: toCloneSafeValue(
                                   message.toolTrace.result,
                               ),
+                              ...(message.toolTrace.status
+                                  ? { status: message.toolTrace.status }
+                                  : {}),
+                              ...(typeof message.toolTrace.command === "string"
+                                  ? { command: message.toolTrace.command }
+                                  : {}),
+                              ...(typeof message.toolTrace.cwd === "string"
+                                  ? { cwd: message.toolTrace.cwd }
+                                  : {}),
+                              ...(typeof message.toolTrace.isAdmin === "boolean"
+                                  ? { isAdmin: message.toolTrace.isAdmin }
+                                  : {}),
                           },
                       }
                     : {}),

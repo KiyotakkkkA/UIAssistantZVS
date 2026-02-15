@@ -118,7 +118,9 @@ export const createOllamaAdapter = ({
                         toolName,
                         args: toolArgs,
                     });
-                    const toolResult = await executeTool(toolName, toolArgs);
+                    const toolResult = await executeTool(toolName, toolArgs, {
+                        callId,
+                    });
                     onToolResult?.({
                         callId,
                         toolName,

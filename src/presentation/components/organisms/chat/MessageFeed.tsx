@@ -15,7 +15,15 @@ interface MessageFeedProps {
     showLoader?: boolean;
 }
 
-function AssistantResponseBlock({ stages }: { stages: ChatMessage[] }) {
+function AssistantResponseBlock({
+    stages,
+    onApproveCommandExec,
+    onRejectCommandExec,
+}: {
+    stages: ChatMessage[];
+    onApproveCommandExec: (messageId: string) => void;
+    onRejectCommandExec: (messageId: string) => void;
+}) {
     const thinkingStages = stages.filter(
         (message) => message.assistantStage === "thinking",
     );
@@ -44,8 +52,11 @@ function AssistantResponseBlock({ stages }: { stages: ChatMessage[] }) {
                 {toolStages.map((message) => (
                     <ToolBubbleCard
                         key={message.id}
+                        messageId={message.id}
                         content={message.content}
                         toolTrace={message.toolTrace}
+                        onApproveCommandExec={onApproveCommandExec}
+                        onRejectCommandExec={onRejectCommandExec}
                     />
                 ))}
                 {answerStage && (
@@ -80,6 +91,8 @@ export function MessageFeed({
         requestDeleteMessage,
         cancelDeleteMessage,
         confirmDeleteMessage,
+        approveCommandExec,
+        rejectCommandExec,
     } = useMessages({ sendMessage });
 
     useEffect(() => {
@@ -150,6 +163,12 @@ export function MessageFeed({
                                     {linkedStages.length > 0 && (
                                         <AssistantResponseBlock
                                             stages={linkedStages}
+                                            onApproveCommandExec={
+                                                approveCommandExec
+                                            }
+                                            onRejectCommandExec={
+                                                rejectCommandExec
+                                            }
                                         />
                                     )}
                                 </div>
@@ -164,6 +183,10 @@ export function MessageFeed({
                                 <div key={message.id}>
                                     <AssistantResponseBlock
                                         stages={[message]}
+                                        onApproveCommandExec={
+                                            approveCommandExec
+                                        }
+                                        onRejectCommandExec={rejectCommandExec}
                                     />
                                 </div>
                             );

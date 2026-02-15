@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
+import { CommandExecService } from "./services/CommandExecService";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 
@@ -31,6 +32,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 let userDataService: UserDataService;
+let commandExecService: CommandExecService;
 
 function createWindow() {
     win = new BrowserWindow({
@@ -74,6 +76,7 @@ app.whenReady().then(() => {
 
     initDirectoriesService.initialize();
     userDataService = new UserDataService(app.getPath("userData"));
+    commandExecService = new CommandExecService();
 
     ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
     ipcMain.handle("app:get-themes-list", () =>
@@ -117,6 +120,11 @@ app.whenReady().then(() => {
     );
     ipcMain.handle("app:save-dialog-snapshot", (_event, dialog: ChatDialog) =>
         userDataService.saveDialogSnapshot(dialog),
+    );
+    ipcMain.handle(
+        "app:exec-shell-command",
+        (_event, command: string, cwd?: string) =>
+            commandExecService.execute(command, cwd),
     );
 
     createWindow();

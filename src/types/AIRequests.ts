@@ -8,6 +8,7 @@ export type ChatAdapterRequest = {
     executeTool?: (
         toolName: string,
         args: Record<string, unknown>,
+        meta: { callId: string },
     ) => Promise<unknown>;
     onToolCall?: (payload: {
         callId: string;

@@ -1,5 +1,5 @@
 import { makeAutoObservable } from "mobx";
-import { webToolsPackage } from "../tools";
+import { commandExecToolsPackage, webToolsPackage } from "../tools";
 import type { OllamaToolDefinition } from "../types/Chat";
 import type { ToolPackageDescriptor } from "../utils/ToolsBuilder";
 
@@ -7,7 +7,7 @@ class ToolsStore {
     readonly packages: ToolPackageDescriptor[];
 
     constructor() {
-        this.packages = [...webToolsPackage()];
+        this.packages = [...webToolsPackage(), ...commandExecToolsPackage()];
         makeAutoObservable(this, {}, { autoBind: true });
     }
 

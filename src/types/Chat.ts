@@ -8,6 +8,10 @@ export type ToolTrace = {
     toolName: string;
     args: Record<string, unknown>;
     result: unknown;
+    status?: "pending" | "accepted" | "cancelled";
+    command?: string;
+    cwd?: string;
+    isAdmin?: boolean;
 };
 
 export type ChatMessage = {

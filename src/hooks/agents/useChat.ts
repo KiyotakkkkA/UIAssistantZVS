@@ -9,6 +9,7 @@ import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
 import { chatsStore } from "../../stores/chatsStore";
 import { toolsStore } from "../../stores/toolsStore";
+import { commandExecApprovalService } from "../../services/commandExecApproval";
 import { Config } from "../../config";
 
 const getTimeStamp = () =>
@@ -18,6 +19,12 @@ const getTimeStamp = () =>
     });
 
 const createMessageId = () => `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+
+const getCommandRequestMeta = (args: Record<string, unknown>) => ({
+    command: typeof args.command === "string" ? args.command : "",
+    cwd: typeof args.cwd === "string" ? args.cwd : ".",
+    isAdmin: false,
+});
 
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
@@ -194,13 +201,73 @@ export function useChat() {
                         userProfile.maxToolCallsPerResponse > 0
                             ? userProfile.maxToolCallsPerResponse
                             : 1,
-                    executeTool: async (toolName, args) =>
-                        toolsStore.executeTool(toolName, args, {
+                    executeTool: async (toolName, args, meta) => {
+                        if (toolName !== "command_exec") {
+                            return await toolsStore.executeTool(
+                                toolName,
+                                args,
+                                {
+                                    ollamaToken: ollamaToken,
+                                },
+                            );
+                        }
+
+                        const messageId = toolTraceMessageIds.get(meta.callId);
+                        const { command, cwd, isAdmin } =
+                            getCommandRequestMeta(args);
+
+                        if (!messageId) {
+                            return {
+                                status: "cancelled",
+                                command,
+                                cwd,
+                                isAdmin,
+                                reason: "Не найдена карточка подтверждения",
+                            };
+                        }
+
+                        const approved =
+                            await commandExecApprovalService.waitForDecision(
+                                messageId,
+                            );
+
+                        updateMessages((prev) =>
+                            prev.map((message) =>
+                                message.id === messageId && message.toolTrace
+                                    ? {
+                                          ...message,
+                                          toolTrace: {
+                                              ...message.toolTrace,
+                                              status: approved
+                                                  ? "accepted"
+                                                  : "cancelled",
+                                          },
+                                      }
+                                    : message,
+                            ),
+                        );
+
+                        if (!approved) {
+                            return {
+                                status: "cancelled",
+                                command,
+                                cwd,
+                                isAdmin,
+                                reason: "Пользователь отклонил выполнение",
+                            };
+                        }
+
+                        return await toolsStore.executeTool(toolName, args, {
                             ollamaToken: ollamaToken,
-                        }),
+                        });
+                    },
                     onToolCall: ({ callId, toolName, args }) => {
                         const messageId = createMessageId();
                         toolTraceMessageIds.set(callId, messageId);
+                        const commandMeta =
+                            toolName === "command_exec"
+                                ? getCommandRequestMeta(args)
+                                : null;
 
                         updateMessages((prev) => [
                             ...prev,
@@ -214,6 +281,14 @@ export function useChat() {
                                     toolName,
                                     args,
                                     result: null,
+                                    ...(toolName === "command_exec"
+                                        ? {
+                                              status: "pending" as const,
+                                              command: commandMeta?.command,
+                                              cwd: commandMeta?.cwd,
+                                              isAdmin: commandMeta?.isAdmin,
+                                          }
+                                        : {}),
                                 },
                                 content: "",
                                 timestamp: getTimeStamp(),
@@ -248,6 +323,13 @@ export function useChat() {
                                             toolName,
                                             args,
                                             result,
+                                            status:
+                                                toolName === "command_exec"
+                                                    ? "cancelled"
+                                                    : "accepted",
+                                            ...(toolName === "command_exec"
+                                                ? getCommandRequestMeta(args)
+                                                : {}),
                                         },
                                         content: nextContent,
                                         timestamp: getTimeStamp(),
@@ -264,6 +346,14 @@ export function useChat() {
                                               toolName,
                                               args,
                                               result,
+                                              status:
+                                                  message.toolTrace?.status ||
+                                                  (toolName === "command_exec"
+                                                      ? "cancelled"
+                                                      : "accepted"),
+                                              ...(toolName === "command_exec"
+                                                  ? getCommandRequestMeta(args)
+                                                  : {}),
                                           },
                                           content: nextContent,
                                       }

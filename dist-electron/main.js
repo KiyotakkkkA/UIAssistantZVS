@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 const defaultProfile = {
   themePreference: "dark-main",
   ollamaModel: "gpt-oss:20b",
@@ -506,6 +507,67 @@ class UserDataService {
     };
   }
 }
+const decodeOutput = (buffer) => {
+  const utf8 = buffer.toString("utf8");
+  if (process.platform !== "win32") {
+    return utf8;
+  }
+  try {
+    const cp866 = new TextDecoder("ibm866").decode(buffer);
+    const utf8ReplacementCount = (utf8.match(/�/g) || []).length;
+    const cp866ReplacementCount = (cp866.match(/�/g) || []).length;
+    return cp866ReplacementCount < utf8ReplacementCount ? cp866 : utf8;
+  } catch {
+    return utf8;
+  }
+};
+class CommandExecService {
+  async execute(command, cwd) {
+    const trimmedCommand = command.trim();
+    if (!trimmedCommand) {
+      throw new Error("Команда для выполнения не указана");
+    }
+    const resolvedCwd = cwd?.trim() ? path.resolve(cwd) : process.cwd();
+    if (!fs.existsSync(resolvedCwd)) {
+      throw new Error(`Рабочая директория не существует: ${resolvedCwd}`);
+    }
+    const executableCommand = process.platform === "win32" ? `chcp 65001>nul & ${trimmedCommand}` : trimmedCommand;
+    return await new Promise((resolve, reject) => {
+      const child = spawn(executableCommand, {
+        cwd: resolvedCwd,
+        shell: true,
+        windowsHide: true
+      });
+      const stdoutChunks = [];
+      const stderrChunks = [];
+      child.stdout.on("data", (chunk) => {
+        stdoutChunks.push(
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+        );
+      });
+      child.stderr.on("data", (chunk) => {
+        stderrChunks.push(
+          Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+        );
+      });
+      child.on("error", (error) => {
+        reject(error);
+      });
+      child.on("close", (code) => {
+        const stdout = decodeOutput(Buffer.concat(stdoutChunks));
+        const stderr = decodeOutput(Buffer.concat(stderrChunks));
+        resolve({
+          command: trimmedCommand,
+          cwd: resolvedCwd,
+          isAdmin: false,
+          exitCode: typeof code === "number" ? code : -1,
+          stdout,
+          stderr
+        });
+      });
+    });
+  }
+}
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -514,6 +576,7 @@ const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 let userDataService;
+let commandExecService;
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
@@ -549,6 +612,7 @@ app.whenReady().then(() => {
   const initDirectoriesService = new InitService(app.getPath("userData"));
   initDirectoriesService.initialize();
   userDataService = new UserDataService(app.getPath("userData"));
+  commandExecService = new CommandExecService();
   ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
   ipcMain.handle(
     "app:get-themes-list",
@@ -594,6 +658,10 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:save-dialog-snapshot",
     (_event, dialog) => userDataService.saveDialogSnapshot(dialog)
+  );
+  ipcMain.handle(
+    "app:exec-shell-command",
+    (_event, command, cwd) => commandExecService.execute(command, cwd)
   );
   createWindow();
 });

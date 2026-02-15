@@ -32,9 +32,18 @@ electron.contextBridge.exposeInMainWorld("appApi", {
   createDialog: () => electron.ipcRenderer.invoke("app:create-dialog"),
   renameDialog: (dialogId, title) => electron.ipcRenderer.invoke("app:rename-dialog", dialogId, title),
   deleteDialog: (dialogId) => electron.ipcRenderer.invoke("app:delete-dialog", dialogId),
-  deleteMessageFromDialog: (dialogId, messageId) => electron.ipcRenderer.invoke("app:delete-message-from-dialog", dialogId, messageId),
-  truncateDialogFromMessage: (dialogId, messageId) => electron.ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
+  deleteMessageFromDialog: (dialogId, messageId) => electron.ipcRenderer.invoke(
+    "app:delete-message-from-dialog",
+    dialogId,
+    messageId
+  ),
+  truncateDialogFromMessage: (dialogId, messageId) => electron.ipcRenderer.invoke(
+    "app:truncate-dialog-from-message",
+    dialogId,
+    messageId
+  ),
   webSearchTool: (request, ollamaToken) => electron.ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
   webFetchTool: (url, ollamaToken) => electron.ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken),
+  execShellCommand: (command, cwd) => electron.ipcRenderer.invoke("app:exec-shell-command", command, cwd),
   saveDialogSnapshot: (dialog) => electron.ipcRenderer.invoke("app:save-dialog-snapshot", dialog)
 });

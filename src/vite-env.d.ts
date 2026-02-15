@@ -31,7 +31,10 @@ declare global {
             getDialogsList: () => Promise<ChatDialogListItem[]>;
             getDialogById: (dialogId: string) => Promise<ChatDialog>;
             createDialog: () => Promise<ChatDialog>;
-            renameDialog: (dialogId: string, title: string) => Promise<ChatDialog>;
+            renameDialog: (
+                dialogId: string,
+                title: string,
+            ) => Promise<ChatDialog>;
             deleteDialog: (dialogId: string) => Promise<DeleteDialogResult>;
             deleteMessageFromDialog: (
                 dialogId: string,
@@ -41,8 +44,25 @@ declare global {
                 dialogId: string,
                 messageId: string,
             ) => Promise<ChatDialog>;
-            webSearchTool: (request: string, ollamaToken: string) => Promise<unknown>;
-            webFetchTool: (url: string, ollamaToken: string) => Promise<unknown>;
+            webSearchTool: (
+                request: string,
+                ollamaToken: string,
+            ) => Promise<unknown>;
+            webFetchTool: (
+                url: string,
+                ollamaToken: string,
+            ) => Promise<unknown>;
+            execShellCommand: (
+                command: string,
+                cwd?: string,
+            ) => Promise<{
+                command: string;
+                cwd: string;
+                isAdmin: false;
+                exitCode: number;
+                stdout: string;
+                stderr: string;
+            }>;
             saveDialogSnapshot: (dialog: ChatDialog) => Promise<ChatDialog>;
         };
     }

@@ -50,7 +50,8 @@ contextBridge.exposeInMainWorld("appApi", {
         ipcRenderer.invoke("app:get-dialogs-list"),
     getDialogById: (dialogId: string): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:get-dialog-by-id", dialogId),
-    createDialog: (): Promise<ChatDialog> => ipcRenderer.invoke("app:create-dialog"),
+    createDialog: (): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:create-dialog"),
     renameDialog: (dialogId: string, title: string): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:rename-dialog", dialogId, title),
     deleteDialog: (dialogId: string): Promise<DeleteDialogResult> =>
@@ -59,16 +60,35 @@ contextBridge.exposeInMainWorld("appApi", {
         dialogId: string,
         messageId: string,
     ): Promise<ChatDialog> =>
-        ipcRenderer.invoke("app:delete-message-from-dialog", dialogId, messageId),
+        ipcRenderer.invoke(
+            "app:delete-message-from-dialog",
+            dialogId,
+            messageId,
+        ),
     truncateDialogFromMessage: (
         dialogId: string,
         messageId: string,
     ): Promise<ChatDialog> =>
-        ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
+        ipcRenderer.invoke(
+            "app:truncate-dialog-from-message",
+            dialogId,
+            messageId,
+        ),
     webSearchTool: (request: string, ollamaToken: string): Promise<unknown> =>
         ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
     webFetchTool: (url: string, ollamaToken: string): Promise<unknown> =>
         ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken),
+    execShellCommand: (
+        command: string,
+        cwd?: string,
+    ): Promise<{
+        command: string;
+        cwd: string;
+        isAdmin: false;
+        exitCode: number;
+        stdout: string;
+        stderr: string;
+    }> => ipcRenderer.invoke("app:exec-shell-command", command, cwd),
     saveDialogSnapshot: (dialog: ChatDialog): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:save-dialog-snapshot", dialog),
 });

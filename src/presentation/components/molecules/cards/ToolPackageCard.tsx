@@ -7,9 +7,11 @@ type ToolPackageCardProps = {
 
 export function ToolPackageCard({ pkg }: ToolPackageCardProps) {
     return (
-        <article className="rounded-2xl border border-main-700/70 bg-main-900/45 p-4">
+        <article className="rounded-2xl bg-main-900/45 p-4">
             <div className="mb-4">
-                <p className="text-base font-semibold text-main-100">{pkg.title}</p>
+                <p className="text-base font-semibold text-main-100">
+                    {pkg.title}
+                </p>
                 <p className="mt-1 text-xs text-main-400">{pkg.description}</p>
             </div>
 

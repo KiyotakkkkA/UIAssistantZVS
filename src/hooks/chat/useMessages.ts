@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { chatsStore } from "../../stores/chatsStore";
+import { commandExecApprovalService } from "../../services/commandExecApproval";
 import { useToasts } from "../useToasts";
 
 type UseMessagesParams = {
@@ -138,6 +139,45 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         setDeleteMessageId(null);
     };
 
+    const setCommandExecStatus = (
+        messageId: string,
+        status: "accepted" | "cancelled",
+    ) => {
+        const dialog = chatsStore.activeDialog;
+
+        if (!dialog) {
+            return;
+        }
+
+        const nextMessages = dialog.messages.map((message) =>
+            message.id === messageId && message.toolTrace
+                ? {
+                      ...message,
+                      toolTrace: {
+                          ...message.toolTrace,
+                          status,
+                      },
+                  }
+                : message,
+        );
+
+        chatsStore.replaceByDialog({
+            ...dialog,
+            messages: nextMessages,
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const approveCommandExec = (messageId: string) => {
+        setCommandExecStatus(messageId, "accepted");
+        commandExecApprovalService.resolve(messageId, true);
+    };
+
+    const rejectCommandExec = (messageId: string) => {
+        setCommandExecStatus(messageId, "cancelled");
+        commandExecApprovalService.resolve(messageId, false);
+    };
+
     return {
         editingMessageId,
         editingValue,
@@ -151,5 +191,7 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         requestDeleteMessage,
         cancelDeleteMessage,
         confirmDeleteMessage,
+        approveCommandExec,
+        rejectCommandExec,
     };
 };

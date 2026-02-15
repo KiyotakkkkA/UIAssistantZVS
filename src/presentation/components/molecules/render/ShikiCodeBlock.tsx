@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { createHighlighter } from "shiki";
 import { Button } from "../../atoms";
+import { useToasts } from "../../../../hooks";
 
 interface ShikiCodeBlockProps {
     code: string;
@@ -61,6 +62,7 @@ const escapeHtml = (text: string) =>
         .replace(/'/g, "&#39;");
 
 export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
+    const toasts = useToasts();
     const normalizedLanguage = normalizeLanguage(language);
     const cacheKey = `${normalizedLanguage}:${code}`;
     const [html, setHtml] = useState<string>(
@@ -115,6 +117,21 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
 
     const languageLabel = normalizedLanguage.toUpperCase();
 
+    const copyMessage = async (content: string) => {
+        try {
+            await navigator.clipboard.writeText(content);
+            toasts.success({
+                title: "Скопировано",
+                description: "Сообщение скопировано в буфер обмена.",
+            });
+        } catch {
+            toasts.danger({
+                title: "Ошибка копирования",
+                description: "Не удалось скопировать сообщение.",
+            });
+        }
+    };
+
     if (!html) {
         return (
             <div className="mb-2 overflow-hidden rounded-xl border border-main-400/20 bg-main-900/80 last:mb-0">
@@ -128,6 +145,7 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                             label="Copy code"
                             shape="rounded-lg"
                             className="p-1"
+                            onClick={() => copyMessage(code)}
                         >
                             <Icon
                                 icon="mdi:content-copy"
@@ -164,6 +182,7 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                         label="Copy code"
                         shape="rounded-lg"
                         className="p-1"
+                        onClick={() => copyMessage(code)}
                     >
                         <Icon icon="mdi:content-copy" width="14" height="14" />
                     </Button>
