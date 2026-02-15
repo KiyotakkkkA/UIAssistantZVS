@@ -2,8 +2,13 @@ import { useMemo } from "react";
 import { useThemeContext } from "../providers";
 
 export const useTheme = () => {
-    const { isReady, userProfile, themesList, preferredThemeData, setTheme } =
-        useThemeContext();
+    const {
+        isReady,
+        themePreference,
+        themesList,
+        preferredThemeData,
+        setTheme,
+    } = useThemeContext();
 
     const themeOptions = useMemo(
         () =>
@@ -16,7 +21,7 @@ export const useTheme = () => {
 
     return {
         isReady,
-        themePreference: userProfile.themePreference,
+        themePreference,
         preferredThemeData,
         themeOptions,
         setTheme,

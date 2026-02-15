@@ -5,17 +5,10 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import type { BootData, ThemeListItem, UserProfile } from "../types/App";
+import { observer } from "mobx-react-lite";
+import type { ThemeListItem } from "../types/App";
 import { ThemeContext, type ThemeContextValue } from "./ThemeContext";
-
-const DEFAULT_THEME_ID = "dark-main";
-
-const defaultBootData: BootData = {
-    userProfile: {
-        themePreference: DEFAULT_THEME_ID,
-    },
-    preferredThemeData: {},
-};
+import { userProfileStore } from "../stores/userProfileStore";
 
 const applyThemePalette = (palette: Record<string, string>) => {
     const root = document.documentElement;
@@ -29,105 +22,117 @@ type ThemeProviderProps = {
     children: ReactNode;
 };
 
-export function ThemeProvider({ children }: ThemeProviderProps) {
-    const [isReady, setIsReady] = useState(false);
-    const [userProfile, setUserProfile] = useState<UserProfile>(
-        defaultBootData.userProfile,
-    );
+export const ThemeProvider = observer(({ children }: ThemeProviderProps) => {
+    const isUserProfileReady = userProfileStore.isReady;
+    const themePreference = userProfileStore.userProfile.themePreference;
+
+    const [isThemeReady, setIsThemeReady] = useState(false);
     const [themesList, setThemesList] = useState<ThemeListItem[]>([]);
     const [preferredThemeData, setPreferredThemeData] = useState<
         Record<string, string>
-    >(defaultBootData.preferredThemeData);
-
-    const updateUserProfile = useCallback(
-        async (nextProfile: Partial<UserProfile>) => {
-            const api = window.appApi;
-
-            if (!api) {
-                const mergedProfile: UserProfile = {
-                    ...userProfile,
-                    ...nextProfile,
-                };
-                setUserProfile(mergedProfile);
-                return mergedProfile;
-            }
-
-            const updatedProfile = await api.updateUserProfile(nextProfile);
-            setUserProfile(updatedProfile);
-            return updatedProfile;
-        },
-        [userProfile],
-    );
+    >({});
 
     const setTheme = useCallback(
         async (themeId: string) => {
             const api = window.appApi;
 
             if (!api) {
-                await updateUserProfile({ themePreference: themeId });
+                await userProfileStore.updateUserProfile({
+                    themePreference: themeId,
+                });
                 return;
             }
 
             const selectedTheme = await api.getThemeData(themeId);
             applyThemePalette(selectedTheme.palette);
             setPreferredThemeData(selectedTheme.palette);
-            await updateUserProfile({ themePreference: themeId });
+            await userProfileStore.updateUserProfile({
+                themePreference: themeId,
+            });
         },
-        [updateUserProfile],
+        [],
     );
+
+    useEffect(() => {
+        void userProfileStore.initialize();
+    }, []);
 
     useEffect(() => {
         let isMounted = true;
 
-        const bootstrap = async () => {
+        const loadThemesList = async () => {
             const api = window.appApi;
 
             if (!api) {
                 if (isMounted) {
-                    setIsReady(true);
+                    setIsThemeReady(true);
                 }
                 return;
             }
 
-            const [bootData, nextThemesList] = await Promise.all([
-                api.getBootData(),
-                api.getThemesList(),
-            ]);
+            const nextThemesList = await api.getThemesList();
 
             if (!isMounted) {
                 return;
             }
 
-            setUserProfile(bootData.userProfile);
-            setPreferredThemeData(bootData.preferredThemeData);
             setThemesList(nextThemesList);
-            applyThemePalette(bootData.preferredThemeData);
-            setIsReady(true);
+            setIsThemeReady(true);
         };
 
-        bootstrap();
+        loadThemesList();
 
         return () => {
             isMounted = false;
         };
     }, []);
 
+    useEffect(() => {
+        let isMounted = true;
+
+        const syncThemePalette = async () => {
+            const api = window.appApi;
+
+            if (!api) {
+                return;
+            }
+
+            const selectedTheme = await api.getThemeData(
+                themePreference,
+            );
+
+            if (!isMounted) {
+                return;
+            }
+
+            setPreferredThemeData(selectedTheme.palette);
+            applyThemePalette(selectedTheme.palette);
+        };
+
+        if (isUserProfileReady) {
+            syncThemePalette();
+        }
+
+        return () => {
+            isMounted = false;
+        };
+    }, [isUserProfileReady, themePreference]);
+
     const contextValue = useMemo<ThemeContextValue>(
         () => ({
-            isReady,
-            userProfile,
+            isReady: isUserProfileReady && isThemeReady,
+            themePreference,
             themesList,
             preferredThemeData,
             setTheme,
-            updateUserProfile,
         }),
         [
-            isReady,
-            userProfile,
+            isUserProfileReady,
+            isThemeReady,
+            themePreference,
             themesList,
             preferredThemeData,
             setTheme,
-            updateUserProfile,
         ],
     );
 
@@ -136,4 +141,4 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
             {children}
         </ThemeContext.Provider>
     );
-}
+});
