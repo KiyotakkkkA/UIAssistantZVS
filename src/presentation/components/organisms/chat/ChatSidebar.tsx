@@ -1,4 +1,4 @@
-import { ConversationItem } from "../molecules";
+import { ConversationItem } from "../../molecules";
 
 const conversations = [
     {

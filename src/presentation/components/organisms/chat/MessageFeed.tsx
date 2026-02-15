@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { ChatMessage } from "../../../types/Chat";
-import { Loader } from "../atoms";
-import { ChatBubble } from "../molecules";
+import type { ChatMessage } from "../../../../types/Chat";
+import { Loader } from "../../atoms";
+import { ChatBubble } from "../../molecules";
 
 interface MessageFeedProps {
     messages: ChatMessage[];

@@ -1,6 +1,10 @@
 import { useOllamaChat } from "../../hooks";
 import { MessageComposer } from "../components/molecules";
-import { ChatHeader, ChatSidebar, MessageFeed } from "../components/organisms";
+import {
+    ChatHeader,
+    ChatSidebar,
+    MessageFeed,
+} from "../components/organisms/chat";
 
 export function ChatPage() {
     const { messages, sendMessage, isStreaming, isAwaitingFirstChunk } =
