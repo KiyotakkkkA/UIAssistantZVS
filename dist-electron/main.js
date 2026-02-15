@@ -2,11 +2,24 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 const defaultProfile = {
   themePreference: "dark-main",
   ollamaModel: "gpt-oss:20b",
   ollamaToken: "",
   chatDriver: "ollama"
+};
+const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
+const createDialogId = () => createPrefixedId("dialog");
+const createBaseDialog = () => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    id: createDialogId(),
+    title: "Новый диалог",
+    messages: [],
+    createdAt: now,
+    updatedAt: now
+  };
 };
 const baseDarkDracula = {
   id: "dark-dracula",
@@ -159,9 +172,14 @@ class InitService {
   }
   ensureChatsDirectory() {
     this.ensureDirectory(this.chatsPath);
-    if (!fs.existsSync(this.dialogsPath)) {
-      fs.mkdirSync(this.dialogsPath);
+    this.ensureDirectory(this.dialogsPath);
+    const dialogFiles = fs.readdirSync(this.dialogsPath).filter((fileName) => fileName.endsWith(".json"));
+    if (dialogFiles.length > 0) {
+      return;
     }
+    const baseDialog = createBaseDialog();
+    const baseDialogPath = path.join(this.dialogsPath, `${baseDialog.id}.json`);
+    fs.writeFileSync(baseDialogPath, JSON.stringify(baseDialog, null, 2));
   }
   ensureThemes() {
     for (const entry of staticThemeEntries) {
@@ -181,11 +199,81 @@ const isChatDriver = (value) => {
 class UserDataService {
   resourcesPath;
   themesPath;
+  dialogsPath;
   profilePath;
   constructor(basePath) {
     this.resourcesPath = path.join(basePath, "resources");
     this.themesPath = path.join(this.resourcesPath, "themes");
+    this.dialogsPath = path.join(this.resourcesPath, "chats", "dialogs");
     this.profilePath = path.join(this.resourcesPath, "profile.json");
+  }
+  getActiveDialog() {
+    const dialogs = this.readDialogs();
+    if (dialogs.length > 0) {
+      return dialogs[0];
+    }
+    const baseDialog = createBaseDialog();
+    this.writeDialog(baseDialog);
+    return baseDialog;
+  }
+  getDialogsList() {
+    return this.readDialogs().map(
+      (dialog) => this.toDialogListItem(dialog)
+    );
+  }
+  getDialogById(dialogId) {
+    const dialogs = this.readDialogs();
+    const dialog = dialogs.find((item) => item.id === dialogId);
+    if (dialog) {
+      return dialog;
+    }
+    return this.getActiveDialog();
+  }
+  createDialog() {
+    const baseDialog = createBaseDialog();
+    this.writeDialog(baseDialog);
+    return baseDialog;
+  }
+  renameDialog(dialogId, nextTitle) {
+    const dialog = this.getDialogById(dialogId);
+    const trimmedTitle = nextTitle.trim();
+    const updatedDialog = {
+      ...dialog,
+      title: trimmedTitle || dialog.title,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
+  deleteDialog(dialogId) {
+    const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
+    if (fs.existsSync(dialogPath)) {
+      fs.unlinkSync(dialogPath);
+    }
+    let dialogs = this.readDialogs();
+    if (dialogs.length === 0) {
+      const fallbackDialog = createBaseDialog();
+      this.writeDialog(fallbackDialog);
+      dialogs = [fallbackDialog];
+    }
+    return {
+      dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
+      activeDialog: dialogs[0]
+    };
+  }
+  saveDialogSnapshot(dialog) {
+    const normalizedMessages = dialog.messages.map(
+      (message) => this.normalizeMessage(message)
+    );
+    const normalizedDialog = {
+      id: this.normalizeDialogId(dialog.id),
+      title: typeof dialog.title === "string" && dialog.title.trim() ? dialog.title : "Новый диалог",
+      messages: normalizedMessages,
+      createdAt: typeof dialog.createdAt === "string" && dialog.createdAt ? dialog.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(normalizedDialog);
+    return normalizedDialog;
   }
   getBootData() {
     const userProfile = this.readUserProfile();
@@ -270,6 +358,64 @@ class UserDataService {
     }
     return result;
   }
+  readDialogs() {
+    if (!fs.existsSync(this.dialogsPath)) {
+      return [];
+    }
+    const files = fs.readdirSync(this.dialogsPath).filter((fileName) => fileName.endsWith(".json"));
+    const dialogs = [];
+    for (const fileName of files) {
+      const filePath = path.join(this.dialogsPath, fileName);
+      try {
+        const rawDialog = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(rawDialog);
+        if (!Array.isArray(parsed.messages)) {
+          continue;
+        }
+        const normalizedMessages = parsed.messages.map(
+          (message) => this.normalizeMessage(message)
+        ).filter(Boolean);
+        dialogs.push({
+          id: this.normalizeDialogId(parsed.id),
+          title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Новый диалог",
+          messages: normalizedMessages,
+          createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
+          updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : (/* @__PURE__ */ new Date()).toISOString()
+        });
+      } catch {
+        continue;
+      }
+    }
+    dialogs.sort(
+      (left, right) => right.updatedAt.localeCompare(left.updatedAt)
+    );
+    return dialogs;
+  }
+  writeDialog(dialog) {
+    if (!fs.existsSync(this.dialogsPath)) {
+      fs.mkdirSync(this.dialogsPath, { recursive: true });
+    }
+    const dialogPath = path.join(this.dialogsPath, `${dialog.id}.json`);
+    fs.writeFileSync(dialogPath, JSON.stringify(dialog, null, 2));
+  }
+  normalizeDialogId(id) {
+    if (typeof id === "string" && id.startsWith("dialog_")) {
+      return id;
+    }
+    return `dialog_${randomUUID().replace(/-/g, "")}`;
+  }
+  normalizeMessage(message) {
+    const role = message.author === "assistant" || message.author === "user" || message.author === "system" || message.author === "tool" ? message.author : "assistant";
+    return {
+      id: typeof message.id === "string" && message.id.startsWith("msg_") ? message.id : `msg_${randomUUID().replace(/-/g, "")}`,
+      author: role,
+      content: typeof message.content === "string" ? message.content : "",
+      timestamp: typeof message.timestamp === "string" && message.timestamp ? message.timestamp : (/* @__PURE__ */ new Date()).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    };
+  }
   resolveThemePalette(themeId) {
     const themes = this.readThemes();
     const preferredTheme = themes.find((theme) => theme.id === themeId);
@@ -277,6 +423,19 @@ class UserDataService {
       return preferredTheme.palette;
     }
     return staticThemesMap[defaultProfile.themePreference].palette;
+  }
+  toDialogListItem(dialog) {
+    const lastMessage = dialog.messages.length > 0 ? dialog.messages[dialog.messages.length - 1] : null;
+    return {
+      id: dialog.id,
+      title: dialog.title,
+      preview: lastMessage?.content?.trim() || "Пустой диалог — отправьте первое сообщение",
+      time: new Date(dialog.updatedAt).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      updatedAt: dialog.updatedAt
+    };
   }
 }
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
@@ -334,6 +493,28 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:update-user-profile",
     (_event, nextProfile) => userDataService.updateUserProfile(nextProfile)
+  );
+  ipcMain.handle(
+    "app:get-active-dialog",
+    () => userDataService.getActiveDialog()
+  );
+  ipcMain.handle("app:get-dialogs-list", () => userDataService.getDialogsList());
+  ipcMain.handle(
+    "app:get-dialog-by-id",
+    (_event, dialogId) => userDataService.getDialogById(dialogId)
+  );
+  ipcMain.handle("app:create-dialog", () => userDataService.createDialog());
+  ipcMain.handle(
+    "app:rename-dialog",
+    (_event, dialogId, title) => userDataService.renameDialog(dialogId, title)
+  );
+  ipcMain.handle(
+    "app:delete-dialog",
+    (_event, dialogId) => userDataService.deleteDialog(dialogId)
+  );
+  ipcMain.handle(
+    "app:save-dialog-snapshot",
+    (_event, dialog) => userDataService.saveDialogSnapshot(dialog)
   );
   createWindow();
 });

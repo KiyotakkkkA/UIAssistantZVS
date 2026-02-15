@@ -1,0 +1,230 @@
+import { makeAutoObservable, runInAction } from "mobx";
+import type {
+    ChatDialog,
+    ChatDialogListItem,
+    ChatMessage,
+} from "../types/Chat";
+
+class ChatsStore {
+    isReady = false;
+    isSwitchingDialog = false;
+    dialogs: ChatDialogListItem[] = [];
+    activeDialog: ChatDialog | null = null;
+    messages: ChatMessage[] = [];
+
+    private isInitializing = false;
+
+    constructor() {
+        makeAutoObservable(this, {}, { autoBind: true });
+    }
+
+    async initialize(): Promise<void> {
+        if (this.isReady || this.isInitializing) {
+            return;
+        }
+
+        this.isInitializing = true;
+
+        try {
+            const api = window.appApi;
+
+            if (!api) {
+                runInAction(() => {
+                    const now = new Date().toISOString();
+                    this.activeDialog = {
+                        id: `dialog_${crypto.randomUUID().replace(/-/g, "")}`,
+                        title: "Новый диалог",
+                        messages: [],
+                        createdAt: now,
+                        updatedAt: now,
+                    };
+                    this.messages = [];
+                    this.dialogs = [];
+                    this.isReady = true;
+                });
+                return;
+            }
+
+            const [dialogs, activeDialog] = await Promise.all([
+                api.getDialogsList(),
+                api.getActiveDialog(),
+            ]);
+
+            runInAction(() => {
+                this.dialogs = dialogs;
+                this.activeDialog = activeDialog;
+                this.messages = activeDialog.messages;
+                this.isReady = true;
+            });
+        } finally {
+            runInAction(() => {
+                this.isInitializing = false;
+            });
+        }
+    }
+
+    setMessages(nextMessages: ChatMessage[]): void {
+        this.messages = nextMessages;
+
+        if (this.activeDialog) {
+            this.activeDialog = {
+                ...this.activeDialog,
+                messages: nextMessages,
+            };
+        }
+    }
+
+    replaceByDialog(dialog: ChatDialog): void {
+        this.activeDialog = dialog;
+        this.messages = dialog.messages;
+        this.upsertDialogListItem(dialog);
+    }
+
+    async switchDialog(dialogId: string): Promise<void> {
+        const api = window.appApi;
+
+        if (!api) {
+            return;
+        }
+
+        runInAction(() => {
+            this.isSwitchingDialog = true;
+        });
+
+        try {
+            const dialog = await api.getDialogById(dialogId);
+
+            runInAction(() => {
+                this.replaceByDialog(dialog);
+            });
+        } finally {
+            runInAction(() => {
+                this.isSwitchingDialog = false;
+            });
+        }
+    }
+
+    async createDialog(): Promise<ChatDialog | null> {
+        const api = window.appApi;
+
+        if (!api) {
+            return null;
+        }
+
+        const dialog = await api.createDialog();
+
+        runInAction(() => {
+            this.replaceByDialog(dialog);
+        });
+
+        return dialog;
+    }
+
+    async renameDialog(
+        dialogId: string,
+        title: string,
+    ): Promise<ChatDialog | null> {
+        const api = window.appApi;
+
+        if (!api) {
+            return null;
+        }
+
+        const dialog = await api.renameDialog(dialogId, title);
+
+        runInAction(() => {
+            if (this.activeDialog?.id === dialog.id) {
+                this.activeDialog = dialog;
+                this.messages = dialog.messages;
+            }
+            this.upsertDialogListItem(dialog);
+        });
+
+        return dialog;
+    }
+
+    async deleteDialog(dialogId: string): Promise<void> {
+        const api = window.appApi;
+
+        if (!api) {
+            return;
+        }
+
+        const result = await api.deleteDialog(dialogId);
+
+        runInAction(() => {
+            this.dialogs = result.dialogs;
+            this.activeDialog = result.activeDialog;
+            this.messages = result.activeDialog.messages;
+        });
+    }
+
+    async saveSnapshot(dialog: ChatDialog): Promise<ChatDialog> {
+        const api = window.appApi;
+        const serializableDialog = this.toSerializableDialog(dialog);
+
+        if (!api) {
+            runInAction(() => {
+                this.replaceByDialog(serializableDialog);
+            });
+            return serializableDialog;
+        }
+
+        const savedDialog = await api.saveDialogSnapshot(serializableDialog);
+
+        runInAction(() => {
+            this.replaceByDialog(savedDialog);
+        });
+
+        return savedDialog;
+    }
+
+    private toSerializableDialog(dialog: ChatDialog): ChatDialog {
+        return {
+            id: String(dialog.id),
+            title: String(dialog.title),
+            createdAt: String(dialog.createdAt),
+            updatedAt: String(dialog.updatedAt),
+            messages: dialog.messages.map((message) => ({
+                id: String(message.id),
+                author: message.author,
+                content: String(message.content),
+                timestamp: String(message.timestamp),
+            })),
+        };
+    }
+
+    private upsertDialogListItem(dialog: ChatDialog): void {
+        const lastMessage =
+            dialog.messages.length > 0
+                ? dialog.messages[dialog.messages.length - 1]
+                : null;
+
+        const preview =
+            lastMessage?.content?.trim() ||
+            "Пустой диалог — отправьте первое сообщение";
+
+        const item: ChatDialogListItem = {
+            id: dialog.id,
+            title: dialog.title,
+            preview,
+            time: new Date(dialog.updatedAt).toLocaleTimeString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+            }),
+            updatedAt: dialog.updatedAt,
+        };
+
+        const next = [
+            item,
+            ...this.dialogs.filter((existing) => existing.id !== dialog.id),
+        ];
+
+        next.sort((left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt),
+        );
+        this.dialogs = next;
+    }
+}
+
+export const chatsStore = new ChatsStore();

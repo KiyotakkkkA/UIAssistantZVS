@@ -1,9 +1,31 @@
 export type MessageRole = "system" | "user" | "assistant" | "tool";
 
 export type ChatMessage = {
+    id: string;
     author: MessageRole;
     content: string;
     timestamp: string;
+};
+
+export type ChatDialog = {
+    id: string;
+    title: string;
+    messages: ChatMessage[];
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ChatDialogListItem = {
+    id: string;
+    title: string;
+    preview: string;
+    time: string;
+    updatedAt: string;
+};
+
+export type DeleteDialogResult = {
+    dialogs: ChatDialogListItem[];
+    activeDialog: ChatDialog;
 };
 
 export interface OllamaMessage {

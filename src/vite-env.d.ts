@@ -6,6 +6,11 @@ import type {
     ThemeListItem,
     UserProfile,
 } from "./types/App";
+import type {
+    ChatDialog,
+    ChatDialogListItem,
+    DeleteDialogResult,
+} from "./types/Chat";
 
 interface ImportMetaEnv {}
 
@@ -22,6 +27,13 @@ declare global {
             updateUserProfile: (
                 nextProfile: Partial<UserProfile>,
             ) => Promise<UserProfile>;
+            getActiveDialog: () => Promise<ChatDialog>;
+            getDialogsList: () => Promise<ChatDialogListItem[]>;
+            getDialogById: (dialogId: string) => Promise<ChatDialog>;
+            createDialog: () => Promise<ChatDialog>;
+            renameDialog: (dialogId: string, title: string) => Promise<ChatDialog>;
+            deleteDialog: (dialogId: string) => Promise<DeleteDialogResult>;
+            saveDialogSnapshot: (dialog: ChatDialog) => Promise<ChatDialog>;
         };
     }
 }

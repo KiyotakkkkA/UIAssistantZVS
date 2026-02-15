@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useChatParams } from "../useChatParams";
 import { useToasts } from "../useToasts";
 import type { ChatDriver } from "../../types/App";
-import type { ChatMessage } from "../../types/Chat";
+import type { ChatDialog, ChatMessage } from "../../types/Chat";
 import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
+import { chatsStore } from "../../stores/chatsStore";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {
@@ -13,14 +14,17 @@ const getTimeStamp = () =>
         minute: "2-digit",
     });
 
+const createMessageId = () => `msg_${crypto.randomUUID().replace(/-/g, "")}`;
+
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
     const toasts = useToasts();
 
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
+    const messages = chatsStore.messages;
     const messagesRef = useRef<ChatMessage[]>(messages);
+    const activeDialogRef = useRef<ChatDialog | null>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
     const cancellationRequestedRef = useRef(false);
 
@@ -38,18 +42,47 @@ export function useChat() {
 
     const commitMessages = (nextMessages: ChatMessage[]) => {
         messagesRef.current = nextMessages;
-        setMessages(nextMessages);
+        chatsStore.setMessages(nextMessages);
     };
 
     const updateMessages = (
         updater: (prev: ChatMessage[]) => ChatMessage[],
     ) => {
-        setMessages((prev) => {
-            const next = updater(prev);
-            messagesRef.current = next;
-            return next;
-        });
+        const next = updater(messagesRef.current);
+        messagesRef.current = next;
+        chatsStore.setMessages(next);
     };
+
+    const ensureDialog = (): ChatDialog => {
+        if (chatsStore.activeDialog) {
+            activeDialogRef.current = chatsStore.activeDialog;
+            return chatsStore.activeDialog;
+        }
+
+        if (activeDialogRef.current) {
+            return activeDialogRef.current;
+        }
+
+        const now = new Date().toISOString();
+        const fallbackDialog: ChatDialog = {
+            id: `dialog_${crypto.randomUUID().replace(/-/g, "")}`,
+            title: "Новый диалог",
+            messages: messagesRef.current,
+            createdAt: now,
+            updatedAt: now,
+        };
+
+        activeDialogRef.current = fallbackDialog;
+        chatsStore.replaceByDialog(fallbackDialog);
+        return fallbackDialog;
+    };
+
+    useEffect(() => {
+        chatsStore.initialize();
+    }, []);
+
+    messagesRef.current = chatsStore.messages;
+    activeDialogRef.current = chatsStore.activeDialog;
 
     const sendMessageMutation = useMutation({
         mutationFn: async (rawContent: string) => {
@@ -79,6 +112,7 @@ export function useChat() {
             }
 
             const userMessage: ChatMessage = {
+                id: createMessageId(),
                 author: "user",
                 content,
                 timestamp: getTimeStamp(),
@@ -86,10 +120,13 @@ export function useChat() {
 
             const assistantTimestamp = getTimeStamp();
             const assistantMessage: ChatMessage = {
+                id: createMessageId(),
                 author: "assistant",
                 content: "",
                 timestamp: assistantTimestamp,
             };
+
+            ensureDialog();
 
             const requestBaseHistory = [...messagesRef.current];
             const historyForRequest = [...requestBaseHistory, userMessage];
@@ -146,6 +183,17 @@ export function useChat() {
                         });
                     },
                 });
+
+                const currentDialog = ensureDialog();
+                const snapshot: ChatDialog = {
+                    ...currentDialog,
+                    messages: messagesRef.current,
+                    updatedAt: new Date().toISOString(),
+                };
+
+                const savedDialog = await chatsStore.saveSnapshot(snapshot);
+                activeDialogRef.current = savedDialog;
+                commitMessages(savedDialog.messages);
             } catch (error) {
                 if (
                     cancellationRequestedRef.current &&

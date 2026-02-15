@@ -1,3 +1,4 @@
+import { observer } from "mobx-react-lite";
 import { useChat } from "../../hooks/agents";
 import { MessageComposer } from "../components/molecules";
 import {
@@ -6,7 +7,7 @@ import {
     MessageFeed,
 } from "../components/organisms/chat";
 
-export function ChatPage() {
+export const ChatPage = observer(function ChatPage() {
     const {
         messages,
         sendMessage,
@@ -35,4 +36,4 @@ export function ChatPage() {
             </div>
         </main>
     );
-}
+});

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { defaultProfile } from "../static/data";
+import { randomUUID } from "node:crypto";
+import { createBaseDialog, defaultProfile } from "../static/data";
 import { staticThemesMap, staticThemesList } from "../static/themes";
 import type {
     BootData,
@@ -9,6 +10,12 @@ import type {
     ThemeListItem,
     UserProfile,
 } from "../../src/types/App";
+import type {
+    ChatDialog,
+    ChatDialogListItem,
+    ChatMessage,
+    DeleteDialogResult,
+} from "../../src/types/Chat";
 
 const isChatDriver = (value: unknown): value is ChatDriver => {
     return value === "ollama" || value === "";
@@ -17,12 +24,107 @@ const isChatDriver = (value: unknown): value is ChatDriver => {
 export class UserDataService {
     private readonly resourcesPath: string;
     private readonly themesPath: string;
+    private readonly dialogsPath: string;
     private readonly profilePath: string;
 
     constructor(basePath: string) {
         this.resourcesPath = path.join(basePath, "resources");
         this.themesPath = path.join(this.resourcesPath, "themes");
+        this.dialogsPath = path.join(this.resourcesPath, "chats", "dialogs");
         this.profilePath = path.join(this.resourcesPath, "profile.json");
+    }
+
+    getActiveDialog(): ChatDialog {
+        const dialogs = this.readDialogs();
+
+        if (dialogs.length > 0) {
+            return dialogs[0];
+        }
+
+        const baseDialog = createBaseDialog();
+        this.writeDialog(baseDialog);
+        return baseDialog;
+    }
+
+    getDialogsList(): ChatDialogListItem[] {
+        return this.readDialogs().map((dialog) =>
+            this.toDialogListItem(dialog),
+        );
+    }
+
+    getDialogById(dialogId: string): ChatDialog {
+        const dialogs = this.readDialogs();
+        const dialog = dialogs.find((item) => item.id === dialogId);
+
+        if (dialog) {
+            return dialog;
+        }
+
+        return this.getActiveDialog();
+    }
+
+    createDialog(): ChatDialog {
+        const baseDialog = createBaseDialog();
+        this.writeDialog(baseDialog);
+        return baseDialog;
+    }
+
+    renameDialog(dialogId: string, nextTitle: string): ChatDialog {
+        const dialog = this.getDialogById(dialogId);
+        const trimmedTitle = nextTitle.trim();
+
+        const updatedDialog: ChatDialog = {
+            ...dialog,
+            title: trimmedTitle || dialog.title,
+            updatedAt: new Date().toISOString(),
+        };
+
+        this.writeDialog(updatedDialog);
+        return updatedDialog;
+    }
+
+    deleteDialog(dialogId: string): DeleteDialogResult {
+        const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
+
+        if (fs.existsSync(dialogPath)) {
+            fs.unlinkSync(dialogPath);
+        }
+
+        let dialogs = this.readDialogs();
+
+        if (dialogs.length === 0) {
+            const fallbackDialog = createBaseDialog();
+            this.writeDialog(fallbackDialog);
+            dialogs = [fallbackDialog];
+        }
+
+        return {
+            dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
+            activeDialog: dialogs[0],
+        };
+    }
+
+    saveDialogSnapshot(dialog: ChatDialog): ChatDialog {
+        const normalizedMessages = dialog.messages.map((message) =>
+            this.normalizeMessage(message),
+        );
+
+        const normalizedDialog: ChatDialog = {
+            id: this.normalizeDialogId(dialog.id),
+            title:
+                typeof dialog.title === "string" && dialog.title.trim()
+                    ? dialog.title
+                    : "Новый диалог",
+            messages: normalizedMessages,
+            createdAt:
+                typeof dialog.createdAt === "string" && dialog.createdAt
+                    ? dialog.createdAt
+                    : new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        this.writeDialog(normalizedDialog);
+        return normalizedDialog;
     }
 
     getBootData(): BootData {
@@ -144,6 +246,105 @@ export class UserDataService {
         return result;
     }
 
+    private readDialogs(): ChatDialog[] {
+        if (!fs.existsSync(this.dialogsPath)) {
+            return [];
+        }
+
+        const files = fs
+            .readdirSync(this.dialogsPath)
+            .filter((fileName) => fileName.endsWith(".json"));
+
+        const dialogs: ChatDialog[] = [];
+
+        for (const fileName of files) {
+            const filePath = path.join(this.dialogsPath, fileName);
+
+            try {
+                const rawDialog = fs.readFileSync(filePath, "utf-8");
+                const parsed = JSON.parse(rawDialog) as Partial<ChatDialog>;
+
+                if (!Array.isArray(parsed.messages)) {
+                    continue;
+                }
+
+                const normalizedMessages = parsed.messages
+                    .map((message) =>
+                        this.normalizeMessage(message as ChatMessage),
+                    )
+                    .filter(Boolean);
+
+                dialogs.push({
+                    id: this.normalizeDialogId(parsed.id),
+                    title:
+                        typeof parsed.title === "string" && parsed.title.trim()
+                            ? parsed.title
+                            : "Новый диалог",
+                    messages: normalizedMessages,
+                    createdAt:
+                        typeof parsed.createdAt === "string" && parsed.createdAt
+                            ? parsed.createdAt
+                            : new Date().toISOString(),
+                    updatedAt:
+                        typeof parsed.updatedAt === "string" && parsed.updatedAt
+                            ? parsed.updatedAt
+                            : new Date().toISOString(),
+                });
+            } catch {
+                continue;
+            }
+        }
+
+        dialogs.sort((left, right) =>
+            right.updatedAt.localeCompare(left.updatedAt),
+        );
+
+        return dialogs;
+    }
+
+    private writeDialog(dialog: ChatDialog): void {
+        if (!fs.existsSync(this.dialogsPath)) {
+            fs.mkdirSync(this.dialogsPath, { recursive: true });
+        }
+
+        const dialogPath = path.join(this.dialogsPath, `${dialog.id}.json`);
+        fs.writeFileSync(dialogPath, JSON.stringify(dialog, null, 2));
+    }
+
+    private normalizeDialogId(id: unknown): string {
+        if (typeof id === "string" && id.startsWith("dialog_")) {
+            return id;
+        }
+
+        return `dialog_${randomUUID().replace(/-/g, "")}`;
+    }
+
+    private normalizeMessage(message: ChatMessage): ChatMessage {
+        const role =
+            message.author === "assistant" ||
+            message.author === "user" ||
+            message.author === "system" ||
+            message.author === "tool"
+                ? message.author
+                : "assistant";
+
+        return {
+            id:
+                typeof message.id === "string" && message.id.startsWith("msg_")
+                    ? message.id
+                    : `msg_${randomUUID().replace(/-/g, "")}`,
+            author: role,
+            content: typeof message.content === "string" ? message.content : "",
+            timestamp:
+                typeof message.timestamp === "string" && message.timestamp
+                    ? message.timestamp
+                    : new Date().toLocaleTimeString("ru-RU", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                      }),
+        };
+    }
+
     private resolveThemePalette(themeId: string): Record<string, string> {
         const themes = this.readThemes();
         const preferredTheme = themes.find((theme) => theme.id === themeId);
@@ -153,5 +354,25 @@ export class UserDataService {
         }
 
         return staticThemesMap[defaultProfile.themePreference].palette;
+    }
+
+    private toDialogListItem(dialog: ChatDialog): ChatDialogListItem {
+        const lastMessage =
+            dialog.messages.length > 0
+                ? dialog.messages[dialog.messages.length - 1]
+                : null;
+
+        return {
+            id: dialog.id,
+            title: dialog.title,
+            preview:
+                lastMessage?.content?.trim() ||
+                "Пустой диалог — отправьте первое сообщение",
+            time: new Date(dialog.updatedAt).toLocaleTimeString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+            }),
+            updatedAt: dialog.updatedAt,
+        };
     }
 }

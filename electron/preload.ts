@@ -5,6 +5,11 @@ import type {
     ThemeListItem,
     UserProfile,
 } from "../src/types/App";
+import type {
+    ChatDialog,
+    ChatDialogListItem,
+    DeleteDialogResult,
+} from "../src/types/Chat";
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -39,4 +44,17 @@ contextBridge.exposeInMainWorld("appApi", {
         nextProfile: Partial<UserProfile>,
     ): Promise<UserProfile> =>
         ipcRenderer.invoke("app:update-user-profile", nextProfile),
+    getActiveDialog: (): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:get-active-dialog"),
+    getDialogsList: (): Promise<ChatDialogListItem[]> =>
+        ipcRenderer.invoke("app:get-dialogs-list"),
+    getDialogById: (dialogId: string): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:get-dialog-by-id", dialogId),
+    createDialog: (): Promise<ChatDialog> => ipcRenderer.invoke("app:create-dialog"),
+    renameDialog: (dialogId: string, title: string): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:rename-dialog", dialogId, title),
+    deleteDialog: (dialogId: string): Promise<DeleteDialogResult> =>
+        ipcRenderer.invoke("app:delete-dialog", dialogId),
+    saveDialogSnapshot: (dialog: ChatDialog): Promise<ChatDialog> =>
+        ipcRenderer.invoke("app:save-dialog-snapshot", dialog),
 });

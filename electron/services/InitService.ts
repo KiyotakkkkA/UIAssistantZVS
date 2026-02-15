@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { defaultProfile } from "../static/data";
+import { createBaseDialog, defaultProfile } from "../static/data";
 import { staticThemeEntries } from "../static/themes";
 
 export class InitService {
@@ -45,10 +45,20 @@ export class InitService {
 
     private ensureChatsDirectory(): void {
         this.ensureDirectory(this.chatsPath);
+        this.ensureDirectory(this.dialogsPath);
 
-        if (!fs.existsSync(this.dialogsPath)) {
-            fs.mkdirSync(this.dialogsPath);
+        const dialogFiles = fs
+            .readdirSync(this.dialogsPath)
+            .filter((fileName) => fileName.endsWith(".json"));
+
+        if (dialogFiles.length > 0) {
+            return;
         }
+
+        const baseDialog = createBaseDialog();
+        const baseDialogPath = path.join(this.dialogsPath, `${baseDialog.id}.json`);
+
+        fs.writeFileSync(baseDialogPath, JSON.stringify(baseDialog, null, 2));
     }
 
     private ensureThemes(): void {

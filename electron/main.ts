@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
 import type { UserProfile } from "../src/types/App";
+import type { ChatDialog } from "../src/types/Chat";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +86,23 @@ app.whenReady().then(() => {
         "app:update-user-profile",
         (_event, nextProfile: Partial<UserProfile>) =>
             userDataService.updateUserProfile(nextProfile),
+    );
+    ipcMain.handle("app:get-active-dialog", () =>
+        userDataService.getActiveDialog(),
+    );
+    ipcMain.handle("app:get-dialogs-list", () => userDataService.getDialogsList());
+    ipcMain.handle("app:get-dialog-by-id", (_event, dialogId: string) =>
+        userDataService.getDialogById(dialogId),
+    );
+    ipcMain.handle("app:create-dialog", () => userDataService.createDialog());
+    ipcMain.handle("app:rename-dialog", (_event, dialogId: string, title: string) =>
+        userDataService.renameDialog(dialogId, title),
+    );
+    ipcMain.handle("app:delete-dialog", (_event, dialogId: string) =>
+        userDataService.deleteDialog(dialogId),
+    );
+    ipcMain.handle("app:save-dialog-snapshot", (_event, dialog: ChatDialog) =>
+        userDataService.saveDialogSnapshot(dialog),
     );
 
     createWindow();
