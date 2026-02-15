@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Avatar, Button, Loader, Modal } from "../../atoms";
 import {
     ChatUserBubbleCard,
@@ -77,7 +77,9 @@ export function MessageFeed({
     sendMessage,
     showLoader = false,
 }: MessageFeedProps) {
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLElement>(null);
+    const hasMountedRef = useRef(false);
+    const previousUserMessagesCountRef = useRef(0);
     const {
         editingMessageId,
         editingValue,
@@ -95,13 +97,41 @@ export function MessageFeed({
         rejectCommandExec,
     } = useMessages({ sendMessage });
 
-    useEffect(() => {
-        messagesEndRef?.current?.scrollIntoView({ behavior: "smooth" });
+    useLayoutEffect(() => {
+        const userMessagesCount = messages.filter(
+            (message) => message.author === "user",
+        ).length;
+
+        if (!hasMountedRef.current) {
+            hasMountedRef.current = true;
+            previousUserMessagesCountRef.current = userMessagesCount;
+            return;
+        }
+
+        const hasNewUserMessage =
+            userMessagesCount > previousUserMessagesCountRef.current;
+
+        previousUserMessagesCountRef.current = userMessagesCount;
+
+        if (!hasNewUserMessage) {
+            return;
+        }
+
+        const container = scrollContainerRef.current;
+
+        if (!container) {
+            return;
+        }
+
+        container.scrollTop = container.scrollHeight;
     }, [messages]);
 
     return (
         <>
-            <section className="flex-1 space-y-4 overflow-y-auto rounded-2xl bg-main-900/55 p-2 ring-main-300/15">
+            <section
+                ref={scrollContainerRef}
+                className="flex-1 space-y-4 overflow-y-auto rounded-2xl bg-main-900/55 p-2 ring-main-300/15"
+            >
                 {(() => {
                     const consumedMessageIds = new Set<string>();
 
@@ -201,7 +231,6 @@ export function MessageFeed({
                         <span>Модель печатает...</span>
                     </div>
                 )}
-                <div ref={messagesEndRef} />
             </section>
 
             <Modal

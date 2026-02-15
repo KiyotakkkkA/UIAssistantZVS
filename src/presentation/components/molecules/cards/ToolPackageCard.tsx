@@ -1,5 +1,5 @@
 import type { ToolPackageDescriptor } from "../../../../utils/ToolsBuilder";
-import { ToolFunctionCard } from "./ToolFunctionCard";
+import { Accordeon } from "../../atoms";
 
 type ToolPackageCardProps = {
     pkg: ToolPackageDescriptor;
@@ -17,10 +17,26 @@ export function ToolPackageCard({ pkg }: ToolPackageCardProps) {
 
             <div className="space-y-3">
                 {pkg.tools.map((tool) => (
-                    <ToolFunctionCard
+                    <Accordeon
                         key={`${pkg.id}_${tool.schema.function.name}`}
-                        schema={tool.schema}
-                    />
+                        title={`Инструмент: ${tool.schema.function.name}`}
+                        subtitle={
+                            tool.schema.function.description || "Без описания"
+                        }
+                    >
+                        <div className="mt-3 rounded-lg border border-main-700/60 bg-main-800/50 p-3">
+                            <p className="mb-2 text-xs font-medium text-main-300">
+                                Параметры
+                            </p>
+                            <pre className="overflow-auto text-[11px] leading-5 text-main-200 whitespace-pre-wrap break-all">
+                                {JSON.stringify(
+                                    tool.schema.function.parameters,
+                                    null,
+                                    2,
+                                )}
+                            </pre>
+                        </div>
+                    </Accordeon>
                 ))}
             </div>
         </article>

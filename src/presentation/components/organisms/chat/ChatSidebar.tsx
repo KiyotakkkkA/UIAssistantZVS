@@ -123,13 +123,9 @@ export const ChatSidebar = observer(function ChatSidebar() {
                 <p className="text-xs uppercase tracking-[0.18em] text-main-400">
                     Рабочая область
                 </p>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded-md px-2 py-1 text-xs text-main-200 hover:bg-main-800/70"
-                    onClick={openCreateModal}
-                >
+                <Button className="px-2 py-1 text-xs" onClick={openCreateModal}>
                     + Диалог
-                </button>
+                </Button>
             </div>
 
             <div className="mt-6 flex-1 space-y-2 overflow-y-auto pr-1">
