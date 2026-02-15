@@ -126,11 +126,15 @@ class InitService {
   basePath;
   resourcesPath;
   themesPath;
+  chatsPath;
+  dialogsPath;
   profilePath;
   constructor(basePath) {
     this.basePath = basePath;
     this.resourcesPath = path.join(this.basePath, "resources");
     this.themesPath = path.join(this.resourcesPath, "themes");
+    this.chatsPath = path.join(this.resourcesPath, "chats");
+    this.dialogsPath = path.join(this.chatsPath, "dialogs");
     this.profilePath = path.join(this.resourcesPath, "profile.json");
   }
   initialize() {
@@ -138,6 +142,7 @@ class InitService {
     this.ensureDirectory(this.themesPath);
     this.ensureProfile();
     this.ensureThemes();
+    this.ensureChatsDirectory();
   }
   ensureDirectory(targetPath) {
     if (!fs.existsSync(targetPath)) {
@@ -150,6 +155,12 @@ class InitService {
         this.profilePath,
         JSON.stringify(defaultProfile, null, 2)
       );
+    }
+  }
+  ensureChatsDirectory() {
+    this.ensureDirectory(this.chatsPath);
+    if (!fs.existsSync(this.dialogsPath)) {
+      fs.mkdirSync(this.dialogsPath);
     }
   }
   ensureThemes() {

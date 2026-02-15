@@ -5,7 +5,7 @@ import { useToasts } from "../useToasts";
 import type { ChatDriver } from "../../types/App";
 import type { ChatMessage } from "../../types/Chat";
 import { createOllamaAdapter } from "./adapters/ollamaAdapter";
-import type { ChatProviderAdapter } from "./adapters/types";
+import type { ChatProviderAdapter } from "../../types/AIRequests";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {

@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../../../types/Chat";
+import type { ChatMessage } from "./Chat";
 
 export type ChatAdapterRequest = {
     history: ChatMessage[];

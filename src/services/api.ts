@@ -1,14 +1,9 @@
 import { Config } from "../config";
 import type { OllamaChatChunk, StreamChatParams } from "../types/Chat";
 
-const getOllamaChatUrl = () => {
-    const baseUrl = Config.OLLAMA_BASE_URL.trim().replace(/\/+$/, "");
-    return baseUrl.endsWith("/ollama")
-        ? `${baseUrl}/chat`
-        : `${baseUrl}/api/chat`;
-};
-
 class API {
+    private readonly ollamaBaseUrl = `${Config.OLLAMA_BASE_URL}/chat`;
+
     public async streamChatOllama({
         model,
         token,
@@ -16,7 +11,7 @@ class API {
         signal,
         onChunk,
     }: StreamChatParams) {
-        const response = await fetch(getOllamaChatUrl(), {
+        const response = await fetch(this.ollamaBaseUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

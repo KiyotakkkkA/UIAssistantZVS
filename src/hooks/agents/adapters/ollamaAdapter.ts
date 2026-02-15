@@ -1,6 +1,6 @@
 import api from "../../../services/api";
 import type { ChatMessage } from "../../../types/Chat";
-import type { ChatProviderAdapter } from "./types";
+import type { ChatProviderAdapter } from "../../../types/AIRequests";
 
 type CreateOllamaAdapterParams = {
     model: string;
