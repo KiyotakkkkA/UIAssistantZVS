@@ -11,6 +11,8 @@ class UserProfileStore {
         ollamaModel: DEFAULT_OLLAMA_MODEL,
         ollamaToken: "",
         chatDriver: "ollama",
+        assistantName: "Чарли",
+        maxToolCallsPerResponse: 4,
         userName: "Пользователь",
         userPrompt: "",
         activeDialogId: "",

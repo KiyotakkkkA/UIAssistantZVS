@@ -1,11 +1,14 @@
 import { useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useTheme, useToasts } from "../../../../hooks";
+import { toolsStore } from "../../../../stores/toolsStore";
 import { Button, Modal } from "../../atoms";
+import { ToolPackageCard } from "../../molecules/cards";
 import { SettingsView, type SettingsViewHandle } from "../settings";
 
 export function ChatHeader() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isToolsOpen, setIsToolsOpen] = useState(false);
     const settingsViewRef = useRef<SettingsViewHandle | null>(null);
     const { themePreference, themeOptions, setTheme } = useTheme();
     const toasts = useToasts();
@@ -51,8 +54,12 @@ export function ChatHeader() {
                     <Button label="Search" className="p-2">
                         <Icon icon="mdi:magnify" width="16" height="16" />
                     </Button>
-                    <Button label="Menu" className="p-2">
-                        <Icon icon="mdi:menu" width="16" height="16" />
+                    <Button
+                        label="Menu"
+                        className="p-2"
+                        onClick={() => setIsToolsOpen(true)}
+                    >
+                        <Icon icon="mdi:tools" width="16" height="16" />
                     </Button>
                     <Button
                         label="Settings"
@@ -88,6 +95,19 @@ export function ChatHeader() {
                         void setTheme(themeId);
                     }}
                 />
+            </Modal>
+
+            <Modal
+                open={isToolsOpen}
+                onClose={() => setIsToolsOpen(false)}
+                title="Пакеты инструментов"
+                className="max-w-6xl min-h-144"
+            >
+                <div className="space-y-4">
+                    {toolsStore.packages.map((pkg) => (
+                        <ToolPackageCard key={pkg.id} pkg={pkg} />
+                    ))}
+                </div>
             </Modal>
         </>
     );

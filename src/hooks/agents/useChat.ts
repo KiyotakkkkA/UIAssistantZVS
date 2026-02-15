@@ -8,6 +8,7 @@ import type { ChatDialog, ChatMessage } from "../../types/Chat";
 import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
 import { chatsStore } from "../../stores/chatsStore";
+import { toolsStore } from "../../stores/toolsStore";
 import { Config } from "../../config";
 
 const getTimeStamp = () =>
@@ -126,12 +127,7 @@ export function useChat() {
             };
 
             const assistantTimestamp = getTimeStamp();
-            const assistantMessage: ChatMessage = {
-                id: createMessageId(),
-                author: "assistant",
-                content: "",
-                timestamp: assistantTimestamp,
-            };
+            const assistantMessageId = createMessageId();
 
             ensureDialog();
 
@@ -143,7 +139,9 @@ export function useChat() {
                       {
                           id: createMessageId(),
                           author: "system",
-                          content: `SYSTEM_PROMPT:\n${Config.SYSTEM_PROMPT}`,
+                          content: `SYSTEM_PROMPT:\n${Config.SYSTEM_PROMPT}\nИмя ассистента: ${
+                              userProfile.assistantName.trim() || "Чарли"
+                          }`,
                           timestamp: getTimeStamp(),
                       },
                       {
@@ -168,19 +166,152 @@ export function useChat() {
                 ...requestBaseHistory,
                 userMessage,
             ];
-            const nextMessages = [...historyForRequest, assistantMessage];
-            commitMessages(nextMessages);
+            const answerMessage: ChatMessage = {
+                id: assistantMessageId,
+                author: "assistant",
+                content: "",
+                timestamp: assistantTimestamp,
+                assistantStage: "answer",
+                answeringAt: userMessage.id,
+            };
+
+            commitMessages([...historyForRequest, answerMessage]);
             setIsStreaming(true);
             setIsAwaitingFirstChunk(true);
             cancellationRequestedRef.current = false;
             const abortController = new AbortController();
             abortControllerRef.current = abortController;
+            const toolTraceMessageIds = new Map<string, string>();
+            let thinkingMessageId: string | null = null;
 
             let hasFirstChunk = false;
 
             try {
                 await adapter.send({
                     history: historyForRequest,
+                    tools: toolsStore.toolDefinitions,
+                    maxToolCalls:
+                        userProfile.maxToolCallsPerResponse > 0
+                            ? userProfile.maxToolCallsPerResponse
+                            : 1,
+                    executeTool: async (toolName, args) =>
+                        toolsStore.executeTool(toolName, args, {
+                            ollamaToken: ollamaToken,
+                        }),
+                    onToolCall: ({ callId, toolName, args }) => {
+                        const messageId = createMessageId();
+                        toolTraceMessageIds.set(callId, messageId);
+
+                        updateMessages((prev) => [
+                            ...prev,
+                            {
+                                id: messageId,
+                                author: "assistant",
+                                assistantStage: "tool",
+                                answeringAt: userMessage.id,
+                                toolTrace: {
+                                    callId,
+                                    toolName,
+                                    args,
+                                    result: null,
+                                },
+                                content: "",
+                                timestamp: getTimeStamp(),
+                            },
+                        ]);
+                    },
+                    onToolResult: ({ callId, toolName, args, result }) => {
+                        const messageId = toolTraceMessageIds.get(callId);
+
+                        updateMessages((prev) => {
+                            const nextContent = JSON.stringify(
+                                {
+                                    callId,
+                                    toolName,
+                                    args,
+                                    result,
+                                },
+                                null,
+                                2,
+                            );
+
+                            if (!messageId) {
+                                return [
+                                    ...prev,
+                                    {
+                                        id: createMessageId(),
+                                        author: "assistant",
+                                        assistantStage: "tool",
+                                        answeringAt: userMessage.id,
+                                        toolTrace: {
+                                            callId,
+                                            toolName,
+                                            args,
+                                            result,
+                                        },
+                                        content: nextContent,
+                                        timestamp: getTimeStamp(),
+                                    },
+                                ];
+                            }
+
+                            return prev.map((message) =>
+                                message.id === messageId
+                                    ? {
+                                          ...message,
+                                          toolTrace: {
+                                              callId,
+                                              toolName,
+                                              args,
+                                              result,
+                                          },
+                                          content: nextContent,
+                                      }
+                                    : message,
+                            );
+                        });
+                    },
+                    onThinkingChunk: (chunkText, done) => {
+                        if (!chunkText) {
+                            if (done && thinkingMessageId) {
+                                thinkingMessageId = null;
+                            }
+                            return;
+                        }
+
+                        if (!thinkingMessageId) {
+                            thinkingMessageId = createMessageId();
+
+                            updateMessages((prev) => [
+                                ...prev,
+                                {
+                                    id: thinkingMessageId as string,
+                                    author: "assistant",
+                                    assistantStage: "thinking",
+                                    answeringAt: userMessage.id,
+                                    content: chunkText,
+                                    timestamp: getTimeStamp(),
+                                },
+                            ]);
+
+                            return;
+                        }
+
+                        updateMessages((prev) =>
+                            prev.map((message) =>
+                                message.id === thinkingMessageId
+                                    ? {
+                                          ...message,
+                                          content: `${message.content}${chunkText}`,
+                                      }
+                                    : message,
+                            ),
+                        );
+
+                        if (done) {
+                            thinkingMessageId = null;
+                        }
+                    },
                     signal: abortController.signal,
                     onChunk: (chunkText, done) => {
                         if (!chunkText) {
@@ -196,25 +327,28 @@ export function useChat() {
                         }
 
                         updateMessages((prev) => {
-                            const lastAssistantIndex = [...prev]
-                                .reverse()
-                                .findIndex(
-                                    (message) =>
-                                        message.author === "assistant" &&
-                                        message.timestamp ===
-                                            assistantTimestamp,
-                                );
+                            const assistantIndex = prev.findIndex(
+                                (message) => message.id === assistantMessageId,
+                            );
 
-                            if (lastAssistantIndex === -1) {
-                                return prev;
+                            if (assistantIndex === -1) {
+                                return [
+                                    ...prev,
+                                    {
+                                        id: assistantMessageId,
+                                        author: "assistant",
+                                        assistantStage: "answer",
+                                        answeringAt: userMessage.id,
+                                        content: chunkText,
+                                        timestamp: assistantTimestamp,
+                                    },
+                                ];
                             }
 
-                            const actualIndex =
-                                prev.length - 1 - lastAssistantIndex;
                             const updated = [...prev];
-                            updated[actualIndex] = {
-                                ...updated[actualIndex],
-                                content: `${updated[actualIndex].content}${chunkText}`,
+                            updated[assistantIndex] = {
+                                ...updated[assistantIndex],
+                                content: `${updated[assistantIndex].content}${chunkText}`,
                             };
 
                             return updated;
@@ -248,22 +382,27 @@ export function useChat() {
                         : "Не удалось получить ответ модели";
 
                 updateMessages((prev) => {
-                    const lastAssistantIndex = [...prev]
-                        .reverse()
-                        .findIndex(
-                            (message) =>
-                                message.author === "assistant" &&
-                                message.timestamp === assistantTimestamp,
-                        );
+                    const assistantIndex = prev.findIndex(
+                        (message) => message.id === assistantMessageId,
+                    );
 
-                    if (lastAssistantIndex === -1) {
-                        return prev;
+                    if (assistantIndex === -1) {
+                        return [
+                            ...prev,
+                            {
+                                id: assistantMessageId,
+                                author: "assistant",
+                                assistantStage: "answer",
+                                answeringAt: userMessage.id,
+                                content: `Ошибка: ${errorMessage}`,
+                                timestamp: assistantTimestamp,
+                            },
+                        ];
                     }
 
-                    const actualIndex = prev.length - 1 - lastAssistantIndex;
                     const updated = [...prev];
-                    updated[actualIndex] = {
-                        ...updated[actualIndex],
+                    updated[assistantIndex] = {
+                        ...updated[assistantIndex],
                         content: `Ошибка: ${errorMessage}`,
                     };
 

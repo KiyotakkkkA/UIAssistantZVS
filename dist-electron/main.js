@@ -8,6 +8,8 @@ const defaultProfile = {
   ollamaModel: "gpt-oss:20b",
   ollamaToken: "",
   chatDriver: "ollama",
+  assistantName: "Чарли",
+  maxToolCallsPerResponse: 10,
   userName: "Пользователь",
   userPrompt: "",
   activeDialogId: ""
@@ -214,7 +216,9 @@ class UserDataService {
     const profile = this.readUserProfile();
     const dialogs = this.readDialogs();
     if (profile.activeDialogId && dialogs.some((dialog) => dialog.id === profile.activeDialogId)) {
-      const activeDialog = dialogs.find((dialog) => dialog.id === profile.activeDialogId) ?? dialogs[0];
+      const activeDialog = dialogs.find(
+        (dialog) => dialog.id === profile.activeDialogId
+      ) ?? dialogs[0];
       return activeDialog;
     }
     if (dialogs.length > 0) {
@@ -277,14 +281,14 @@ class UserDataService {
   }
   deleteMessageFromDialog(dialogId, messageId) {
     const dialog = this.getDialogById(dialogId);
-    const messageIndex = dialog.messages.findIndex(
+    const targetMessage = dialog.messages.find(
       (message) => message.id === messageId
     );
-    if (messageIndex === -1) {
+    if (!targetMessage) {
       return dialog;
     }
     const nextMessages = dialog.messages.filter(
-      (_message, index) => index !== messageIndex && index !== messageIndex + 1
+      (message) => message.id !== messageId && message.answeringAt !== messageId
     );
     const updatedDialog = {
       ...dialog,
@@ -382,6 +386,10 @@ class UserDataService {
         ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
         ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
         ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
+        ...typeof parsed.assistantName === "string" ? { assistantName: parsed.assistantName } : {},
+        ...typeof parsed.maxToolCallsPerResponse === "number" && Number.isFinite(parsed.maxToolCallsPerResponse) ? {
+          maxToolCallsPerResponse: parsed.maxToolCallsPerResponse
+        } : {},
         ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
         ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
         ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
@@ -458,7 +466,11 @@ class UserDataService {
     return `dialog_${randomUUID().replace(/-/g, "")}`;
   }
   normalizeMessage(message) {
-    const role = message.author === "assistant" || message.author === "user" || message.author === "system" || message.author === "tool" ? message.author : "assistant";
+    const rawAuthor = message.author;
+    const role = rawAuthor === "assistant" || rawAuthor === "user" || rawAuthor === "system" ? rawAuthor : "assistant";
+    const migratedStage = rawAuthor === "tool" ? "tool" : rawAuthor === "thinking" ? "thinking" : void 0;
+    const assistantStage = role === "assistant" ? message.assistantStage === "tool" || message.assistantStage === "thinking" || message.assistantStage === "answer" ? message.assistantStage : migratedStage || "answer" : void 0;
+    const toolTrace = role === "assistant" && assistantStage === "tool" ? message.toolTrace && typeof message.toolTrace.callId === "string" && typeof message.toolTrace.toolName === "string" && typeof message.toolTrace.args === "object" && message.toolTrace.args !== null ? message.toolTrace : void 0 : void 0;
     return {
       id: typeof message.id === "string" && message.id.startsWith("msg_") ? message.id : `msg_${randomUUID().replace(/-/g, "")}`,
       author: role,
@@ -466,7 +478,10 @@ class UserDataService {
       timestamp: typeof message.timestamp === "string" && message.timestamp ? message.timestamp : (/* @__PURE__ */ new Date()).toLocaleTimeString("ru-RU", {
         hour: "2-digit",
         minute: "2-digit"
-      })
+      }),
+      ...typeof message.answeringAt === "string" ? { answeringAt: message.answeringAt } : {},
+      ...assistantStage ? { assistantStage } : {},
+      ...toolTrace ? { toolTrace } : {}
     };
   }
   resolveThemePalette(themeId) {
@@ -551,7 +566,10 @@ app.whenReady().then(() => {
     "app:get-active-dialog",
     () => userDataService.getActiveDialog()
   );
-  ipcMain.handle("app:get-dialogs-list", () => userDataService.getDialogsList());
+  ipcMain.handle(
+    "app:get-dialogs-list",
+    () => userDataService.getDialogsList()
+  );
   ipcMain.handle(
     "app:get-dialog-by-id",
     (_event, dialogId) => userDataService.getDialogById(dialogId)

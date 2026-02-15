@@ -34,5 +34,7 @@ electron.contextBridge.exposeInMainWorld("appApi", {
   deleteDialog: (dialogId) => electron.ipcRenderer.invoke("app:delete-dialog", dialogId),
   deleteMessageFromDialog: (dialogId, messageId) => electron.ipcRenderer.invoke("app:delete-message-from-dialog", dialogId, messageId),
   truncateDialogFromMessage: (dialogId, messageId) => electron.ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
+  webSearchTool: (request, ollamaToken) => electron.ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
+  webFetchTool: (url, ollamaToken) => electron.ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken),
   saveDialogSnapshot: (dialog) => electron.ipcRenderer.invoke("app:save-dialog-snapshot", dialog)
 });

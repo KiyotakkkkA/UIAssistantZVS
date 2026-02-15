@@ -119,20 +119,13 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
             );
             chatsStore.replaceByDialog(updatedDialog);
         } else {
-            const messageIndex = dialog.messages.findIndex(
-                (message) => message.id === deleteMessageId,
-            );
-
             chatsStore.replaceByDialog({
                 ...dialog,
-                messages:
-                    messageIndex === -1
-                        ? dialog.messages
-                        : dialog.messages.filter(
-                              (_message, index) =>
-                                  index !== messageIndex &&
-                                  index !== messageIndex + 1,
-                          ),
+                messages: dialog.messages.filter(
+                    (message) =>
+                        message.id !== deleteMessageId &&
+                        message.answeringAt !== deleteMessageId,
+                ),
                 updatedAt: new Date().toISOString(),
             });
         }

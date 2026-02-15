@@ -65,6 +65,10 @@ contextBridge.exposeInMainWorld("appApi", {
         messageId: string,
     ): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:truncate-dialog-from-message", dialogId, messageId),
+    webSearchTool: (request: string, ollamaToken: string): Promise<unknown> =>
+        ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
+    webFetchTool: (url: string, ollamaToken: string): Promise<unknown> =>
+        ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken),
     saveDialogSnapshot: (dialog: ChatDialog): Promise<ChatDialog> =>
         ipcRenderer.invoke("app:save-dialog-snapshot", dialog),
 });

@@ -5,6 +5,64 @@ import type {
     ChatMessage,
 } from "../types/Chat";
 
+const toCloneSafeValue = (
+    value: unknown,
+    seen: WeakSet<object> = new WeakSet<object>(),
+): unknown => {
+    if (
+        value === null ||
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+    ) {
+        return value;
+    }
+
+    if (typeof value === "bigint") {
+        return value.toString();
+    }
+
+    if (
+        value === undefined ||
+        typeof value === "function" ||
+        typeof value === "symbol"
+    ) {
+        return null;
+    }
+
+    if (Array.isArray(value)) {
+        return value.map((item) => toCloneSafeValue(item, seen));
+    }
+
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+
+    if (typeof value === "object") {
+        if (seen.has(value)) {
+            return "[Circular]";
+        }
+
+        seen.add(value);
+        const entries = Object.entries(value as Record<string, unknown>).map(
+            ([key, entry]) => [key, toCloneSafeValue(entry, seen)],
+        );
+        return Object.fromEntries(entries);
+    }
+
+    return String(value);
+};
+
+const toCloneSafeRecord = (value: unknown): Record<string, unknown> => {
+    const safe = toCloneSafeValue(value);
+
+    if (safe && typeof safe === "object" && !Array.isArray(safe)) {
+        return safe as Record<string, unknown>;
+    }
+
+    return {};
+};
+
 class ChatsStore {
     isReady = false;
     isSwitchingDialog = false;
@@ -190,6 +248,24 @@ class ChatsStore {
                 author: message.author,
                 content: String(message.content),
                 timestamp: String(message.timestamp),
+                ...(typeof message.answeringAt === "string"
+                    ? { answeringAt: message.answeringAt }
+                    : {}),
+                ...(message.assistantStage
+                    ? { assistantStage: message.assistantStage }
+                    : {}),
+                ...(message.toolTrace
+                    ? {
+                          toolTrace: {
+                              callId: String(message.toolTrace.callId),
+                              toolName: String(message.toolTrace.toolName),
+                              args: toCloneSafeRecord(message.toolTrace.args),
+                              result: toCloneSafeValue(
+                                  message.toolTrace.result,
+                              ),
+                          },
+                      }
+                    : {}),
             })),
         };
     }

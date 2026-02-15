@@ -90,13 +90,17 @@ app.whenReady().then(() => {
     ipcMain.handle("app:get-active-dialog", () =>
         userDataService.getActiveDialog(),
     );
-    ipcMain.handle("app:get-dialogs-list", () => userDataService.getDialogsList());
+    ipcMain.handle("app:get-dialogs-list", () =>
+        userDataService.getDialogsList(),
+    );
     ipcMain.handle("app:get-dialog-by-id", (_event, dialogId: string) =>
         userDataService.getDialogById(dialogId),
     );
     ipcMain.handle("app:create-dialog", () => userDataService.createDialog());
-    ipcMain.handle("app:rename-dialog", (_event, dialogId: string, title: string) =>
-        userDataService.renameDialog(dialogId, title),
+    ipcMain.handle(
+        "app:rename-dialog",
+        (_event, dialogId: string, title: string) =>
+            userDataService.renameDialog(dialogId, title),
     );
     ipcMain.handle("app:delete-dialog", (_event, dialogId: string) =>
         userDataService.deleteDialog(dialogId),

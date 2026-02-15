@@ -8,6 +8,7 @@ class API {
         model,
         token,
         messages,
+        tools,
         signal,
         onChunk,
     }: StreamChatParams) {
@@ -23,6 +24,8 @@ class API {
                 model,
                 messages,
                 stream: true,
+                think: true,
+                ...(tools && tools.length > 0 ? { tools } : {}),
             }),
             signal,
         });

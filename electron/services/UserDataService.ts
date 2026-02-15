@@ -43,8 +43,9 @@ export class UserDataService {
             dialogs.some((dialog) => dialog.id === profile.activeDialogId)
         ) {
             const activeDialog =
-                dialogs.find((dialog) => dialog.id === profile.activeDialogId) ??
-                dialogs[0];
+                dialogs.find(
+                    (dialog) => dialog.id === profile.activeDialogId,
+                ) ?? dialogs[0];
 
             return activeDialog;
         }
@@ -126,17 +127,17 @@ export class UserDataService {
     deleteMessageFromDialog(dialogId: string, messageId: string): ChatDialog {
         const dialog = this.getDialogById(dialogId);
 
-        const messageIndex = dialog.messages.findIndex(
+        const targetMessage = dialog.messages.find(
             (message) => message.id === messageId,
         );
 
-        if (messageIndex === -1) {
+        if (!targetMessage) {
             return dialog;
         }
 
         const nextMessages = dialog.messages.filter(
-            (_message, index) =>
-                index !== messageIndex && index !== messageIndex + 1,
+            (message) =>
+                message.id !== messageId && message.answeringAt !== messageId,
         );
 
         const updatedDialog: ChatDialog = {
@@ -270,6 +271,16 @@ export class UserDataService {
                 ...(isChatDriver(parsed.chatDriver)
                     ? { chatDriver: parsed.chatDriver }
                     : {}),
+                ...(typeof parsed.assistantName === "string"
+                    ? { assistantName: parsed.assistantName }
+                    : {}),
+                ...(typeof parsed.maxToolCallsPerResponse === "number" &&
+                Number.isFinite(parsed.maxToolCallsPerResponse)
+                    ? {
+                          maxToolCallsPerResponse:
+                              parsed.maxToolCallsPerResponse,
+                      }
+                    : {}),
                 ...(typeof parsed.userName === "string"
                     ? { userName: parsed.userName }
                     : {}),
@@ -395,13 +406,41 @@ export class UserDataService {
     }
 
     private normalizeMessage(message: ChatMessage): ChatMessage {
+        const rawAuthor = (message as { author?: string }).author;
+
         const role =
-            message.author === "assistant" ||
-            message.author === "user" ||
-            message.author === "system" ||
-            message.author === "tool"
-                ? message.author
+            rawAuthor === "assistant" ||
+            rawAuthor === "user" ||
+            rawAuthor === "system"
+                ? rawAuthor
                 : "assistant";
+
+        const migratedStage =
+            rawAuthor === "tool"
+                ? "tool"
+                : rawAuthor === "thinking"
+                  ? "thinking"
+                  : undefined;
+
+        const assistantStage =
+            role === "assistant"
+                ? message.assistantStage === "tool" ||
+                  message.assistantStage === "thinking" ||
+                  message.assistantStage === "answer"
+                    ? message.assistantStage
+                    : migratedStage || "answer"
+                : undefined;
+
+        const toolTrace =
+            role === "assistant" && assistantStage === "tool"
+                ? message.toolTrace &&
+                  typeof message.toolTrace.callId === "string" &&
+                  typeof message.toolTrace.toolName === "string" &&
+                  typeof message.toolTrace.args === "object" &&
+                  message.toolTrace.args !== null
+                    ? message.toolTrace
+                    : undefined
+                : undefined;
 
         return {
             id:
@@ -417,6 +456,11 @@ export class UserDataService {
                           hour: "2-digit",
                           minute: "2-digit",
                       }),
+            ...(typeof message.answeringAt === "string"
+                ? { answeringAt: message.answeringAt }
+                : {}),
+            ...(assistantStage ? { assistantStage } : {}),
+            ...(toolTrace ? { toolTrace } : {}),
         };
     }
 

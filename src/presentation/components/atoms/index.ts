@@ -7,3 +7,4 @@ export * from "./Loader";
 export * from "./Modal";
 export * from "./Select";
 export * from "./Dropdown";
+export * from "./Accordeon";

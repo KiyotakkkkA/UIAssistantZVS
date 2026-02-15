@@ -57,18 +57,28 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
     ({ themePreference, themeOptions, setTheme }, ref) => {
         const [activeRoute, setActiveRoute] =
             useState<SettingsRoute>("interface");
-        const { chatDriver, ollamaModel, ollamaToken, saveChatParams } =
-            useChatParams();
+        const {
+            chatDriver,
+            ollamaModel,
+            ollamaToken,
+            assistantName,
+            maxToolCallsPerResponse,
+            saveChatParams,
+        } = useChatParams();
         const { userProfile, updateUserProfile } = useUserProfile();
 
         const [chatDraft, setChatDraft] = useState<{
             chatDriver: ChatDriver;
             ollamaModel: string;
             ollamaToken: string;
+            assistantName: string;
+            maxToolCallsPerResponse: number;
         }>({
             chatDriver,
             ollamaModel,
             ollamaToken,
+            assistantName,
+            maxToolCallsPerResponse,
         });
 
         const [profileDraft, setProfileDraft] = useState<{
@@ -84,8 +94,16 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                 chatDriver,
                 ollamaModel,
                 ollamaToken,
+                assistantName,
+                maxToolCallsPerResponse,
             });
-        }, [chatDriver, ollamaModel, ollamaToken]);
+        }, [
+            chatDriver,
+            ollamaModel,
+            ollamaToken,
+            assistantName,
+            maxToolCallsPerResponse,
+        ]);
 
         useEffect(() => {
             setProfileDraft({
@@ -148,6 +166,22 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                             setChatDraft((prev) => ({
                                 ...prev,
                                 ollamaToken: value,
+                            }));
+                        }}
+                        assistantName={chatDraft.assistantName}
+                        maxToolCallsPerResponse={
+                            chatDraft.maxToolCallsPerResponse
+                        }
+                        setAssistantName={(value) => {
+                            setChatDraft((prev) => ({
+                                ...prev,
+                                assistantName: value,
+                            }));
+                        }}
+                        setMaxToolCallsPerResponse={(value) => {
+                            setChatDraft((prev) => ({
+                                ...prev,
+                                maxToolCallsPerResponse: value,
                             }));
                         }}
                     />

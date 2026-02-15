@@ -41,6 +41,8 @@ declare global {
                 dialogId: string,
                 messageId: string,
             ) => Promise<ChatDialog>;
+            webSearchTool: (request: string, ollamaToken: string) => Promise<unknown>;
+            webFetchTool: (url: string, ollamaToken: string) => Promise<unknown>;
             saveDialogSnapshot: (dialog: ChatDialog) => Promise<ChatDialog>;
         };
     }

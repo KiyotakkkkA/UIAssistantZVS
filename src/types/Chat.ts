@@ -1,10 +1,23 @@
-export type MessageRole = "system" | "user" | "assistant" | "tool";
+export type MessageRole = "system" | "user" | "assistant";
+export type OllamaRole = MessageRole | "tool";
+
+export type AssistantStage = "answer" | "tool" | "thinking";
+
+export type ToolTrace = {
+    callId: string;
+    toolName: string;
+    args: Record<string, unknown>;
+    result: unknown;
+};
 
 export type ChatMessage = {
     id: string;
     author: MessageRole;
     content: string;
     timestamp: string;
+    answeringAt?: string;
+    assistantStage?: AssistantStage;
+    toolTrace?: ToolTrace;
 };
 
 export type ChatDialog = {
@@ -34,25 +47,79 @@ export type DialogMessagePayload = {
 };
 
 export interface OllamaMessage {
-    role: MessageRole;
+    role: OllamaRole;
     content: string;
+    tool_calls?: OllamaToolCall[];
+    tool_name?: string;
+    thinking?: string;
 }
+
+export type ToolParameterSchema = {
+    type: string;
+    description?: string;
+    enum?: string[];
+    properties?: Record<string, ToolParameterSchema>;
+    items?: ToolParameterSchema;
+    required?: string[];
+};
+
+export type OllamaToolDefinition = {
+    type: "function";
+    function: {
+        name: string;
+        description?: string;
+        parameters: ToolParameterSchema;
+    };
+};
+
+export type OllamaToolCall = {
+    type?: "function";
+    function: {
+        index?: number;
+        name: string;
+        arguments: Record<string, unknown>;
+    };
+};
 
 export interface OllamaChatChunk {
     model?: string;
     created_at?: string;
     message?: {
-        role?: MessageRole;
+        role?: OllamaRole;
         content?: string;
+        thinking?: string;
+        tool_calls?: OllamaToolCall[];
     };
     done: boolean;
     error?: string;
+}
+
+export interface OllamaChatResponse {
+    model?: string;
+    created_at?: string;
+    message: {
+        role?: OllamaRole;
+        content?: string;
+        thinking?: string;
+        tool_calls?: OllamaToolCall[];
+    };
+    done: boolean;
+    done_reason?: string;
 }
 
 export interface StreamChatParams {
     model: string;
     token?: string;
     messages: OllamaMessage[];
+    tools?: OllamaToolDefinition[];
     signal?: AbortSignal;
     onChunk?: (chunk: OllamaChatChunk) => void;
+}
+
+export interface ChatOllamaParams {
+    model: string;
+    token?: string;
+    messages: OllamaMessage[];
+    tools?: OllamaToolDefinition[];
+    signal?: AbortSignal;
 }

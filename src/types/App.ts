@@ -5,6 +5,8 @@ export type UserProfile = {
     ollamaModel: string;
     ollamaToken: string;
     chatDriver: ChatDriver;
+    assistantName: string;
+    maxToolCallsPerResponse: number;
     userName: string;
     userPrompt: string;
     activeDialogId: string;

@@ -5,6 +5,8 @@ export const defaultProfile: UserProfile = {
     ollamaModel: "gpt-oss:20b",
     ollamaToken: "",
     chatDriver: "ollama",
+    assistantName: "Чарли",
+    maxToolCallsPerResponse: 10,
     userName: "Пользователь",
     userPrompt: "",
     activeDialogId: "",
