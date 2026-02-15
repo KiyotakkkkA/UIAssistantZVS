@@ -3,321 +3,331 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 const defaultProfile = {
-    themePreference: "dark-main",
+  themePreference: "dark-main",
+  ollamaModel: "gpt-oss:20b",
+  ollamaToken: "",
+  chatDriver: "ollama"
 };
 const baseDarkDracula = {
-    id: "dark-dracula",
-    name: "Dracula",
-    palette: {
-        "--color-main-50": "rgb(248 248 242)",
-        "--color-main-100": "rgb(235 236 241)",
-        "--color-main-200": "rgb(211 214 229)",
-        "--color-main-300": "rgb(168 174 199)",
-        "--color-main-400": "rgb(125 133 171)",
-        "--color-main-500": "rgb(98 114 164)",
-        "--color-main-600": "rgb(74 84 120)",
-        "--color-main-700": "rgb(54 60 88)",
-        "--color-main-800": "rgb(40 42 54)",
-        "--color-main-900": "rgb(24 26 36)",
-    },
+  id: "dark-dracula",
+  name: "Dracula",
+  palette: {
+    "--color-main-50": "rgb(248 248 242)",
+    "--color-main-100": "rgb(235 236 241)",
+    "--color-main-200": "rgb(211 214 229)",
+    "--color-main-300": "rgb(168 174 199)",
+    "--color-main-400": "rgb(125 133 171)",
+    "--color-main-500": "rgb(98 114 164)",
+    "--color-main-600": "rgb(74 84 120)",
+    "--color-main-700": "rgb(54 60 88)",
+    "--color-main-800": "rgb(40 42 54)",
+    "--color-main-900": "rgb(24 26 36)"
+  }
 };
 const baseDarkGithub = {
-    id: "dark-github",
-    name: "GitHub Dark",
-    palette: {
-        "--color-main-50": "rgb(240 246 252)",
-        "--color-main-100": "rgb(201 209 217)",
-        "--color-main-200": "rgb(161 171 178)",
-        "--color-main-300": "rgb(139 148 158)",
-        "--color-main-400": "rgb(110 118 129)",
-        "--color-main-500": "rgb(72 80 89)",
-        "--color-main-600": "rgb(48 54 61)",
-        "--color-main-700": "rgb(33 38 45)",
-        "--color-main-800": "rgb(22 27 34)",
-        "--color-main-900": "rgb(13 17 23)",
-    },
+  id: "dark-github",
+  name: "GitHub Dark",
+  palette: {
+    "--color-main-50": "rgb(240 246 252)",
+    "--color-main-100": "rgb(201 209 217)",
+    "--color-main-200": "rgb(161 171 178)",
+    "--color-main-300": "rgb(139 148 158)",
+    "--color-main-400": "rgb(110 118 129)",
+    "--color-main-500": "rgb(72 80 89)",
+    "--color-main-600": "rgb(48 54 61)",
+    "--color-main-700": "rgb(33 38 45)",
+    "--color-main-800": "rgb(22 27 34)",
+    "--color-main-900": "rgb(13 17 23)"
+  }
 };
 const baseDarkGruvbox = {
-    id: "dark-gruvbox",
-    name: "Gruvbox",
-    palette: {
-        "--color-main-50": "rgb(251 241 199)",
-        "--color-main-100": "rgb(235 219 178)",
-        "--color-main-200": "rgb(213 196 161)",
-        "--color-main-300": "rgb(189 174 147)",
-        "--color-main-400": "rgb(168 153 132)",
-        "--color-main-500": "rgb(146 131 116)",
-        "--color-main-600": "rgb(124 111 100)",
-        "--color-main-700": "rgb(102 92 84)",
-        "--color-main-800": "rgb(60 56 54)",
-        "--color-main-900": "rgb(40 40 40)",
-    },
+  id: "dark-gruvbox",
+  name: "Gruvbox",
+  palette: {
+    "--color-main-50": "rgb(251 241 199)",
+    "--color-main-100": "rgb(235 219 178)",
+    "--color-main-200": "rgb(213 196 161)",
+    "--color-main-300": "rgb(189 174 147)",
+    "--color-main-400": "rgb(168 153 132)",
+    "--color-main-500": "rgb(146 131 116)",
+    "--color-main-600": "rgb(124 111 100)",
+    "--color-main-700": "rgb(102 92 84)",
+    "--color-main-800": "rgb(60 56 54)",
+    "--color-main-900": "rgb(40 40 40)"
+  }
 };
 const baseDarkMain = {
-    id: "dark-main",
-    name: "Основная",
-    palette: {
-        "--color-main-50": "rgb(250 250 250)",
-        "--color-main-100": "rgb(245 245 245)",
-        "--color-main-200": "rgb(229 229 229)",
-        "--color-main-300": "rgb(212 212 212)",
-        "--color-main-400": "rgb(163 163 163)",
-        "--color-main-500": "rgb(115 115 115)",
-        "--color-main-600": "rgb(82 82 82)",
-        "--color-main-700": "rgb(64 64 64)",
-        "--color-main-800": "rgb(38 38 38)",
-        "--color-main-900": "rgb(23 23 23)",
-    },
+  id: "dark-main",
+  name: "Основная",
+  palette: {
+    "--color-main-50": "rgb(250 250 250)",
+    "--color-main-100": "rgb(245 245 245)",
+    "--color-main-200": "rgb(229 229 229)",
+    "--color-main-300": "rgb(212 212 212)",
+    "--color-main-400": "rgb(163 163 163)",
+    "--color-main-500": "rgb(115 115 115)",
+    "--color-main-600": "rgb(82 82 82)",
+    "--color-main-700": "rgb(64 64 64)",
+    "--color-main-800": "rgb(38 38 38)",
+    "--color-main-900": "rgb(23 23 23)"
+  }
 };
 const baseDarkNord = {
-    id: "dark-nord",
-    name: "Nord",
-    palette: {
-        "--color-main-50": "rgb(236 239 244)",
-        "--color-main-100": "rgb(229 233 240)",
-        "--color-main-200": "rgb(216 222 233)",
-        "--color-main-300": "rgb(196 204 218)",
-        "--color-main-400": "rgb(143 162 190)",
-        "--color-main-500": "rgb(129 161 193)",
-        "--color-main-600": "rgb(94 129 172)",
-        "--color-main-700": "rgb(76 97 132)",
-        "--color-main-800": "rgb(59 66 82)",
-        "--color-main-900": "rgb(46 52 64)",
-    },
+  id: "dark-nord",
+  name: "Nord",
+  palette: {
+    "--color-main-50": "rgb(236 239 244)",
+    "--color-main-100": "rgb(229 233 240)",
+    "--color-main-200": "rgb(216 222 233)",
+    "--color-main-300": "rgb(196 204 218)",
+    "--color-main-400": "rgb(143 162 190)",
+    "--color-main-500": "rgb(129 161 193)",
+    "--color-main-600": "rgb(94 129 172)",
+    "--color-main-700": "rgb(76 97 132)",
+    "--color-main-800": "rgb(59 66 82)",
+    "--color-main-900": "rgb(46 52 64)"
+  }
 };
 const baseDarkOneDark = {
-    id: "dark-one-dark",
-    name: "One Dark",
-    palette: {
-        "--color-main-50": "rgb(220 223 228)",
-        "--color-main-100": "rgb(204 210 219)",
-        "--color-main-200": "rgb(179 189 204)",
-        "--color-main-300": "rgb(137 152 173)",
-        "--color-main-400": "rgb(97 118 147)",
-        "--color-main-500": "rgb(73 90 118)",
-        "--color-main-600": "rgb(56 69 92)",
-        "--color-main-700": "rgb(40 48 65)",
-        "--color-main-800": "rgb(33 39 54)",
-        "--color-main-900": "rgb(22 27 34)",
-    },
+  id: "dark-one-dark",
+  name: "One Dark",
+  palette: {
+    "--color-main-50": "rgb(220 223 228)",
+    "--color-main-100": "rgb(204 210 219)",
+    "--color-main-200": "rgb(179 189 204)",
+    "--color-main-300": "rgb(137 152 173)",
+    "--color-main-400": "rgb(97 118 147)",
+    "--color-main-500": "rgb(73 90 118)",
+    "--color-main-600": "rgb(56 69 92)",
+    "--color-main-700": "rgb(40 48 65)",
+    "--color-main-800": "rgb(33 39 54)",
+    "--color-main-900": "rgb(22 27 34)"
+  }
 };
 const staticThemeEntries = [
-    { fileName: "baseDarkMain.json", data: baseDarkMain },
-    { fileName: "baseDarkDracula.json", data: baseDarkDracula },
-    { fileName: "baseDarkNord.json", data: baseDarkNord },
-    { fileName: "baseDarkOneDark.json", data: baseDarkOneDark },
-    { fileName: "baseDarkGruvbox.json", data: baseDarkGruvbox },
-    { fileName: "baseDarkGithub.json", data: baseDarkGithub },
+  { fileName: "baseDarkMain.json", data: baseDarkMain },
+  { fileName: "baseDarkDracula.json", data: baseDarkDracula },
+  { fileName: "baseDarkNord.json", data: baseDarkNord },
+  { fileName: "baseDarkOneDark.json", data: baseDarkOneDark },
+  { fileName: "baseDarkGruvbox.json", data: baseDarkGruvbox },
+  { fileName: "baseDarkGithub.json", data: baseDarkGithub }
 ];
-const staticThemes = staticThemeEntries.map((entry) => entry.data);
+const staticThemes = staticThemeEntries.map(
+  (entry) => entry.data
+);
 const staticThemesMap = Object.fromEntries(
-    staticThemes.map((theme) => [theme.id, theme]),
+  staticThemes.map((theme) => [theme.id, theme])
 );
 const staticThemesList = staticThemes.map((theme) => ({
-    id: theme.id,
-    name: theme.name,
+  id: theme.id,
+  name: theme.name
 }));
 class InitService {
-    basePath;
-    resourcesPath;
-    themesPath;
-    profilePath;
-    constructor(basePath) {
-        this.basePath = basePath;
-        this.resourcesPath = path.join(this.basePath, "resources");
-        this.themesPath = path.join(this.resourcesPath, "themes");
-        this.profilePath = path.join(this.resourcesPath, "profile.json");
+  basePath;
+  resourcesPath;
+  themesPath;
+  profilePath;
+  constructor(basePath) {
+    this.basePath = basePath;
+    this.resourcesPath = path.join(this.basePath, "resources");
+    this.themesPath = path.join(this.resourcesPath, "themes");
+    this.profilePath = path.join(this.resourcesPath, "profile.json");
+  }
+  initialize() {
+    this.ensureDirectory(this.resourcesPath);
+    this.ensureDirectory(this.themesPath);
+    this.ensureProfile();
+    this.ensureThemes();
+  }
+  ensureDirectory(targetPath) {
+    if (!fs.existsSync(targetPath)) {
+      fs.mkdirSync(targetPath, { recursive: true });
     }
-    initialize() {
-        this.ensureDirectory(this.resourcesPath);
-        this.ensureDirectory(this.themesPath);
-        this.ensureProfile();
-        this.ensureThemes();
+  }
+  ensureProfile() {
+    if (!fs.existsSync(this.profilePath)) {
+      fs.writeFileSync(
+        this.profilePath,
+        JSON.stringify(defaultProfile, null, 2)
+      );
     }
-    ensureDirectory(targetPath) {
-        if (!fs.existsSync(targetPath)) {
-            fs.mkdirSync(targetPath, { recursive: true });
-        }
-    }
-    ensureProfile() {
-        if (!fs.existsSync(this.profilePath)) {
-            fs.writeFileSync(
-                this.profilePath,
-                JSON.stringify(defaultProfile, null, 2),
-            );
-        }
-    }
-    ensureThemes() {
-        for (const entry of staticThemeEntries) {
-            const themeFilePath = path.join(this.themesPath, entry.fileName);
-            if (!fs.existsSync(themeFilePath)) {
-                fs.writeFileSync(
-                    themeFilePath,
-                    JSON.stringify(entry.data, null, 2),
-                );
-            }
-        }
-    }
-}
-class UserDataService {
-    resourcesPath;
-    themesPath;
-    profilePath;
-    constructor(basePath) {
-        this.resourcesPath = path.join(basePath, "resources");
-        this.themesPath = path.join(this.resourcesPath, "themes");
-        this.profilePath = path.join(this.resourcesPath, "profile.json");
-    }
-    getBootData() {
-        const userProfile = this.readUserProfile();
-        const preferredThemeData = this.resolveThemePalette(
-            userProfile.themePreference,
-        );
-        return {
-            userProfile,
-            preferredThemeData,
-        };
-    }
-    getThemesList() {
-        const themes = this.readThemes();
-        if (themes.length === 0) {
-            return staticThemesList;
-        }
-        return themes.map((theme) => ({
-            id: theme.id,
-            name: theme.name,
-        }));
-    }
-    getThemeData(themeId) {
-        const themes = this.readThemes();
-        const preferredTheme = themes.find((theme) => theme.id === themeId);
-        if (preferredTheme) {
-            return preferredTheme;
-        }
-        const fallbackTheme = staticThemesMap[themeId];
-        if (fallbackTheme) {
-            return fallbackTheme;
-        }
-        return staticThemesMap[defaultProfile.themePreference];
-    }
-    updateUserProfile(nextProfile) {
-        const currentProfile = this.readUserProfile();
-        const mergedProfile = {
-            ...currentProfile,
-            ...nextProfile,
-        };
+  }
+  ensureThemes() {
+    for (const entry of staticThemeEntries) {
+      const themeFilePath = path.join(this.themesPath, entry.fileName);
+      if (!fs.existsSync(themeFilePath)) {
         fs.writeFileSync(
-            this.profilePath,
-            JSON.stringify(mergedProfile, null, 2),
+          themeFilePath,
+          JSON.stringify(entry.data, null, 2)
         );
-        return mergedProfile;
+      }
     }
-    readUserProfile() {
-        if (!fs.existsSync(this.profilePath)) {
-            return defaultProfile;
-        }
-        try {
-            const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
-            const parsed = JSON.parse(rawProfile);
-            if (typeof parsed.themePreference === "string") {
-                return parsed;
-            }
-            return defaultProfile;
-        } catch {
-            return defaultProfile;
-        }
+  }
+}
+const isChatDriver = (value) => {
+  return value === "ollama" || value === "";
+};
+class UserDataService {
+  resourcesPath;
+  themesPath;
+  profilePath;
+  constructor(basePath) {
+    this.resourcesPath = path.join(basePath, "resources");
+    this.themesPath = path.join(this.resourcesPath, "themes");
+    this.profilePath = path.join(this.resourcesPath, "profile.json");
+  }
+  getBootData() {
+    const userProfile = this.readUserProfile();
+    const preferredThemeData = this.resolveThemePalette(
+      userProfile.themePreference
+    );
+    return {
+      userProfile,
+      preferredThemeData
+    };
+  }
+  getThemesList() {
+    const themes = this.readThemes();
+    if (themes.length === 0) {
+      return staticThemesList;
     }
-    readThemes() {
-        if (!fs.existsSync(this.themesPath)) {
-            return [];
-        }
-        const files = fs
-            .readdirSync(this.themesPath)
-            .filter((fileName) => fileName.endsWith(".json"));
-        const result = [];
-        for (const fileName of files) {
-            const filePath = path.join(this.themesPath, fileName);
-            try {
-                const rawTheme = fs.readFileSync(filePath, "utf-8");
-                const parsed = JSON.parse(rawTheme);
-                if (
-                    typeof parsed.id === "string" &&
-                    typeof parsed.name === "string" &&
-                    typeof parsed.palette === "object" &&
-                    parsed.palette !== null
-                ) {
-                    result.push(parsed);
-                }
-            } catch {
-                continue;
-            }
-        }
-        return result;
+    return themes.map((theme) => ({
+      id: theme.id,
+      name: theme.name
+    }));
+  }
+  getThemeData(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme;
     }
-    resolveThemePalette(themeId) {
-        const themes = this.readThemes();
-        const preferredTheme = themes.find((theme) => theme.id === themeId);
-        if (preferredTheme) {
-            return preferredTheme.palette;
-        }
-        return staticThemesMap[defaultProfile.themePreference].palette;
+    const fallbackTheme = staticThemesMap[themeId];
+    if (fallbackTheme) {
+      return fallbackTheme;
     }
+    return staticThemesMap[defaultProfile.themePreference];
+  }
+  updateUserProfile(nextProfile) {
+    const currentProfile = this.readUserProfile();
+    const mergedProfile = {
+      ...currentProfile,
+      ...nextProfile
+    };
+    fs.writeFileSync(
+      this.profilePath,
+      JSON.stringify(mergedProfile, null, 2)
+    );
+    return mergedProfile;
+  }
+  readUserProfile() {
+    if (!fs.existsSync(this.profilePath)) {
+      return defaultProfile;
+    }
+    try {
+      const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
+      const parsed = JSON.parse(rawProfile);
+      const normalized = {
+        ...defaultProfile,
+        ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
+        ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
+        ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
+        ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {}
+      };
+      return normalized;
+    } catch {
+      return defaultProfile;
+    }
+  }
+  readThemes() {
+    if (!fs.existsSync(this.themesPath)) {
+      return [];
+    }
+    const files = fs.readdirSync(this.themesPath).filter((fileName) => fileName.endsWith(".json"));
+    const result = [];
+    for (const fileName of files) {
+      const filePath = path.join(this.themesPath, fileName);
+      try {
+        const rawTheme = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(rawTheme);
+        if (typeof parsed.id === "string" && typeof parsed.name === "string" && typeof parsed.palette === "object" && parsed.palette !== null) {
+          result.push(parsed);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return result;
+  }
+  resolveThemePalette(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme.palette;
+    }
+    return staticThemesMap[defaultProfile.themePreference].palette;
+  }
 }
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
-    ? path.join(process.env.APP_ROOT, "public")
-    : RENDERER_DIST;
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 let userDataService;
 function createWindow() {
-    win = new BrowserWindow({
-        icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
-        webPreferences: {
-            preload: path.join(__dirname$1, "preload.mjs"),
-        },
-    });
-    win.webContents.on("did-finish-load", () => {
-        win?.webContents.send(
-            "main-process-message",
-            /* @__PURE__ */ new Date().toLocaleString(),
-        );
-    });
-    if (VITE_DEV_SERVER_URL) {
-        win.loadURL(VITE_DEV_SERVER_URL);
-    } else {
-        win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  win = new BrowserWindow({
+    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    webPreferences: {
+      preload: path.join(__dirname$1, "preload.mjs")
     }
-    win.maximize();
+  });
+  win.webContents.on("did-finish-load", () => {
+    win?.webContents.send(
+      "main-process-message",
+      (/* @__PURE__ */ new Date()).toLocaleString()
+    );
+  });
+  if (VITE_DEV_SERVER_URL) {
+    win.loadURL(VITE_DEV_SERVER_URL);
+  } else {
+    win.loadFile(path.join(RENDERER_DIST, "index.html"));
+  }
+  win.maximize();
 }
 app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-        app.quit();
-        win = null;
-    }
+  if (process.platform !== "darwin") {
+    app.quit();
+    win = null;
+  }
 });
 app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
 app.whenReady().then(() => {
-    const initDirectoriesService = new InitService(app.getPath("userData"));
-    initDirectoriesService.initialize();
-    userDataService = new UserDataService(app.getPath("userData"));
-    ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
-    ipcMain.handle("app:get-themes-list", () =>
-        userDataService.getThemesList(),
-    );
-    ipcMain.handle("app:get-theme-data", (_event, themeId) =>
-        userDataService.getThemeData(themeId),
-    );
-    ipcMain.handle("app:update-user-profile", (_event, nextProfile) =>
-        userDataService.updateUserProfile(nextProfile),
-    );
-    createWindow();
+  const initDirectoriesService = new InitService(app.getPath("userData"));
+  initDirectoriesService.initialize();
+  userDataService = new UserDataService(app.getPath("userData"));
+  ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
+  ipcMain.handle(
+    "app:get-themes-list",
+    () => userDataService.getThemesList()
+  );
+  ipcMain.handle(
+    "app:get-theme-data",
+    (_event, themeId) => userDataService.getThemeData(themeId)
+  );
+  ipcMain.handle(
+    "app:update-user-profile",
+    (_event, nextProfile) => userDataService.updateUserProfile(nextProfile)
+  );
+  createWindow();
 });
-export { MAIN_DIST, RENDERER_DIST, VITE_DEV_SERVER_URL };
+export {
+  MAIN_DIST,
+  RENDERER_DIST,
+  VITE_DEV_SERVER_URL
+};

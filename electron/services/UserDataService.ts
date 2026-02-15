@@ -4,10 +4,15 @@ import { defaultProfile } from "../static/data";
 import { staticThemesMap, staticThemesList } from "../static/themes";
 import type {
     BootData,
+    ChatDriver,
     ThemeData,
     ThemeListItem,
     UserProfile,
 } from "../../src/types/App";
+
+const isChatDriver = (value: unknown): value is ChatDriver => {
+    return value === "ollama" || value === "";
+};
 
 export class UserDataService {
     private readonly resourcesPath: string;
@@ -81,13 +86,25 @@ export class UserDataService {
 
         try {
             const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
-            const parsed = JSON.parse(rawProfile) as UserProfile;
+            const parsed = JSON.parse(rawProfile) as Partial<UserProfile>;
 
-            if (typeof parsed.themePreference === "string") {
-                return parsed;
-            }
+            const normalized: UserProfile = {
+                ...defaultProfile,
+                ...(typeof parsed.themePreference === "string"
+                    ? { themePreference: parsed.themePreference }
+                    : {}),
+                ...(typeof parsed.ollamaModel === "string"
+                    ? { ollamaModel: parsed.ollamaModel }
+                    : {}),
+                ...(typeof parsed.ollamaToken === "string"
+                    ? { ollamaToken: parsed.ollamaToken }
+                    : {}),
+                ...(isChatDriver(parsed.chatDriver)
+                    ? { chatDriver: parsed.chatDriver }
+                    : {}),
+            };
 
-            return defaultProfile;
+            return normalized;
         } catch {
             return defaultProfile;
         }

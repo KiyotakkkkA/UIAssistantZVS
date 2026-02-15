@@ -2,7 +2,7 @@ import type { ThemeData } from "../../../src/types/App";
 
 export const baseDarkMain: ThemeData = {
     id: "dark-main",
-    name: "Тёмная (Main)",
+    name: "Основная",
     palette: {
         "--color-main-50": "rgb(250 250 250)",
         "--color-main-100": "rgb(245 245 245)",

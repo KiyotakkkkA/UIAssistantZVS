@@ -2,11 +2,15 @@ import { makeAutoObservable, runInAction } from "mobx";
 import type { UserProfile } from "../types/App";
 
 const DEFAULT_THEME_ID = "dark-main";
+const DEFAULT_OLLAMA_MODEL = "gpt-oss:20b";
 
 class UserProfileStore {
     isReady = false;
     userProfile: UserProfile = {
         themePreference: DEFAULT_THEME_ID,
+        ollamaModel: DEFAULT_OLLAMA_MODEL,
+        ollamaToken: "",
+        chatDriver: "ollama",
     };
 
     private isInitializing = false;

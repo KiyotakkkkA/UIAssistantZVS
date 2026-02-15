@@ -24,6 +24,7 @@ export interface OllamaChatChunk {
 
 export interface StreamChatParams {
     model: string;
+    token?: string;
     messages: OllamaMessage[];
     signal?: AbortSignal;
     onChunk?: (chunk: OllamaChatChunk) => void;

@@ -1,5 +1,10 @@
+export type ChatDriver = "" | "ollama";
+
 export type UserProfile = {
     themePreference: string;
+    ollamaModel: string;
+    ollamaToken: string;
+    chatDriver: ChatDriver;
 };
 
 export type ThemeData = {

@@ -1,12 +1,35 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { useTheme } from "../../../../hooks";
+import { useTheme, useToasts } from "../../../../hooks";
 import { Button, Modal } from "../../atoms";
-import { SettingsView } from "../settings";
+import { SettingsView, type SettingsViewHandle } from "../settings";
 
 export function ChatHeader() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const settingsViewRef = useRef<SettingsViewHandle | null>(null);
     const { themePreference, themeOptions, setTheme } = useTheme();
+    const toasts = useToasts();
+
+    const handleSaveSettings = async () => {
+        const result = await settingsViewRef.current?.save();
+
+        if (!result) {
+            return;
+        }
+
+        if (result.scope === "chat") {
+            toasts.success({
+                title: "Интеграция сохранена",
+                description: "Параметры провайдера успешно сохранены.",
+            });
+            return;
+        }
+
+        toasts.info({
+            title: "Изменений нет",
+            description: "Для этой вкладки сохранение не требуется.",
+        });
+    };
 
     return (
         <>
@@ -38,8 +61,19 @@ export function ChatHeader() {
                 onClose={() => setIsSettingsOpen(false)}
                 title="Настройки"
                 className="max-w-6xl min-h-144"
+                footer={
+                    <Button
+                        className="rounded-xl px-4 py-2"
+                        onClick={() => {
+                            void handleSaveSettings();
+                        }}
+                    >
+                        Сохранить
+                    </Button>
+                }
             >
                 <SettingsView
+                    ref={settingsViewRef}
                     themePreference={themePreference}
                     themeOptions={themeOptions}
                     setTheme={(themeId) => {

@@ -9,8 +9,9 @@ const getOllamaChatUrl = () => {
 };
 
 class API {
-    public async streamChat({
+    public async streamChatOllama({
         model,
+        token,
         messages,
         signal,
         onChunk,
@@ -19,8 +20,8 @@ class API {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                ...(Config.OLLAMA_TOKEN && {
-                    Authorization: `Bearer ${Config.OLLAMA_TOKEN}`,
+                ...(token && {
+                    Authorization: `Bearer ${token}`,
                 }),
             },
             body: JSON.stringify({

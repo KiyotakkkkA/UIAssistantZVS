@@ -4,12 +4,14 @@ import { Button, InputBig } from "../atoms";
 
 interface MessageComposerProps {
     onMessageSend: (content: string) => void;
-    disabled?: boolean;
+    onCancelGeneration: () => void;
+    isStreaming?: boolean;
 }
 
 export function MessageComposer({
     onMessageSend,
-    disabled = false,
+    onCancelGeneration,
+    isStreaming = false,
 }: MessageComposerProps) {
     const [msgContent, setMsgContent] = useState("");
     const areaRef = useRef<HTMLTextAreaElement>(null);
@@ -17,7 +19,7 @@ export function MessageComposer({
     const handleSend = () => {
         const payload = msgContent.trim();
 
-        if (!payload || disabled) {
+        if (!payload || isStreaming) {
             return;
         }
 
@@ -41,7 +43,7 @@ export function MessageComposer({
                         if (
                             event.key === "Enter" &&
                             !event.shiftKey &&
-                            !disabled
+                            !isStreaming
                         ) {
                             event.preventDefault();
                             handleSend();
@@ -52,13 +54,13 @@ export function MessageComposer({
                     <Icon icon={"mdi:paperclip"} />
                 </Button>
                 <Button
-                    onClick={handleSend}
-                    label="Send"
+                    onClick={isStreaming ? onCancelGeneration : handleSend}
+                    label={isStreaming ? "Cancel" : "Send"}
                     className="absolute right-2 top-1.5 p-2"
                     variant="primary"
-                    disabled={disabled || !msgContent.trim()}
+                    disabled={!isStreaming && !msgContent.trim()}
                 >
-                    <Icon icon={"mdi:send"} />
+                    <Icon icon={isStreaming ? "mdi:stop" : "mdi:send"} />
                 </Button>
             </div>
         </footer>

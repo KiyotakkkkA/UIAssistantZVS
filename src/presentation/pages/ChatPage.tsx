@@ -1,4 +1,4 @@
-import { useOllamaChat } from "../../hooks";
+import { useChat } from "../../hooks/agents";
 import { MessageComposer } from "../components/molecules";
 import {
     ChatHeader,
@@ -7,8 +7,13 @@ import {
 } from "../components/organisms/chat";
 
 export function ChatPage() {
-    const { messages, sendMessage, isStreaming, isAwaitingFirstChunk } =
-        useOllamaChat();
+    const {
+        messages,
+        sendMessage,
+        cancelGeneration,
+        isStreaming,
+        isAwaitingFirstChunk,
+    } = useChat();
 
     return (
         <main className="h-screen w-screen overflow-hidden bg-main-900 p-3 text-main-100">
@@ -23,7 +28,8 @@ export function ChatPage() {
                     />
                     <MessageComposer
                         onMessageSend={sendMessage}
-                        disabled={isStreaming}
+                        onCancelGeneration={cancelGeneration}
+                        isStreaming={isStreaming}
                     />
                 </section>
             </div>

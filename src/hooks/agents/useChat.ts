@@ -1,8 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { Config } from "../config";
-import api from "../services/api";
-import { ChatMessage } from "../types/Chat";
+import { useMemo, useRef, useState } from "react";
+import { useChatParams } from "../useChatParams";
+import { useToasts } from "../useToasts";
+import type { ChatDriver } from "../../types/App";
+import type { ChatMessage } from "../../types/Chat";
+import { createOllamaAdapter } from "./adapters/ollamaAdapter";
+import type { ChatProviderAdapter } from "./adapters/types";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {
@@ -10,27 +13,68 @@ const getTimeStamp = () =>
         minute: "2-digit",
     });
 
-const toOllamaMessages = (messages: ChatMessage[]) =>
-    messages.map((message) => ({
-        role: message.author,
-        content: message.content,
-    }));
+export function useChat() {
+    const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
+    const toasts = useToasts();
 
-export function useOllamaChat() {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
     const messagesRef = useRef<ChatMessage[]>(messages);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const cancellationRequestedRef = useRef(false);
 
-    useEffect(() => {
-        messagesRef.current = messages;
-    }, [messages]);
+    const providers = useMemo<
+        Partial<Record<Exclude<ChatDriver, "">, ChatProviderAdapter>>
+    >(
+        () => ({
+            ollama: createOllamaAdapter({
+                model: ollamaModel,
+                token: ollamaToken,
+            }),
+        }),
+        [ollamaModel, ollamaToken],
+    );
+
+    const commitMessages = (nextMessages: ChatMessage[]) => {
+        messagesRef.current = nextMessages;
+        setMessages(nextMessages);
+    };
+
+    const updateMessages = (
+        updater: (prev: ChatMessage[]) => ChatMessage[],
+    ) => {
+        setMessages((prev) => {
+            const next = updater(prev);
+            messagesRef.current = next;
+            return next;
+        });
+    };
 
     const sendMessageMutation = useMutation({
         mutationFn: async (rawContent: string) => {
             const content = rawContent.trim();
 
             if (!content) {
+                return;
+            }
+
+            if (!chatDriver) {
+                toasts.danger({
+                    title: "Провайдер не выбран",
+                    description:
+                        "Выберите провайдер в настройках чата перед отправкой сообщения.",
+                });
+                return;
+            }
+
+            const adapter = providers[chatDriver as Exclude<ChatDriver, "">];
+            if (!adapter) {
+                toasts.danger({
+                    title: "Провайдер не поддерживается",
+                    description:
+                        "Для выбранного провайдера ещё не подключён адаптер.",
+                });
                 return;
             }
 
@@ -47,32 +91,25 @@ export function useOllamaChat() {
                 timestamp: assistantTimestamp,
             };
 
-            const historyForRequest = toOllamaMessages([
-                ...messagesRef.current,
-                userMessage,
-            ]);
-
-            const nextMessages = [
-                ...messagesRef.current,
-                userMessage,
-                assistantMessage,
-            ];
-            setMessages(nextMessages);
-            messagesRef.current = nextMessages;
+            const requestBaseHistory = [...messagesRef.current];
+            const historyForRequest = [...requestBaseHistory, userMessage];
+            const nextMessages = [...historyForRequest, assistantMessage];
+            commitMessages(nextMessages);
             setIsStreaming(true);
             setIsAwaitingFirstChunk(true);
+            cancellationRequestedRef.current = false;
+            const abortController = new AbortController();
+            abortControllerRef.current = abortController;
 
             let hasFirstChunk = false;
 
             try {
-                await api.streamChat({
-                    model: Config.OLLAMA_MODEL,
-                    messages: historyForRequest,
-                    onChunk: (chunk) => {
-                        const chunkContent = chunk.message?.content || "";
-
-                        if (!chunkContent) {
-                            if (chunk.done) {
+                await adapter.send({
+                    history: historyForRequest,
+                    signal: abortController.signal,
+                    onChunk: (chunkText, done) => {
+                        if (!chunkText) {
+                            if (done) {
                                 setIsAwaitingFirstChunk(false);
                             }
                             return;
@@ -83,7 +120,7 @@ export function useOllamaChat() {
                             setIsAwaitingFirstChunk(false);
                         }
 
-                        setMessages((prev) => {
+                        updateMessages((prev) => {
                             const lastAssistantIndex = [...prev]
                                 .reverse()
                                 .findIndex(
@@ -102,7 +139,7 @@ export function useOllamaChat() {
                             const updated = [...prev];
                             updated[actualIndex] = {
                                 ...updated[actualIndex],
-                                content: `${updated[actualIndex].content}${chunkContent}`,
+                                content: `${updated[actualIndex].content}${chunkText}`,
                             };
 
                             return updated;
@@ -110,12 +147,21 @@ export function useOllamaChat() {
                     },
                 });
             } catch (error) {
+                if (
+                    cancellationRequestedRef.current &&
+                    error instanceof Error &&
+                    error.name === "AbortError"
+                ) {
+                    commitMessages(requestBaseHistory);
+                    return;
+                }
+
                 const errorMessage =
                     error instanceof Error
                         ? error.message
                         : "Не удалось получить ответ модели";
 
-                setMessages((prev) => {
+                updateMessages((prev) => {
                     const lastAssistantIndex = [...prev]
                         .reverse()
                         .findIndex(
@@ -138,15 +184,29 @@ export function useOllamaChat() {
                     return updated;
                 });
             } finally {
+                abortControllerRef.current = null;
+                cancellationRequestedRef.current = false;
                 setIsAwaitingFirstChunk(false);
                 setIsStreaming(false);
             }
         },
     });
 
+    const cancelGeneration = () => {
+        const controller = abortControllerRef.current;
+
+        if (!controller) {
+            return;
+        }
+
+        cancellationRequestedRef.current = true;
+        controller.abort();
+    };
+
     return {
         messages,
         sendMessage: sendMessageMutation.mutate,
+        cancelGeneration,
         isStreaming,
         isAwaitingFirstChunk,
     };
