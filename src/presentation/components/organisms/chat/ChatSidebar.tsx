@@ -21,9 +21,9 @@ const conversations = [
 
 export function ChatSidebar() {
     return (
-        <aside className="flex h-full w-[320px] flex-col bg-neutral-900/85 p-4 border-r border-neutral-300/20 backdrop-blur-md">
+        <aside className="flex h-full w-[320px] flex-col bg-main-900/85 p-4 border-r border-main-300/20 backdrop-blur-md">
             <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+                <p className="text-xs uppercase tracking-[0.18em] text-main-400">
                     Рабочая область
                 </p>
             </div>

@@ -29,14 +29,14 @@ export function MessageComposer({
     };
 
     return (
-        <footer className="rounded-2xl bg-neutral-900/90 ring-neutral-300/20 backdrop-blur-sm">
+        <footer className="rounded-2xl bg-main-900/90 ring-main-300/20 backdrop-blur-sm">
             <div className="relative items-center gap-3">
                 <InputBig
                     ref={areaRef}
                     value={msgContent}
                     onChange={setMsgContent}
                     placeholder="Напишите сообщение модели..."
-                    className="bg-neutral-800/70 text-neutral-100 placeholder:text-neutral-400 ring-neutral-300/20 outline-none focus:ring-neutral-300/40"
+                    className="bg-main-800/70 text-main-100 placeholder:text-main-400 ring-main-300/20 outline-none focus:ring-main-300/40"
                     onKeyDown={(event) => {
                         if (
                             event.key === "Enter" &&

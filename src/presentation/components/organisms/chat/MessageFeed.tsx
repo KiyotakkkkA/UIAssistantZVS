@@ -20,7 +20,7 @@ export function MessageFeed({
 
     return (
         <>
-            <section className="flex-1 space-y-4 overflow-y-auto rounded-2xl bg-neutral-900/55 p-2 ring-neutral-300/15">
+            <section className="flex-1 space-y-4 overflow-y-auto rounded-2xl bg-main-900/55 p-2 ring-main-300/15">
                 {messages.map((message, index) => (
                     <ChatBubble
                         key={`${message.timestamp}-${index}`}
@@ -28,7 +28,7 @@ export function MessageFeed({
                     />
                 ))}
                 {showLoader && (
-                    <div className="flex items-center gap-2 px-2 text-sm text-neutral-400">
+                    <div className="flex items-center gap-2 px-2 text-sm text-main-400">
                         <Loader />
                         <span>Модель печатает...</span>
                     </div>

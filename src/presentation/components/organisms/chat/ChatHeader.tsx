@@ -1,24 +1,18 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
-import { useThemePreference, type ThemePreference } from "../../../../hooks";
+import { useTheme } from "../../../../hooks";
 import { Button, Modal } from "../../atoms";
 import { SettingsView } from "../settings";
 
 export function ChatHeader() {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const { themePreference, setTheme } = useThemePreference();
-
-    const themeOptions: { value: ThemePreference; label: string }[] = [
-        { value: "system", label: "Система" },
-        { value: "light", label: "Светлая" },
-        { value: "dark", label: "Тёмная" },
-    ];
+    const { themePreference, themeOptions, setTheme } = useTheme();
 
     return (
         <>
-            <header className="flex items-center justify-between rounded-2xl bg-neutral-900/90 px-4 py-3 backdrop-blur-md">
+            <header className="flex items-center justify-between rounded-2xl bg-main-900/90 px-4 py-3 backdrop-blur-md">
                 <div>
-                    <h1 className="text-base font-semibold text-neutral-100">
+                    <h1 className="text-base font-semibold text-main-100">
                         Чат с моделью
                     </h1>
                 </div>
@@ -43,12 +37,14 @@ export function ChatHeader() {
                 open={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 title="Настройки"
-                className="max-w-6xl min-h-95"
+                className="max-w-6xl min-h-144"
             >
                 <SettingsView
                     themePreference={themePreference}
                     themeOptions={themeOptions}
-                    setTheme={setTheme}
+                    setTheme={(themeId) => {
+                        void setTheme(themeId);
+                    }}
                 />
             </Modal>
         </>

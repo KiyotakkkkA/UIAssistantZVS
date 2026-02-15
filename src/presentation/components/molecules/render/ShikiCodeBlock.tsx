@@ -117,9 +117,9 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
 
     if (!html) {
         return (
-            <div className="mb-2 overflow-hidden rounded-xl border border-neutral-400/20 bg-neutral-900/80 last:mb-0">
-                <div className="flex items-center justify-between border-b border-neutral-400/20 bg-neutral-800/70 p-2">
-                    <span className="text-[11px] uppercase tracking-wide text-neutral-300">
+            <div className="mb-2 overflow-hidden rounded-xl border border-main-400/20 bg-main-900/80 last:mb-0">
+                <div className="flex items-center justify-between border-b border-main-400/20 bg-main-800/70 p-2">
+                    <span className="text-[11px] uppercase tracking-wide text-main-300">
                         {languageLabel}
                     </span>
                     <div className="flex items-center gap-1">
@@ -146,16 +146,16 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                     </div>
                 </div>
                 <div className="p-3">
-                    <div className="h-18 w-full animate-pulse rounded-lg bg-neutral-800/70" />
+                    <div className="h-18 w-full animate-pulse rounded-lg bg-main-800/70" />
                 </div>
             </div>
         );
     }
 
     return (
-        <div className="mb-2 overflow-hidden rounded-xl border border-neutral-400/20 bg-[#1e1e1e] last:mb-0">
-            <div className="flex items-center justify-between border-b border-neutral-400/20 bg-neutral-700/60 p-2">
-                <span className="text-[11px] uppercase tracking-wide text-neutral-300">
+        <div className="mb-2 overflow-hidden rounded-xl border border-main-400/20 bg-[#1e1e1e] last:mb-0">
+            <div className="flex items-center justify-between border-b border-main-400/20 bg-main-700/60 p-2">
+                <span className="text-[11px] uppercase tracking-wide text-main-300">
                     {languageLabel}
                 </span>
                 <div className="flex items-center gap-1">

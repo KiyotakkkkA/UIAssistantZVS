@@ -1,55 +1,53 @@
 import fs from "node:fs";
 import path from "node:path";
-
-interface DirectoryNode {
-    [name: string]: DirectoryNode | string;
-}
-
-const DEFAULT_RESOURCES_TREE: DirectoryNode = {
-    themes: {},
-};
+import { defaultProfile } from "../static/data";
+import { staticThemeEntries } from "../static/themes";
 
 export class InitService {
     private readonly basePath: string;
-    private readonly resourcesTree: DirectoryNode;
+    private readonly resourcesPath: string;
+    private readonly themesPath: string;
+    private readonly profilePath: string;
 
     constructor(basePath: string) {
         this.basePath = basePath;
-        this.resourcesTree = DEFAULT_RESOURCES_TREE;
+        this.resourcesPath = path.join(this.basePath, "resources");
+        this.themesPath = path.join(this.resourcesPath, "themes");
+        this.profilePath = path.join(this.resourcesPath, "profile.json");
     }
 
     initialize(): void {
-        this.buildTree();
+        this.ensureDirectory(this.resourcesPath);
+        this.ensureDirectory(this.themesPath);
+        this.ensureProfile();
+        this.ensureThemes();
     }
 
-    buildTree(): void {
-        this.createDirectoryStructure(
-            {
-                resources: this.resourcesTree,
-            },
-            this.basePath,
-        );
+    private ensureDirectory(targetPath: string): void {
+        if (!fs.existsSync(targetPath)) {
+            fs.mkdirSync(targetPath, { recursive: true });
+        }
     }
 
-    private createDirectoryStructure(
-        tree: DirectoryNode,
-        targetBasePath: string,
-    ): void {
-        for (const [name, node] of Object.entries(tree)) {
-            const currentPath = path.join(targetBasePath, name);
+    private ensureProfile(): void {
+        if (!fs.existsSync(this.profilePath)) {
+            fs.writeFileSync(
+                this.profilePath,
+                JSON.stringify(defaultProfile, null, 2),
+            );
+        }
+    }
 
-            if (typeof node === "string") {
-                if (!fs.existsSync(currentPath)) {
-                    fs.writeFileSync(currentPath, node);
-                }
-                continue;
+    private ensureThemes(): void {
+        for (const entry of staticThemeEntries) {
+            const themeFilePath = path.join(this.themesPath, entry.fileName);
+
+            if (!fs.existsSync(themeFilePath)) {
+                fs.writeFileSync(
+                    themeFilePath,
+                    JSON.stringify(entry.data, null, 2),
+                );
             }
-
-            if (!fs.existsSync(currentPath)) {
-                fs.mkdirSync(currentPath, { recursive: true });
-            }
-
-            this.createDirectoryStructure(node, currentPath);
         }
     }
 }

@@ -1,2 +1,3 @@
 export * from "./useOllamaChat";
-export * from "./useThemePreference";
+export * from "./useTheme";
+export * from "./useUserProfile";

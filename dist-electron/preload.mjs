@@ -3,20 +3,27 @@ const electron = require("electron");
 electron.contextBridge.exposeInMainWorld("ipcRenderer", {
   on(...args) {
     const [channel, listener] = args;
-    return electron.ipcRenderer.on(channel, (event, ...args2) => listener(event, ...args2));
+    return electron.ipcRenderer.on(
+      channel,
+      (event, ...nextArgs) => listener(event, ...nextArgs)
+    );
   },
   off(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.off(channel, ...omit);
+    const [channel, ...nextArgs] = args;
+    return electron.ipcRenderer.off(channel, ...nextArgs);
   },
   send(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.send(channel, ...omit);
+    const [channel, ...nextArgs] = args;
+    return electron.ipcRenderer.send(channel, ...nextArgs);
   },
   invoke(...args) {
-    const [channel, ...omit] = args;
-    return electron.ipcRenderer.invoke(channel, ...omit);
+    const [channel, ...nextArgs] = args;
+    return electron.ipcRenderer.invoke(channel, ...nextArgs);
   }
-  // You can expose other APTs you need here.
-  // ...
+});
+electron.contextBridge.exposeInMainWorld("appApi", {
+  getBootData: () => electron.ipcRenderer.invoke("app:get-boot-data"),
+  getThemesList: () => electron.ipcRenderer.invoke("app:get-themes-list"),
+  getThemeData: (themeId) => electron.ipcRenderer.invoke("app:get-theme-data", themeId),
+  updateUserProfile: (nextProfile) => electron.ipcRenderer.invoke("app:update-user-profile", nextProfile)
 });

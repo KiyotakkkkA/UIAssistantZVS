@@ -1,8 +1,10 @@
 import path from "node:path";
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
+import { UserDataService } from "./services/UserDataService";
+import type { UserProfile } from "../src/types/App";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -27,6 +29,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
     : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let userDataService: UserDataService;
 
 function createWindow() {
     win = new BrowserWindow({
@@ -69,5 +72,20 @@ app.whenReady().then(() => {
     const initDirectoriesService = new InitService(app.getPath("userData"));
 
     initDirectoriesService.initialize();
+    userDataService = new UserDataService(app.getPath("userData"));
+
+    ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
+    ipcMain.handle("app:get-themes-list", () =>
+        userDataService.getThemesList(),
+    );
+    ipcMain.handle("app:get-theme-data", (_event, themeId: string) =>
+        userDataService.getThemeData(themeId),
+    );
+    ipcMain.handle(
+        "app:update-user-profile",
+        (_event, nextProfile: Partial<UserProfile>) =>
+            userDataService.updateUserProfile(nextProfile),
+    );
+
     createWindow();
 });

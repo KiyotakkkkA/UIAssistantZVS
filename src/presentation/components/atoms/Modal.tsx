@@ -57,15 +57,15 @@ export function Modal({
             role="dialog"
         >
             <div
-                className={`w-full max-w-5xl rounded-2xl border border-neutral-700/90 bg-neutral-900/95 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-2 duration-220 ${className}`}
+                className={`flex max-h-[88vh] w-full max-w-5xl flex-col rounded-2xl border border-main-700/90 bg-main-900/95 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-2 duration-220 ${className}`}
             >
-                <div className="flex items-center justify-between border-b border-neutral-700/80 px-5 py-4">
-                    <h3 className="text-base font-semibold text-neutral-100">
+                <div className="flex items-center justify-between border-b border-main-700/80 px-5 py-4">
+                    <h3 className="text-base font-semibold text-main-100">
                         {title}
                     </h3>
                     <Button
                         variant="secondary"
-                        className="h-8 w-8 border-neutral-600 bg-neutral-700/70 hover:bg-neutral-600/80"
+                        className="h-8 w-8 border-main-600 bg-main-700/70 hover:bg-main-600/80"
                         onClick={onClose}
                         aria-label="Закрыть окно"
                     >
@@ -73,12 +73,12 @@ export function Modal({
                     </Button>
                 </div>
 
-                <div className="max-h-[90vh] overflow-y-auto overflow-x-hidden px-5 py-5">
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-5">
                     {children}
                 </div>
 
                 {footer ? (
-                    <div className="flex items-center justify-end gap-2 border-t border-neutral-700/80 px-5 py-4">
+                    <div className="flex items-center justify-end gap-2 border-t border-main-700/80 px-5 py-4">
                         {footer}
                     </div>
                 ) : null}

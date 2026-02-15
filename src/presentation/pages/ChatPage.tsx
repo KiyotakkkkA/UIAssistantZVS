@@ -11,11 +11,11 @@ export function ChatPage() {
         useOllamaChat();
 
     return (
-        <main className="h-screen w-screen overflow-hidden bg-neutral-900 p-3 text-neutral-100">
+        <main className="h-screen w-screen overflow-hidden bg-main-900 p-3 text-main-100">
             <div className="flex h-full w-full gap-3">
                 <ChatSidebar />
 
-                <section className="flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-neutral-900/70 backdrop-blur-md">
+                <section className="flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
                     <ChatHeader />
                     <MessageFeed
                         messages={messages}

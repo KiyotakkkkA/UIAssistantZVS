@@ -20,8 +20,8 @@ export function ChatBubble({ author, content, timestamp }: ChatBubbleProps) {
             <div
                 className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     isAssistant
-                        ? " text-neutral-100"
-                        : "bg-neutral-500/20 text-neutral-100 ring-neutral-300/30"
+                        ? " text-main-100"
+                        : "bg-main-500/20 text-main-100 ring-main-300/30"
                 }`}
             >
                 {isAssistant ? (
@@ -29,7 +29,7 @@ export function ChatBubble({ author, content, timestamp }: ChatBubbleProps) {
                 ) : (
                     <p>{content}</p>
                 )}
-                <p className="mt-2 text-[11px] text-neutral-400">{timestamp}</p>
+                <p className="mt-2 text-[11px] text-main-400">{timestamp}</p>
             </div>
             {!isAssistant && <Avatar label="YOU" tone="user" />}
         </article>

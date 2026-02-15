@@ -131,14 +131,14 @@ export function Dropdown({
                 aria-label={ariaLabel}
                 disabled={disabled}
                 onClick={toggleOpen}
-                className={`min-h-10 min-w-34 justify-between gap-3 border-transparent rounded-xl px-3 py-2 text-neutral-100 ${triggerClassName}`}
+                className={`min-h-10 min-w-34 justify-between gap-3 border-transparent rounded-xl px-3 py-2 text-main-100 ${triggerClassName}`}
             >
                 <span className="min-w-0 truncate text-left">
                     {selectedOption?.label ?? placeholder ?? "Выберите"}
                 </span>
                 <Icon
                     icon="mdi:chevron-down"
-                    className={`shrink-0 text-neutral-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                    className={`shrink-0 text-main-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
                     aria-hidden
                 />
             </Button>
@@ -148,7 +148,7 @@ export function Dropdown({
                 role="listbox"
                 tabIndex={-1}
                 style={menuStyle}
-                className={`absolute left-0 top-full z-30 mt-2 origin-top rounded-xl bg-neutral-800/95 p-1.5 transition-all duration-180 ${open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1 scale-98 opacity-0"} ${menuClassName}`}
+                className={`absolute left-0 top-full z-30 mt-2 origin-top rounded-xl bg-main-800/95 p-1.5 transition-all duration-180 ${open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1 scale-98 opacity-0"} ${menuClassName}`}
             >
                 <div className="space-y-1.5 overflow-x-hidden rounded-lg">
                     {searchable ? (
@@ -162,7 +162,7 @@ export function Dropdown({
 
                     <div className="max-h-72 space-y-1 overflow-y-auto overflow-x-hidden rounded-lg pr-1">
                         {filteredOptions.length === 0 ? (
-                            <p className="px-3 py-2 text-sm text-neutral-500">
+                            <p className="px-3 py-2 text-sm text-main-500">
                                 {emptyMessage}
                             </p>
                         ) : null}
@@ -177,8 +177,8 @@ export function Dropdown({
                                     onClick={() => onSelect(option.value)}
                                     className={`w-full min-w-0 justify-between rounded-lg border border-transparent px-3 py-2 text-left text-sm space-x-2 ${
                                         active
-                                            ? "bg-neutral-700/60 text-neutral-100"
-                                            : "bg-transparent text-neutral-300 hover:bg-neutral-700/80 hover:text-neutral-100"
+                                            ? "bg-main-700/60 text-main-100"
+                                            : "bg-transparent text-main-300 hover:bg-main-700/80 hover:text-main-100"
                                     } ${optionClassName}`}
                                 >
                                     <span className="min-w-0 truncate">
@@ -187,7 +187,7 @@ export function Dropdown({
                                     {active ? (
                                         <Icon
                                             icon="mdi:check"
-                                            className="shrink-0 text-neutral-200"
+                                            className="shrink-0 text-main-200"
                                             aria-hidden
                                         />
                                     ) : null}

@@ -6,8 +6,8 @@ type AvatarProps = {
 export function Avatar({ label, tone = "assistant" }: AvatarProps) {
     const toneStyles =
         tone === "assistant"
-            ? "bg-neutral-500/20 text-neutral-100 ring-neutral-300/30"
-            : "bg-neutral-700/70 text-neutral-100 ring-neutral-400/30";
+            ? "bg-main-500/20 text-main-100 ring-main-300/30"
+            : "bg-main-700/70 text-main-100 ring-main-400/30";
 
     return (
         <div
