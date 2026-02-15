@@ -126,8 +126,17 @@ export class UserDataService {
     deleteMessageFromDialog(dialogId: string, messageId: string): ChatDialog {
         const dialog = this.getDialogById(dialogId);
 
+        const messageIndex = dialog.messages.findIndex(
+            (message) => message.id === messageId,
+        );
+
+        if (messageIndex === -1) {
+            return dialog;
+        }
+
         const nextMessages = dialog.messages.filter(
-            (message) => message.id !== messageId,
+            (_message, index) =>
+                index !== messageIndex && index !== messageIndex + 1,
         );
 
         const updatedDialog: ChatDialog = {
