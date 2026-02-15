@@ -1,6 +1,44 @@
+import path from "node:path";
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+import fs from "node:fs";
+const DEFAULT_RESOURCES_TREE = {
+  themes: {}
+};
+class InitService {
+  basePath;
+  resourcesTree;
+  constructor(basePath) {
+    this.basePath = basePath;
+    this.resourcesTree = DEFAULT_RESOURCES_TREE;
+  }
+  initialize() {
+    this.buildTree();
+  }
+  buildTree() {
+    this.createDirectoryStructure(
+      {
+        resources: this.resourcesTree
+      },
+      this.basePath
+    );
+  }
+  createDirectoryStructure(tree, targetBasePath) {
+    for (const [name, node] of Object.entries(tree)) {
+      const currentPath = path.join(targetBasePath, name);
+      if (typeof node === "string") {
+        if (!fs.existsSync(currentPath)) {
+          fs.writeFileSync(currentPath, node);
+        }
+        continue;
+      }
+      if (!fs.existsSync(currentPath)) {
+        fs.mkdirSync(currentPath, { recursive: true });
+      }
+      this.createDirectoryStructure(node, currentPath);
+    }
+  }
+}
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -39,7 +77,11 @@ app.on("activate", () => {
     createWindow();
   }
 });
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  const initDirectoriesService = new InitService(app.getPath("userData"));
+  initDirectoriesService.initialize();
+  createWindow();
+});
 export {
   MAIN_DIST,
   RENDERER_DIST,

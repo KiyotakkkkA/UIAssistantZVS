@@ -1,6 +1,8 @@
+import path from "node:path";
+
 import { app, BrowserWindow } from "electron";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
+import { InitService } from "./services/InitService";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -63,4 +65,9 @@ app.on("activate", () => {
     }
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    const initDirectoriesService = new InitService(app.getPath("userData"));
+
+    initDirectoriesService.initialize();
+    createWindow();
+});
