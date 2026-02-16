@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
-import { useDialogs, useToasts } from "../../../../hooks";
+import { useDialogs, useProjects, useToasts } from "../../../../hooks";
 import { Button, Dropdown, InputSmall, Modal } from "../../atoms";
 import { ConversationItem } from "../../molecules";
 import { Icon } from "@iconify/react";
@@ -18,6 +18,13 @@ export const ChatSidebar = observer(function ChatSidebar() {
         switchDialog,
         canDeleteDialog,
     } = useDialogs();
+    const {
+        projects,
+        activeProjectId,
+        switchProject,
+        clearActiveProject,
+        deleteProject,
+    } = useProjects();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editMode, setEditMode] = useState<"create" | "rename">("create");
@@ -26,6 +33,9 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteDialogId, setDeleteDialogId] = useState<string | null>(null);
+    const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] =
+        useState(false);
+    const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
 
     const editModalTitle = useMemo(
         () =>
@@ -35,6 +45,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
     const openCreateModal = () => {
         navigate("/dialogs");
+        clearActiveProject();
         setEditMode("create");
         setDialogName("");
         setTargetDialogId(null);
@@ -42,12 +53,18 @@ export const ChatSidebar = observer(function ChatSidebar() {
     };
 
     const openProjectsPage = () => {
-        navigate("/projects");
+        navigate("/projects/create");
     };
 
     const selectDialogAndOpenPage = async (dialogId: string) => {
+        clearActiveProject();
         await switchDialog(dialogId);
         navigate("/dialogs");
+    };
+
+    const selectProjectAndOpenPage = async (projectId: string) => {
+        await switchProject(projectId);
+        navigate(`/projects/${projectId}`);
     };
 
     const createOptionsList = [
@@ -132,6 +149,16 @@ export const ChatSidebar = observer(function ChatSidebar() {
         setDeleteDialogId(null);
     };
 
+    const openDeleteProjectModal = (projectId: string) => {
+        setDeleteProjectId(projectId);
+        setIsDeleteProjectModalOpen(true);
+    };
+
+    const closeDeleteProjectModal = () => {
+        setDeleteProjectId(null);
+        setIsDeleteProjectModalOpen(false);
+    };
+
     const confirmDelete = async () => {
         if (!deleteDialogId) {
             return;
@@ -143,6 +170,35 @@ export const ChatSidebar = observer(function ChatSidebar() {
             description: "Диалог был удалён из списка.",
         });
         closeDeleteModal();
+    };
+
+    const confirmDeleteProject = async () => {
+        if (!deleteProjectId) {
+            return;
+        }
+
+        const deleted = await deleteProject(deleteProjectId);
+
+        if (!deleted) {
+            toasts.warning({
+                title: "Не удалось удалить",
+                description: "Проект не найден или уже удалён.",
+            });
+            closeDeleteProjectModal();
+            return;
+        }
+
+        if (activeProjectId === deleteProjectId) {
+            clearActiveProject();
+            navigate("/dialogs");
+        }
+
+        toasts.info({
+            title: "Проект удалён",
+            description: "Проект, его диалог и документы удалены.",
+        });
+
+        closeDeleteProjectModal();
     };
 
     return (
@@ -188,6 +244,84 @@ export const ChatSidebar = observer(function ChatSidebar() {
                         {...conversation}
                     />
                 ))}
+
+                <div className="my-3 flex items-center gap-3 px-1">
+                    <div className="h-px flex-1 bg-main-600/70" />
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
+                        Проекты
+                    </p>
+                    <div className="h-px flex-1 bg-main-600/70" />
+                </div>
+
+                {projects.length > 0 ? (
+                    projects.map((project) => {
+                        const isActive = project.id === activeProjectId;
+
+                        return (
+                            <div
+                                role="button"
+                                tabIndex={0}
+                                key={project.id}
+                                onClick={() => {
+                                    void selectProjectAndOpenPage(project.id);
+                                }}
+                                onKeyDown={(event) => {
+                                    if (
+                                        event.key === "Enter" ||
+                                        event.key === " "
+                                    ) {
+                                        event.preventDefault();
+                                        void selectProjectAndOpenPage(
+                                            project.id,
+                                        );
+                                    }
+                                }}
+                                className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
+                                    isActive
+                                        ? "bg-main-500/20"
+                                        : "bg-transparent"
+                                }`}
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                                        <p className="truncate text-sm font-medium text-main-100">
+                                            {project.title}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-xs text-main-400">
+                                            {project.time}
+                                        </span>
+                                        <Button
+                                            variant=""
+                                            className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                openDeleteProjectModal(
+                                                    project.id,
+                                                );
+                                            }}
+                                            aria-label="Удалить проект"
+                                        >
+                                            <Icon
+                                                icon="mdi:trash-can-outline"
+                                                width="16"
+                                                height="16"
+                                            />
+                                        </Button>
+                                    </div>
+                                </div>
+                                <p className="mt-1 truncate text-xs text-main-400">
+                                    {project.preview}
+                                </p>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="rounded-xl bg-main-900/50 p-3 text-xs text-main-400">
+                        Проекты ещё не созданы.
+                    </div>
+                )}
             </div>
 
             <Modal
@@ -261,6 +395,39 @@ export const ChatSidebar = observer(function ChatSidebar() {
             >
                 <p className="text-sm text-main-300">
                     Подтвердите удаление выбранного диалога.
+                </p>
+            </Modal>
+
+            <Modal
+                open={isDeleteProjectModalOpen}
+                onClose={closeDeleteProjectModal}
+                title="Удаление проекта"
+                className="max-w-md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={closeDeleteProjectModal}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => {
+                                void confirmDeleteProject();
+                            }}
+                        >
+                            Удалить
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-main-300">
+                    Подтвердите удаление проекта вместе с диалогом и файлами.
                 </p>
             </Modal>
         </aside>

@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
+import { useNavigate } from "react-router-dom";
 import { toolsStore } from "../../../stores/toolsStore";
+import { useFileSave, useProjects, useToasts } from "../../../hooks";
+import type { UploadedFileData } from "../../../types/ElectronApi";
 import {
     AutoFillSelector,
     Button,
@@ -8,17 +11,82 @@ import {
     InputCheckbox,
     InputFile,
     InputSmall,
+    Modal,
 } from "../../components/atoms";
+import { Icon } from "@iconify/react";
 
 export const CreateProjectPage = observer(function CreateProjectPage() {
+    const navigate = useNavigate();
+    const toasts = useToasts();
+    const { createProject } = useProjects();
+    const { saveFiles, isSaving } = useFileSave();
+
     const [projectName, setProjectName] = useState("");
     const [projectDescription, setProjectDescription] = useState("");
     const [toolsQuery, setToolsQuery] = useState("");
+    const [documents, setDocuments] = useState<UploadedFileData[]>([]);
+    const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
 
     const filteredPackages = useMemo(
         () => toolsStore.getFilteredPackages(toolsQuery),
         [toolsQuery],
     );
+
+    const formNewProjData = (fileUUIDs: string[]) => {
+        return {
+            name: projectName.trim(),
+            description: projectDescription.trim(),
+            requiredTools: toolsStore.requiredPromptTools,
+            fileUUIDs,
+        };
+    };
+
+    const openConfirmModal = () => {
+        if (!projectName.trim()) {
+            toasts.warning({
+                title: "Введите название",
+                description: "Название проекта не может быть пустым.",
+            });
+            return;
+        }
+
+        setIsConfirmOpen(true);
+    };
+
+    const confirmCreateProject = async () => {
+        if (isCreating) {
+            return;
+        }
+
+        try {
+            setIsCreating(true);
+
+            const savedFiles =
+                documents.length > 0 ? await saveFiles(documents) : [];
+            const project = await createProject(
+                formNewProjData(savedFiles.map((file) => file.id)),
+            );
+
+            if (!project) {
+                toasts.danger({
+                    title: "Ошибка создания",
+                    description: "Не удалось создать проект.",
+                });
+                return;
+            }
+
+            toasts.success({
+                title: "Проект создан",
+                description: "Проект добавлен в рабочую область.",
+            });
+
+            setIsConfirmOpen(false);
+            navigate(`/projects/${project.id}`);
+        } finally {
+            setIsCreating(false);
+        }
+    };
 
     return (
         <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-main-900/60">
@@ -32,7 +100,7 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     </p>
                 </div>
 
-                <section className="space-y-2">
+                <section className="space-y-2 border-l-3 border-main-600 pl-3">
                     <p className="text-sm font-semibold text-main-100">
                         Название проекта
                     </p>
@@ -43,7 +111,7 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     />
                 </section>
 
-                <section className="space-y-2">
+                <section className="space-y-2 border-l-3 border-main-600 pl-3">
                     <p className="text-sm font-semibold text-main-100">
                         Описание проекта
                     </p>
@@ -55,7 +123,7 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     />
                 </section>
 
-                <section className="space-y-4">
+                <section className="space-y-4 border-l-3 border-main-600 pl-3">
                     <p className="text-sm font-semibold text-main-100">
                         Используемые инструменты
                     </p>
@@ -71,10 +139,8 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                             Инструменты для обязательного использования
                         </p>
                         <p className="mt-1 text-xs text-main-400">
-                            Выбранные инструменты будут добавлены в промпт как:
-                            <br />
-                            You must use these tools while completing task:
-                            TOOLS - ...
+                            Выбранные инструменты будут обязательно использованы
+                            при ответе во време работы над задачей.
                         </p>
                         <AutoFillSelector
                             className="mt-3"
@@ -96,9 +162,12 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                                 className="rounded-2xl bg-main-900/45 p-4"
                             >
                                 <div className="mb-3">
-                                    <p className="text-base font-semibold text-main-100">
-                                        {pkg.title}
-                                    </p>
+                                    <div className="flex gap-2 items-center">
+                                        <Icon icon="mdi:tools" />
+                                        <p className="text-base font-semibold text-main-100">
+                                            {pkg.title}
+                                        </p>
+                                    </div>
                                     <p className="mt-1 text-xs text-main-400">
                                         {pkg.description}
                                     </p>
@@ -117,9 +186,12 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                                                 className="flex items-start justify-between gap-3 rounded-xl border border-main-700/70 bg-main-900/60 p-3"
                                             >
                                                 <div>
-                                                    <p className="text-sm font-semibold text-main-100">
-                                                        {toolName}
-                                                    </p>
+                                                    <div className="flex gap-2 items-center">
+                                                        <Icon icon="mdi:toolbox" />
+                                                        <p className="text-sm font-semibold text-main-100">
+                                                            {toolName}
+                                                        </p>
+                                                    </div>
                                                     <p className="mt-1 text-xs text-main-400">
                                                         {tool.schema.function
                                                             .description ||
@@ -151,10 +223,12 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     )}
                 </section>
 
-                <section className="space-y-2">
+                <section className="space-y-2 border-l-3 border-main-600 pl-3">
                     <InputFile
                         label="Документы"
                         helperText="Добавьте материалы проекта через проводник"
+                        value={documents}
+                        onChange={setDocuments}
                         accept={["image/*", ".pdf", ".docx"]}
                         multiple
                     />
@@ -166,11 +240,58 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     variant="primary"
                     shape="rounded-lg"
                     className="h-9 px-4"
-                    disabled
+                    disabled={isCreating || isSaving}
+                    onClick={openConfirmModal}
                 >
                     Создать проект
                 </Button>
             </div>
+
+            <Modal
+                open={isConfirmOpen}
+                onClose={() => setIsConfirmOpen(false)}
+                title="Подтверждение создания проекта"
+                className="max-w-md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => setIsConfirmOpen(false)}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            disabled={isCreating || isSaving}
+                            onClick={() => {
+                                void confirmCreateProject();
+                            }}
+                        >
+                            {isCreating || isSaving
+                                ? "Создание..."
+                                : "Подтвердить"}
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-2 text-sm text-main-300">
+                    <p>
+                        Подтвердите создание проекта с выбранными параметрами.
+                    </p>
+                    <p>
+                        <span className="text-main-400">Название:</span>{" "}
+                        {projectName.trim()}
+                    </p>
+                    <p>
+                        <span className="text-main-400">Документы:</span>{" "}
+                        {documents.length}
+                    </p>
+                </div>
+            </Modal>
         </div>
     );
 });

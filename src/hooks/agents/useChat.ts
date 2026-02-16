@@ -9,6 +9,7 @@ import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
 import { chatsStore } from "../../stores/chatsStore";
 import { toolsStore } from "../../stores/toolsStore";
+import { projectsStore } from "../../stores/projectsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
 import { Config } from "../../config";
 
@@ -82,6 +83,7 @@ export function useChat() {
         const fallbackDialog: ChatDialog = {
             id: `dialog_${crypto.randomUUID().replace(/-/g, "")}`,
             title: "Новый диалог",
+            forProjectId: null,
             messages: messagesRef.current,
             createdAt: now,
             updatedAt: now,
@@ -136,12 +138,15 @@ export function useChat() {
             const assistantTimestamp = getTimeStamp();
             const assistantMessageId = createMessageId();
 
-            ensureDialog();
+            const currentDialog = ensureDialog();
 
             const requestBaseHistory = [...messagesRef.current];
             const isFirstDialogMessage = requestBaseHistory.length === 0;
             const requiredToolsInstruction =
                 toolsStore.requiredPromptInstruction;
+            const activeProject = projectsStore.activeProject;
+            const shouldAttachProjectPrompt =
+                activeProject?.dialogId === currentDialog.id;
 
             const initialSystemMessages: ChatMessage[] = isFirstDialogMessage
                 ? [
@@ -167,6 +172,23 @@ export function useChat() {
                               .join("\n"),
                           timestamp: getTimeStamp(),
                       },
+                      ...(shouldAttachProjectPrompt
+                          ? [
+                                {
+                                    id: createMessageId(),
+                                    author: "system" as const,
+                                    content: [
+                                        "PROJECT_PROMPT:",
+                                        `Название проекта: ${activeProject.name}`,
+                                        `Описание проекта: ${
+                                            activeProject.description ||
+                                            "Без описания"
+                                        }`,
+                                    ].join("\n"),
+                                    timestamp: getTimeStamp(),
+                                },
+                            ]
+                          : []),
                   ]
                 : [];
 
@@ -464,7 +486,6 @@ export function useChat() {
                     },
                 });
 
-                const currentDialog = ensureDialog();
                 const snapshot: ChatDialog = {
                     ...currentDialog,
                     messages: messagesRef.current,

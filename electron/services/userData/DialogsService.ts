@@ -30,8 +30,12 @@ export class DialogsService {
             }
         }
 
-        if (dialogs.length > 0) {
-            const fallbackActiveDialog = dialogs[0];
+        const availableDialogs = dialogs.filter(
+            (dialog) => dialog.forProjectId === null,
+        );
+
+        if (availableDialogs.length > 0) {
+            const fallbackActiveDialog = availableDialogs[0];
             this.onActiveDialogIdUpdate(fallbackActiveDialog.id);
             return fallbackActiveDialog;
         }
@@ -43,9 +47,9 @@ export class DialogsService {
     }
 
     getDialogsList(): ChatDialogListItem[] {
-        return this.readDialogs().map((dialog) =>
-            this.toDialogListItem(dialog),
-        );
+        return this.readDialogs()
+            .filter((dialog) => dialog.forProjectId === null)
+            .map((dialog) => this.toDialogListItem(dialog));
     }
 
     getDialogById(dialogId: string, activeDialogId?: string): ChatDialog {
@@ -60,11 +64,26 @@ export class DialogsService {
         return this.getActiveDialog(activeDialogId);
     }
 
-    createDialog(): ChatDialog {
-        const baseDialog = createBaseDialog();
+    createDialog(forProjectId: string | null = null): ChatDialog {
+        const baseDialog = createBaseDialog(forProjectId);
         this.writeDialog(baseDialog);
         this.onActiveDialogIdUpdate(baseDialog.id);
         return baseDialog;
+    }
+
+    linkDialogToProject(dialogId: string, projectId: string): void {
+        const dialogs = this.readDialogs();
+        const targetDialog = dialogs.find((dialog) => dialog.id === dialogId);
+
+        if (!targetDialog || targetDialog.forProjectId === projectId) {
+            return;
+        }
+
+        this.writeDialog({
+            ...targetDialog,
+            forProjectId: projectId,
+            updatedAt: new Date().toISOString(),
+        });
     }
 
     renameDialog(
@@ -100,11 +119,17 @@ export class DialogsService {
             dialogs = [fallbackDialog];
         }
 
-        this.onActiveDialogIdUpdate(dialogs[0].id);
+        const fallbackDialog =
+            dialogs.find((dialog) => dialog.forProjectId === null) ||
+            dialogs[0];
+
+        this.onActiveDialogIdUpdate(fallbackDialog.id);
 
         return {
-            dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
-            activeDialog: dialogs[0],
+            dialogs: dialogs
+                .filter((dialog) => dialog.forProjectId === null)
+                .map((dialog) => this.toDialogListItem(dialog)),
+            activeDialog: fallbackDialog,
         };
     }
 
@@ -174,6 +199,7 @@ export class DialogsService {
                     ? dialog.title
                     : "Новый диалог",
             messages: normalizedMessages,
+            forProjectId: this.normalizeForProjectId(dialog.forProjectId),
             createdAt:
                 typeof dialog.createdAt === "string" && dialog.createdAt
                     ? dialog.createdAt
@@ -221,6 +247,9 @@ export class DialogsService {
                             ? parsed.title
                             : "Новый диалог",
                     messages: normalizedMessages,
+                    forProjectId: this.normalizeForProjectId(
+                        parsed.forProjectId,
+                    ),
                     createdAt:
                         typeof parsed.createdAt === "string" && parsed.createdAt
                             ? parsed.createdAt
@@ -257,6 +286,17 @@ export class DialogsService {
         }
 
         return `dialog_${randomUUID().replace(/-/g, "")}`;
+    }
+
+    private normalizeForProjectId(forProjectId: unknown): string | null {
+        if (
+            typeof forProjectId === "string" &&
+            forProjectId.startsWith("project_")
+        ) {
+            return forProjectId;
+        }
+
+        return null;
     }
 
     private normalizeMessage(message: ChatMessage): ChatMessage {

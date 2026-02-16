@@ -6,7 +6,15 @@ import { Button, Modal } from "../../atoms";
 import { ToolPackageCard } from "../../molecules/cards";
 import { SettingsView, type SettingsViewHandle } from "../settings";
 
-export function ChatHeader() {
+type ChatHeaderProps = {
+    title?: string;
+    onOpenDocuments?: () => void;
+};
+
+export function ChatHeader({
+    title = "Чат с моделью",
+    onOpenDocuments,
+}: ChatHeaderProps) {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isToolsOpen, setIsToolsOpen] = useState(false);
     const settingsViewRef = useRef<SettingsViewHandle | null>(null);
@@ -47,10 +55,26 @@ export function ChatHeader() {
             <header className="flex items-center justify-between rounded-2xl bg-main-900/90 px-4 py-3 backdrop-blur-md">
                 <div>
                     <h1 className="text-base font-semibold text-main-100">
-                        Чат с моделью
+                        {title}
                     </h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    {onOpenDocuments ? (
+                        <Button
+                            label="Документы"
+                            className="px-3 py-2 text-xs"
+                            onClick={onOpenDocuments}
+                        >
+                            <span className="inline-flex items-center gap-1">
+                                <Icon
+                                    icon="mdi:file-document-multiple-outline"
+                                    width="16"
+                                    height="16"
+                                />
+                                Документы
+                            </span>
+                        </Button>
+                    ) : null}
                     <Button label="Search" className="p-2">
                         <Icon icon="mdi:magnify" width="16" height="16" />
                     </Button>

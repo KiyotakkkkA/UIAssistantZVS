@@ -9,15 +9,28 @@ import type {
     ChatDialogListItem,
     DeleteDialogResult,
 } from "../../src/types/Chat";
+import { randomUUID } from "node:crypto";
+import type { UploadedFileData } from "../../src/types/ElectronApi";
+import type { SavedFileRecord } from "../../src/types/ElectronApi";
+import type {
+    CreateProjectPayload,
+    DeleteProjectResult,
+    Project,
+    ProjectListItem,
+} from "../../src/types/Project";
 import { createUserDataPaths } from "./userData/UserDataPaths";
 import { UserProfileService } from "./userData/UserProfileService";
 import { ThemesService } from "./userData/ThemesService";
 import { DialogsService } from "./userData/DialogsService";
+import { ProjectsService } from "./userData/ProjectsService";
+import { FileStorageService } from "./FileStorageService";
 
 export class UserDataService {
     private readonly userProfileService: UserProfileService;
     private readonly themesService: ThemesService;
     private readonly dialogsService: DialogsService;
+    private readonly projectsService: ProjectsService;
+    private readonly fileStorageService: FileStorageService;
 
     constructor(basePath: string) {
         const paths = createUserDataPaths(basePath);
@@ -32,6 +45,13 @@ export class UserDataService {
                 });
             },
         );
+        this.projectsService = new ProjectsService(paths.projectsPath);
+        this.fileStorageService = new FileStorageService(
+            paths.filesPath,
+            paths.storageManifestPath,
+        );
+
+        this.syncProjectDialogs();
     }
 
     getActiveDialog(): ChatDialog {
@@ -90,6 +110,56 @@ export class UserDataService {
         return this.dialogsService.saveDialogSnapshot(dialog);
     }
 
+    getProjectsList(): ProjectListItem[] {
+        return this.projectsService.getProjectsList();
+    }
+
+    getProjectById(projectId: string): Project | null {
+        return this.projectsService.getProjectById(projectId);
+    }
+
+    createProject(payload: CreateProjectPayload): Project {
+        const projectId = `project_${randomUUID().replace(/-/g, "")}`;
+        const dialog = this.dialogsService.createDialog(projectId);
+        const nextTitle = payload.name.trim();
+
+        if (nextTitle) {
+            this.dialogsService.renameDialog(dialog.id, nextTitle);
+        }
+
+        return this.projectsService.createProject({
+            ...payload,
+            dialogId: dialog.id,
+            projectId,
+        });
+    }
+
+    deleteProject(projectId: string): DeleteProjectResult {
+        const deletedProject = this.projectsService.deleteProject(projectId);
+
+        if (deletedProject) {
+            this.fileStorageService.deleteFilesByIds(deletedProject.fileUUIDs);
+            this.dialogsService.deleteDialog(deletedProject.dialogId);
+        }
+
+        return {
+            projects: this.projectsService.getProjectsList(),
+            deletedProjectId: projectId,
+        };
+    }
+
+    saveFiles(files: UploadedFileData[]): SavedFileRecord[] {
+        return this.fileStorageService.saveFiles(files);
+    }
+
+    getFilesByIds(fileIds: string[]): SavedFileRecord[] {
+        return this.fileStorageService.getFilesByIds(fileIds);
+    }
+
+    getFileById(fileId: string): SavedFileRecord | null {
+        return this.fileStorageService.getFileById(fileId);
+    }
+
     getBootData(): BootData {
         const userProfile = this.userProfileService.getUserProfile();
         const preferredThemeData = this.themesService.resolveThemePalette(
@@ -112,5 +182,16 @@ export class UserDataService {
 
     updateUserProfile(nextProfile: Partial<UserProfile>): UserProfile {
         return this.userProfileService.updateUserProfile(nextProfile);
+    }
+
+    private syncProjectDialogs(): void {
+        const projects = this.projectsService.getProjectsList();
+
+        for (const project of projects) {
+            this.dialogsService.linkDialogToProject(
+                project.dialogId,
+                project.id,
+            );
+        }
     }
 }

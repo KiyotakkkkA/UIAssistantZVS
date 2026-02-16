@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 type="button"
                 aria-label={label}
-                className={`inline-flex ${shape} items-center justify-center transition-colors border cursor-pointer ${variant ? variants[variant] : ""} ${className}`}
+                className={`inline-flex disabled:opacity-70 disabled:cursor-not-allowed ${shape} items-center justify-center transition-colors border cursor-pointer ${variant ? variants[variant] : ""} ${className}`}
                 {...props}
             >
                 {children}

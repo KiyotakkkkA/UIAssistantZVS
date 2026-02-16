@@ -8,13 +8,16 @@ export const createDialogId = () => createPrefixedId("dialog");
 
 export const createMessageId = () => createPrefixedId("msg");
 
-export const createBaseDialog = (): ChatDialog => {
+export const createBaseDialog = (
+    forProjectId: string | null = null,
+): ChatDialog => {
     const now = new Date().toISOString();
 
     return {
         id: createDialogId(),
         title: "Новый диалог",
         messages: [],
+        forProjectId,
         createdAt: now,
         updatedAt: now,
     };

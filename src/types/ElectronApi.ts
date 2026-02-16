@@ -4,6 +4,12 @@ import type {
     ChatDialogListItem,
     DeleteDialogResult,
 } from "./Chat";
+import type {
+    CreateProjectPayload,
+    DeleteProjectResult,
+    Project,
+    ProjectListItem,
+} from "./Project";
 
 export type ExecShellCommandResult = {
     command: string;
@@ -19,6 +25,17 @@ export type UploadedFileData = {
     mimeType: string;
     size: number;
     dataUrl: string;
+};
+
+export type FileManifestEntry = {
+    path: string;
+    originalName: string;
+    size: number;
+    savedAt: string;
+};
+
+export type SavedFileRecord = FileManifestEntry & {
+    id: string;
 };
 
 export type AppApiBootNamespace = {
@@ -73,6 +90,19 @@ export type AppApiUploadNamespace = {
     }) => Promise<UploadedFileData[]>;
 };
 
+export type AppApiFilesNamespace = {
+    saveFiles: (files: UploadedFileData[]) => Promise<SavedFileRecord[]>;
+    getFilesByIds: (fileIds: string[]) => Promise<SavedFileRecord[]>;
+    openFile: (fileId: string) => Promise<boolean>;
+};
+
+export type AppApiProjectsNamespace = {
+    getProjectsList: () => Promise<ProjectListItem[]>;
+    getProjectById: (projectId: string) => Promise<Project | null>;
+    createProject: (payload: CreateProjectPayload) => Promise<Project>;
+    deleteProject: (projectId: string) => Promise<DeleteProjectResult>;
+};
+
 export type AppApi = {
     boot: AppApiBootNamespace;
     themes: AppApiThemesNamespace;
@@ -81,4 +111,6 @@ export type AppApi = {
     tools: AppApiToolsNamespace;
     shell: AppApiShellNamespace;
     upload: AppApiUploadNamespace;
+    files: AppApiFilesNamespace;
+    projects: AppApiProjectsNamespace;
 };

@@ -1,0 +1,31 @@
+export type Project = {
+    id: string;
+    name: string;
+    description: string;
+    dialogId: string;
+    fileUUIDs: string[];
+    requiredTools: string[];
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ProjectListItem = {
+    id: string;
+    title: string;
+    preview: string;
+    time: string;
+    updatedAt: string;
+    dialogId: string;
+};
+
+export type CreateProjectPayload = {
+    name: string;
+    description: string;
+    fileUUIDs: string[];
+    requiredTools: string[];
+};
+
+export type DeleteProjectResult = {
+    projects: ProjectListItem[];
+    deletedProjectId: string;
+};

@@ -93,6 +93,7 @@ class ChatsStore {
                         id: `dialog_${crypto.randomUUID().replace(/-/g, "")}`,
                         title: "Новый диалог",
                         messages: [],
+                        forProjectId: null,
                         createdAt: now,
                         updatedAt: now,
                     };
@@ -242,6 +243,10 @@ class ChatsStore {
         return {
             id: String(dialog.id),
             title: String(dialog.title),
+            forProjectId:
+                typeof dialog.forProjectId === "string"
+                    ? dialog.forProjectId
+                    : null,
             createdAt: String(dialog.createdAt),
             updatedAt: String(dialog.updatedAt),
             messages: dialog.messages.map((message) => ({
@@ -284,6 +289,13 @@ class ChatsStore {
     }
 
     private upsertDialogListItem(dialog: ChatDialog): void {
+        if (dialog.forProjectId) {
+            this.dialogs = this.dialogs.filter(
+                (existing) => existing.id !== dialog.id,
+            );
+            return;
+        }
+
         const lastMessage =
             dialog.messages.length > 0
                 ? dialog.messages[dialog.messages.length - 1]

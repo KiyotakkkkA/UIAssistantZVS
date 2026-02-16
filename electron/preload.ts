@@ -7,6 +7,7 @@ import type {
 } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 import type { AppApi } from "../src/types/ElectronApi";
+import type { CreateProjectPayload } from "../src/types/Project";
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -86,6 +87,21 @@ const appApi: AppApi = {
     upload: {
         pickFiles: (options?: { accept?: string[]; multiple?: boolean }) =>
             ipcRenderer.invoke("app:pick-files", options),
+    },
+    files: {
+        saveFiles: (files) => ipcRenderer.invoke("app:save-files", files),
+        getFilesByIds: (fileIds) =>
+            ipcRenderer.invoke("app:get-files-by-ids", fileIds),
+        openFile: (fileId) => ipcRenderer.invoke("app:open-saved-file", fileId),
+    },
+    projects: {
+        getProjectsList: () => ipcRenderer.invoke("app:get-projects-list"),
+        getProjectById: (projectId: string) =>
+            ipcRenderer.invoke("app:get-project-by-id", projectId),
+        createProject: (payload: CreateProjectPayload) =>
+            ipcRenderer.invoke("app:create-project", payload),
+        deleteProject: (projectId: string) =>
+            ipcRenderer.invoke("app:delete-project", projectId),
     },
 };
 

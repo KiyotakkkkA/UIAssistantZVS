@@ -28,6 +28,7 @@ export type ChatDialog = {
     id: string;
     title: string;
     messages: ChatMessage[];
+    forProjectId: string | null;
     createdAt: string;
     updatedAt: string;
 };

@@ -261,10 +261,8 @@ export const MessageComposer = observer(function MessageComposer({
                             Инструменты для обязательного использования
                         </p>
                         <p className="mt-1 text-xs text-main-400">
-                            Выбранные инструменты будут добавлены в промпт как:
-                            <br />
-                            You must use these tools while completing task:
-                            TOOLS - ...
+                            Выбранные инструменты будут обязательно использованы
+                            при ответе во време работы над задачей.
                         </p>
                         <AutoFillSelector
                             className="mt-3"

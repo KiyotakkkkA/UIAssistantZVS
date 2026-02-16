@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
@@ -9,6 +9,7 @@ import { CommandExecService } from "./services/CommandExecService";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 import type { UploadedFileData } from "../src/types/ElectronApi";
+import type { CreateProjectPayload } from "../src/types/Project";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -151,6 +152,36 @@ app.whenReady().then(() => {
     ipcMain.handle("app:save-dialog-snapshot", (_event, dialog: ChatDialog) =>
         userDataService.saveDialogSnapshot(dialog),
     );
+    ipcMain.handle("app:get-projects-list", () =>
+        userDataService.getProjectsList(),
+    );
+    ipcMain.handle("app:get-project-by-id", (_event, projectId: string) =>
+        userDataService.getProjectById(projectId),
+    );
+    ipcMain.handle(
+        "app:create-project",
+        (_event, payload: CreateProjectPayload) =>
+            userDataService.createProject(payload),
+    );
+    ipcMain.handle("app:delete-project", (_event, projectId: string) =>
+        userDataService.deleteProject(projectId),
+    );
+    ipcMain.handle("app:save-files", (_event, files: UploadedFileData[]) =>
+        userDataService.saveFiles(files),
+    );
+    ipcMain.handle("app:get-files-by-ids", (_event, fileIds: string[]) =>
+        userDataService.getFilesByIds(fileIds),
+    );
+    ipcMain.handle("app:open-saved-file", async (_event, fileId: string) => {
+        const file = userDataService.getFileById(fileId);
+
+        if (!file) {
+            return false;
+        }
+
+        const openResult = await shell.openPath(file.path);
+        return openResult === "";
+    });
     ipcMain.handle(
         "app:exec-shell-command",
         (_event, command: string, cwd?: string) =>
