@@ -41,7 +41,7 @@ class UserProfileStore {
                 return;
             }
 
-            const bootData = await api.getBootData();
+            const bootData = await api.boot.getBootData();
 
             runInAction(() => {
                 this.userProfile = bootData.userProfile;
@@ -70,7 +70,7 @@ class UserProfileStore {
             return this.userProfile;
         }
 
-        const updatedProfile = await api.updateUserProfile(nextProfile);
+        const updatedProfile = await api.profile.updateUserProfile(nextProfile);
 
         runInAction(() => {
             this.userProfile = updatedProfile;

@@ -104,8 +104,8 @@ class ChatsStore {
             }
 
             const [dialogs, activeDialog] = await Promise.all([
-                api.getDialogsList(),
-                api.getActiveDialog(),
+                api.dialogs.getDialogsList(),
+                api.dialogs.getActiveDialog(),
             ]);
 
             runInAction(() => {
@@ -150,7 +150,7 @@ class ChatsStore {
         });
 
         try {
-            const dialog = await api.getDialogById(dialogId);
+            const dialog = await api.dialogs.getDialogById(dialogId);
 
             runInAction(() => {
                 this.replaceByDialog(dialog);
@@ -169,7 +169,7 @@ class ChatsStore {
             return null;
         }
 
-        const dialog = await api.createDialog();
+        const dialog = await api.dialogs.createDialog();
 
         runInAction(() => {
             this.replaceByDialog(dialog);
@@ -188,7 +188,7 @@ class ChatsStore {
             return null;
         }
 
-        const dialog = await api.renameDialog(dialogId, title);
+        const dialog = await api.dialogs.renameDialog(dialogId, title);
 
         runInAction(() => {
             if (this.activeDialog?.id === dialog.id) {
@@ -208,7 +208,7 @@ class ChatsStore {
             return;
         }
 
-        const result = await api.deleteDialog(dialogId);
+        const result = await api.dialogs.deleteDialog(dialogId);
 
         runInAction(() => {
             this.dialogs = result.dialogs;
@@ -228,7 +228,8 @@ class ChatsStore {
             return serializableDialog;
         }
 
-        const savedDialog = await api.saveDialogSnapshot(serializableDialog);
+        const savedDialog =
+            await api.dialogs.saveDialogSnapshot(serializableDialog);
 
         runInAction(() => {
             this.replaceByDialog(savedDialog);

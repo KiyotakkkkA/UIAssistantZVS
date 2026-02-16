@@ -32,13 +32,13 @@ export const commandExecToolsPackage = () => {
 
                 const api = window.appApi;
 
-                if (!api?.execShellCommand) {
+                if (!api?.shell.execShellCommand) {
                     throw new Error(
                         "Командное выполнение недоступно в текущей среде",
                     );
                 }
 
-                return await api.execShellCommand(command, cwd);
+                return await api.shell.execShellCommand(command, cwd);
             },
         })
         .done();

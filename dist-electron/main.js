@@ -199,37 +199,139 @@ class InitService {
     }
   }
 }
+const createUserDataPaths = (basePath) => {
+  const resourcesPath = path.join(basePath, "resources");
+  return {
+    resourcesPath,
+    themesPath: path.join(resourcesPath, "themes"),
+    dialogsPath: path.join(resourcesPath, "chats", "dialogs"),
+    profilePath: path.join(resourcesPath, "profile.json")
+  };
+};
 const isChatDriver = (value) => {
   return value === "ollama" || value === "";
 };
-class UserDataService {
-  resourcesPath;
-  themesPath;
-  dialogsPath;
-  profilePath;
-  constructor(basePath) {
-    this.resourcesPath = path.join(basePath, "resources");
-    this.themesPath = path.join(this.resourcesPath, "themes");
-    this.dialogsPath = path.join(this.resourcesPath, "chats", "dialogs");
-    this.profilePath = path.join(this.resourcesPath, "profile.json");
+class UserProfileService {
+  constructor(profilePath) {
+    this.profilePath = profilePath;
   }
-  getActiveDialog() {
-    const profile = this.readUserProfile();
+  getUserProfile() {
+    if (!fs.existsSync(this.profilePath)) {
+      return defaultProfile;
+    }
+    try {
+      const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
+      const parsed = JSON.parse(rawProfile);
+      const normalized = {
+        ...defaultProfile,
+        ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
+        ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
+        ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
+        ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
+        ...typeof parsed.assistantName === "string" ? { assistantName: parsed.assistantName } : {},
+        ...typeof parsed.maxToolCallsPerResponse === "number" && Number.isFinite(parsed.maxToolCallsPerResponse) ? {
+          maxToolCallsPerResponse: parsed.maxToolCallsPerResponse
+        } : {},
+        ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
+        ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
+        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
+      };
+      return normalized;
+    } catch {
+      return defaultProfile;
+    }
+  }
+  updateUserProfile(nextProfile) {
+    const currentProfile = this.getUserProfile();
+    const mergedProfile = {
+      ...currentProfile,
+      ...nextProfile
+    };
+    fs.writeFileSync(
+      this.profilePath,
+      JSON.stringify(mergedProfile, null, 2)
+    );
+    return mergedProfile;
+  }
+}
+class ThemesService {
+  constructor(themesPath) {
+    this.themesPath = themesPath;
+  }
+  getThemesList() {
+    const themes = this.readThemes();
+    if (themes.length === 0) {
+      return staticThemesList;
+    }
+    return themes.map((theme) => ({
+      id: theme.id,
+      name: theme.name
+    }));
+  }
+  getThemeData(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme;
+    }
+    const fallbackTheme = staticThemesMap[themeId];
+    if (fallbackTheme) {
+      return fallbackTheme;
+    }
+    return staticThemesMap[defaultProfile.themePreference];
+  }
+  resolveThemePalette(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme.palette;
+    }
+    return staticThemesMap[defaultProfile.themePreference].palette;
+  }
+  readThemes() {
+    if (!fs.existsSync(this.themesPath)) {
+      return [];
+    }
+    const files = fs.readdirSync(this.themesPath).filter((fileName) => fileName.endsWith(".json"));
+    const result = [];
+    for (const fileName of files) {
+      const filePath = path.join(this.themesPath, fileName);
+      try {
+        const rawTheme = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(rawTheme);
+        if (typeof parsed.id === "string" && typeof parsed.name === "string" && typeof parsed.palette === "object" && parsed.palette !== null) {
+          result.push(parsed);
+        }
+      } catch {
+        continue;
+      }
+    }
+    return result;
+  }
+}
+class DialogsService {
+  constructor(dialogsPath, onActiveDialogIdUpdate) {
+    this.dialogsPath = dialogsPath;
+    this.onActiveDialogIdUpdate = onActiveDialogIdUpdate;
+  }
+  getActiveDialog(activeDialogId) {
     const dialogs = this.readDialogs();
-    if (profile.activeDialogId && dialogs.some((dialog) => dialog.id === profile.activeDialogId)) {
+    if (activeDialogId) {
       const activeDialog = dialogs.find(
-        (dialog) => dialog.id === profile.activeDialogId
-      ) ?? dialogs[0];
-      return activeDialog;
+        (dialog) => dialog.id === activeDialogId
+      );
+      if (activeDialog) {
+        return activeDialog;
+      }
     }
     if (dialogs.length > 0) {
       const fallbackActiveDialog = dialogs[0];
-      this.updateUserProfile({ activeDialogId: fallbackActiveDialog.id });
+      this.onActiveDialogIdUpdate(fallbackActiveDialog.id);
       return fallbackActiveDialog;
     }
     const baseDialog = createBaseDialog();
     this.writeDialog(baseDialog);
-    this.updateUserProfile({ activeDialogId: baseDialog.id });
+    this.onActiveDialogIdUpdate(baseDialog.id);
     return baseDialog;
   }
   getDialogsList() {
@@ -237,23 +339,23 @@ class UserDataService {
       (dialog) => this.toDialogListItem(dialog)
     );
   }
-  getDialogById(dialogId) {
+  getDialogById(dialogId, activeDialogId) {
     const dialogs = this.readDialogs();
     const dialog = dialogs.find((item) => item.id === dialogId);
     if (dialog) {
-      this.updateUserProfile({ activeDialogId: dialog.id });
+      this.onActiveDialogIdUpdate(dialog.id);
       return dialog;
     }
-    return this.getActiveDialog();
+    return this.getActiveDialog(activeDialogId);
   }
   createDialog() {
     const baseDialog = createBaseDialog();
     this.writeDialog(baseDialog);
-    this.updateUserProfile({ activeDialogId: baseDialog.id });
+    this.onActiveDialogIdUpdate(baseDialog.id);
     return baseDialog;
   }
-  renameDialog(dialogId, nextTitle) {
-    const dialog = this.getDialogById(dialogId);
+  renameDialog(dialogId, nextTitle, activeDialogId) {
+    const dialog = this.getDialogById(dialogId, activeDialogId);
     const trimmedTitle = nextTitle.trim();
     const updatedDialog = {
       ...dialog,
@@ -274,14 +376,14 @@ class UserDataService {
       this.writeDialog(fallbackDialog);
       dialogs = [fallbackDialog];
     }
-    this.updateUserProfile({ activeDialogId: dialogs[0].id });
+    this.onActiveDialogIdUpdate(dialogs[0].id);
     return {
       dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
       activeDialog: dialogs[0]
     };
   }
-  deleteMessageFromDialog(dialogId, messageId) {
-    const dialog = this.getDialogById(dialogId);
+  deleteMessageFromDialog(dialogId, messageId, activeDialogId) {
+    const dialog = this.getDialogById(dialogId, activeDialogId);
     const targetMessage = dialog.messages.find(
       (message) => message.id === messageId
     );
@@ -299,8 +401,8 @@ class UserDataService {
     this.writeDialog(updatedDialog);
     return updatedDialog;
   }
-  truncateDialogFromMessage(dialogId, messageId) {
-    const dialog = this.getDialogById(dialogId);
+  truncateDialogFromMessage(dialogId, messageId, activeDialogId) {
+    const dialog = this.getDialogById(dialogId, activeDialogId);
     const messageIndex = dialog.messages.findIndex(
       (message) => message.id === messageId
     );
@@ -327,98 +429,8 @@ class UserDataService {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(normalizedDialog);
-    this.updateUserProfile({ activeDialogId: normalizedDialog.id });
+    this.onActiveDialogIdUpdate(normalizedDialog.id);
     return normalizedDialog;
-  }
-  getBootData() {
-    const userProfile = this.readUserProfile();
-    const preferredThemeData = this.resolveThemePalette(
-      userProfile.themePreference
-    );
-    return {
-      userProfile,
-      preferredThemeData
-    };
-  }
-  getThemesList() {
-    const themes = this.readThemes();
-    if (themes.length === 0) {
-      return staticThemesList;
-    }
-    return themes.map((theme) => ({
-      id: theme.id,
-      name: theme.name
-    }));
-  }
-  getThemeData(themeId) {
-    const themes = this.readThemes();
-    const preferredTheme = themes.find((theme) => theme.id === themeId);
-    if (preferredTheme) {
-      return preferredTheme;
-    }
-    const fallbackTheme = staticThemesMap[themeId];
-    if (fallbackTheme) {
-      return fallbackTheme;
-    }
-    return staticThemesMap[defaultProfile.themePreference];
-  }
-  updateUserProfile(nextProfile) {
-    const currentProfile = this.readUserProfile();
-    const mergedProfile = {
-      ...currentProfile,
-      ...nextProfile
-    };
-    fs.writeFileSync(
-      this.profilePath,
-      JSON.stringify(mergedProfile, null, 2)
-    );
-    return mergedProfile;
-  }
-  readUserProfile() {
-    if (!fs.existsSync(this.profilePath)) {
-      return defaultProfile;
-    }
-    try {
-      const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
-      const parsed = JSON.parse(rawProfile);
-      const normalized = {
-        ...defaultProfile,
-        ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
-        ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
-        ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
-        ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
-        ...typeof parsed.assistantName === "string" ? { assistantName: parsed.assistantName } : {},
-        ...typeof parsed.maxToolCallsPerResponse === "number" && Number.isFinite(parsed.maxToolCallsPerResponse) ? {
-          maxToolCallsPerResponse: parsed.maxToolCallsPerResponse
-        } : {},
-        ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
-        ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
-        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
-      };
-      return normalized;
-    } catch {
-      return defaultProfile;
-    }
-  }
-  readThemes() {
-    if (!fs.existsSync(this.themesPath)) {
-      return [];
-    }
-    const files = fs.readdirSync(this.themesPath).filter((fileName) => fileName.endsWith(".json"));
-    const result = [];
-    for (const fileName of files) {
-      const filePath = path.join(this.themesPath, fileName);
-      try {
-        const rawTheme = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(rawTheme);
-        if (typeof parsed.id === "string" && typeof parsed.name === "string" && typeof parsed.palette === "object" && parsed.palette !== null) {
-          result.push(parsed);
-        }
-      } catch {
-        continue;
-      }
-    }
-    return result;
   }
   readDialogs() {
     if (!fs.existsSync(this.dialogsPath)) {
@@ -485,14 +497,6 @@ class UserDataService {
       ...toolTrace ? { toolTrace } : {}
     };
   }
-  resolveThemePalette(themeId) {
-    const themes = this.readThemes();
-    const preferredTheme = themes.find((theme) => theme.id === themeId);
-    if (preferredTheme) {
-      return preferredTheme.palette;
-    }
-    return staticThemesMap[defaultProfile.themePreference].palette;
-  }
   toDialogListItem(dialog) {
     const lastMessage = dialog.messages.length > 0 ? dialog.messages[dialog.messages.length - 1] : null;
     return {
@@ -505,6 +509,90 @@ class UserDataService {
       }),
       updatedAt: dialog.updatedAt
     };
+  }
+}
+class UserDataService {
+  userProfileService;
+  themesService;
+  dialogsService;
+  constructor(basePath) {
+    const paths = createUserDataPaths(basePath);
+    this.userProfileService = new UserProfileService(paths.profilePath);
+    this.themesService = new ThemesService(paths.themesPath);
+    this.dialogsService = new DialogsService(
+      paths.dialogsPath,
+      (dialogId) => {
+        this.userProfileService.updateUserProfile({
+          activeDialogId: dialogId
+        });
+      }
+    );
+  }
+  getActiveDialog() {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.getActiveDialog(profile.activeDialogId);
+  }
+  getDialogsList() {
+    return this.dialogsService.getDialogsList();
+  }
+  getDialogById(dialogId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.getDialogById(
+      dialogId,
+      profile.activeDialogId
+    );
+  }
+  createDialog() {
+    return this.dialogsService.createDialog();
+  }
+  renameDialog(dialogId, nextTitle) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.renameDialog(
+      dialogId,
+      nextTitle,
+      profile.activeDialogId
+    );
+  }
+  deleteDialog(dialogId) {
+    return this.dialogsService.deleteDialog(dialogId);
+  }
+  deleteMessageFromDialog(dialogId, messageId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.deleteMessageFromDialog(
+      dialogId,
+      messageId,
+      profile.activeDialogId
+    );
+  }
+  truncateDialogFromMessage(dialogId, messageId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.truncateDialogFromMessage(
+      dialogId,
+      messageId,
+      profile.activeDialogId
+    );
+  }
+  saveDialogSnapshot(dialog) {
+    return this.dialogsService.saveDialogSnapshot(dialog);
+  }
+  getBootData() {
+    const userProfile = this.userProfileService.getUserProfile();
+    const preferredThemeData = this.themesService.resolveThemePalette(
+      userProfile.themePreference
+    );
+    return {
+      userProfile,
+      preferredThemeData
+    };
+  }
+  getThemesList() {
+    return this.themesService.getThemesList();
+  }
+  getThemeData(themeId) {
+    return this.themesService.getThemeData(themeId);
+  }
+  updateUserProfile(nextProfile) {
+    return this.userProfileService.updateUserProfile(nextProfile);
   }
 }
 const decodeOutput = (buffer) => {

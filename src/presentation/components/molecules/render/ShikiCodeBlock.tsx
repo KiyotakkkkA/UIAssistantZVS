@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { createHighlighter } from "shiki";
 import { Button } from "../../atoms";
-import { useToasts } from "../../../../hooks";
+import { useDownload, useToasts } from "../../../../hooks";
 
 interface ShikiCodeBlockProps {
     code: string;
@@ -64,6 +64,7 @@ const escapeHtml = (text: string) =>
 export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
     const toasts = useToasts();
     const normalizedLanguage = normalizeLanguage(language);
+    const downloadCode = useDownload(code, `${normalizedLanguage}.txt`);
     const cacheKey = `${normalizedLanguage}:${code}`;
     const [html, setHtml] = useState<string>(
         highlightedHtmlCache.get(cacheKey) || "",
@@ -132,6 +133,18 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
         }
     };
 
+    const buildDownloadFilename = () => {
+        const fileId =
+            globalThis.crypto?.randomUUID?.() ||
+            `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        return `${fileId}.${normalizedLanguage}`;
+    };
+
+    const handleDownload = () => {
+        downloadCode(buildDownloadFilename());
+    };
+
     if (!html) {
         return (
             <div className="mb-2 overflow-hidden rounded-xl border border-main-400/20 bg-main-900/80 last:mb-0">
@@ -158,6 +171,7 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                             label="Download code"
                             shape="rounded-lg"
                             className="p-1"
+                            onClick={handleDownload}
                         >
                             <Icon icon="mdi:download" width="14" height="14" />
                         </Button>
@@ -191,6 +205,7 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                         label="Download code"
                         shape="rounded-lg"
                         className="p-1"
+                        onClick={handleDownload}
                     >
                         <Icon icon="mdi:download" width="14" height="14" />
                     </Button>

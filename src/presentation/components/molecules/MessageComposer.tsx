@@ -33,7 +33,7 @@ export const MessageComposer = observer(function MessageComposer({
 
     const filteredPackages = useMemo(
         () => toolsStore.getFilteredPackages(toolsQuery),
-        [toolsQuery, toolsStore.enabledToolNames.size],
+        [toolsQuery],
     );
 
     const attachOptions = useMemo(

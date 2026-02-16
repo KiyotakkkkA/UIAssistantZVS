@@ -59,8 +59,8 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
 
         const api = window.appApi;
 
-        if (api?.truncateDialogFromMessage) {
-            const updatedDialog = await api.truncateDialogFromMessage(
+        if (api?.dialogs.truncateDialogFromMessage) {
+            const updatedDialog = await api.dialogs.truncateDialogFromMessage(
                 dialog.id,
                 messageId,
             );
@@ -113,8 +113,8 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
 
         const api = window.appApi;
 
-        if (api?.deleteMessageFromDialog) {
-            const updatedDialog = await api.deleteMessageFromDialog(
+        if (api?.dialogs.deleteMessageFromDialog) {
+            const updatedDialog = await api.dialogs.deleteMessageFromDialog(
                 dialog.id,
                 deleteMessageId,
             );
