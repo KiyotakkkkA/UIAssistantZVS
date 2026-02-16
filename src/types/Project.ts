@@ -2,6 +2,7 @@ export type Project = {
     id: string;
     name: string;
     description: string;
+    directoryPath: string;
     dialogId: string;
     fileUUIDs: string[];
     requiredTools: string[];
@@ -21,6 +22,7 @@ export type ProjectListItem = {
 export type CreateProjectPayload = {
     name: string;
     description: string;
+    directoryPath?: string;
     fileUUIDs: string[];
     requiredTools: string[];
 };

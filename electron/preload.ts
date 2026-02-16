@@ -87,6 +87,8 @@ const appApi: AppApi = {
     upload: {
         pickFiles: (options?: { accept?: string[]; multiple?: boolean }) =>
             ipcRenderer.invoke("app:pick-files", options),
+        pickPath: (options?: { forFolders?: boolean }) =>
+            ipcRenderer.invoke("app:pick-path", options),
     },
     files: {
         saveFiles: (files) => ipcRenderer.invoke("app:save-files", files),
@@ -96,6 +98,8 @@ const appApi: AppApi = {
     },
     projects: {
         getProjectsList: () => ipcRenderer.invoke("app:get-projects-list"),
+        getDefaultProjectsDirectory: () =>
+            ipcRenderer.invoke("app:get-default-projects-directory"),
         getProjectById: (projectId: string) =>
             ipcRenderer.invoke("app:get-project-by-id", projectId),
         createProject: (payload: CreateProjectPayload) =>

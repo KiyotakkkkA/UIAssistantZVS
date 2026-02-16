@@ -3,15 +3,19 @@ import { InputBig, InputSmall } from "../../atoms";
 type SettingsProfilePanelProps = {
     userName: string;
     userPrompt: string;
+    userLanguage: string;
     setUserName: (value: string) => void;
     setUserPrompt: (value: string) => void;
+    setUserLanguage: (value: string) => void;
 };
 
 export const SettingsProfilePanel = ({
     userName,
     userPrompt,
+    userLanguage,
     setUserName,
     setUserPrompt,
+    setUserLanguage,
 }: SettingsProfilePanelProps) => {
     return (
         <div className="space-y-5">
@@ -27,6 +31,19 @@ export const SettingsProfilePanel = ({
                                 setUserName(event.target.value)
                             }
                             placeholder="Пользователь"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-main-200">
+                            Предпочитаемый язык
+                        </p>
+                        <InputSmall
+                            value={userLanguage}
+                            onChange={(event) =>
+                                setUserLanguage(event.target.value)
+                            }
+                            placeholder="Русский"
                         />
                     </div>
 

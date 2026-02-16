@@ -9,6 +9,7 @@ export type UserProfile = {
     maxToolCallsPerResponse: number;
     userName: string;
     userPrompt: string;
+    userLanguage: string;
     activeDialogId: string;
 };
 

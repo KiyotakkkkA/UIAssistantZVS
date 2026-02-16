@@ -18,6 +18,7 @@ import type {
     Project,
     ProjectListItem,
 } from "../../src/types/Project";
+import path from "node:path";
 import { createUserDataPaths } from "./userData/UserDataPaths";
 import { UserProfileService } from "./userData/UserProfileService";
 import { ThemesService } from "./userData/ThemesService";
@@ -31,9 +32,15 @@ export class UserDataService {
     private readonly dialogsService: DialogsService;
     private readonly projectsService: ProjectsService;
     private readonly fileStorageService: FileStorageService;
+    private readonly defaultProjectsDirectory: string;
 
     constructor(basePath: string) {
         const paths = createUserDataPaths(basePath);
+        this.defaultProjectsDirectory = path.join(
+            basePath,
+            "resources",
+            "projects",
+        );
 
         this.userProfileService = new UserProfileService(paths.profilePath);
         this.themesService = new ThemesService(paths.themesPath);
@@ -118,10 +125,16 @@ export class UserDataService {
         return this.projectsService.getProjectById(projectId);
     }
 
+    getDefaultProjectsDirectory(): string {
+        return this.defaultProjectsDirectory;
+    }
+
     createProject(payload: CreateProjectPayload): Project {
         const projectId = `project_${randomUUID().replace(/-/g, "")}`;
         const dialog = this.dialogsService.createDialog(projectId);
         const nextTitle = payload.name.trim();
+        const selectedBaseDirectory =
+            payload.directoryPath?.trim() || this.defaultProjectsDirectory;
 
         if (nextTitle) {
             this.dialogsService.renameDialog(dialog.id, nextTitle);
@@ -129,6 +142,7 @@ export class UserDataService {
 
         return this.projectsService.createProject({
             ...payload,
+            directoryPath: selectedBaseDirectory,
             dialogId: dialog.id,
             projectId,
         });

@@ -48,6 +48,9 @@ export class UserProfileService {
                 ...(typeof parsed.userPrompt === "string"
                     ? { userPrompt: parsed.userPrompt }
                     : {}),
+                ...(typeof parsed.userLanguage === "string"
+                    ? { userLanguage: parsed.userLanguage }
+                    : {}),
                 ...(typeof parsed.activeDialogId === "string"
                     ? { activeDialogId: parsed.activeDialogId }
                     : {}),

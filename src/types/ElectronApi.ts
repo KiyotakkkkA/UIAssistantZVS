@@ -88,6 +88,7 @@ export type AppApiUploadNamespace = {
         accept?: string[];
         multiple?: boolean;
     }) => Promise<UploadedFileData[]>;
+    pickPath: (options?: { forFolders?: boolean }) => Promise<string | null>;
 };
 
 export type AppApiFilesNamespace = {
@@ -98,6 +99,7 @@ export type AppApiFilesNamespace = {
 
 export type AppApiProjectsNamespace = {
     getProjectsList: () => Promise<ProjectListItem[]>;
+    getDefaultProjectsDirectory: () => Promise<string>;
     getProjectById: (projectId: string) => Promise<Project | null>;
     createProject: (payload: CreateProjectPayload) => Promise<Project>;
     deleteProject: (projectId: string) => Promise<DeleteProjectResult>;

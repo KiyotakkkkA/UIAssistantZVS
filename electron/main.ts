@@ -155,6 +155,9 @@ app.whenReady().then(() => {
     ipcMain.handle("app:get-projects-list", () =>
         userDataService.getProjectsList(),
     );
+    ipcMain.handle("app:get-default-projects-directory", () =>
+        userDataService.getDefaultProjectsDirectory(),
+    );
     ipcMain.handle("app:get-project-by-id", (_event, projectId: string) =>
         userDataService.getProjectById(projectId),
     );
@@ -261,6 +264,30 @@ app.whenReady().then(() => {
             );
 
             return files;
+        },
+    );
+
+    ipcMain.handle(
+        "app:pick-path",
+        async (event, options?: { forFolders?: boolean }) => {
+            const currentWindow = BrowserWindow.fromWebContents(event.sender);
+            const dialogProperties: Array<"openFile" | "openDirectory"> = [
+                options?.forFolders ? "openDirectory" : "openFile",
+            ];
+
+            const openDialogOptions = {
+                properties: dialogProperties,
+            };
+
+            const selection = currentWindow
+                ? await dialog.showOpenDialog(currentWindow, openDialogOptions)
+                : await dialog.showOpenDialog(openDialogOptions);
+
+            if (selection.canceled || selection.filePaths.length === 0) {
+                return null;
+            }
+
+            return selection.filePaths[0] ?? null;
         },
     );
 

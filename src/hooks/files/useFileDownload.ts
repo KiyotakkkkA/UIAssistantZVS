@@ -1,7 +1,7 @@
 import { useCallback } from "react";
-import { useToasts } from "./useToasts";
+import { useToasts } from "../useToasts";
 
-export const useDownload = (content: string, filename: string) => {
+export const useFileDownload = (content: string, filename: string) => {
     const toasts = useToasts();
 
     return useCallback(

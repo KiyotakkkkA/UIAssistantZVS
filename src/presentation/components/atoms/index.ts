@@ -10,3 +10,4 @@ export * from "./Dropdown";
 export * from "./Accordeon";
 export * from "./AutoFillSelector";
 export * from "./InputFile";
+export * from "./InputPath";

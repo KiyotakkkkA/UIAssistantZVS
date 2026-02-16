@@ -28,10 +28,14 @@ export class ProjectsService {
         },
     ): Project {
         const now = new Date().toISOString();
+        const projectDirectoryPath = this.createProjectDirectory(
+            payload.directoryPath,
+        );
         const project: Project = {
             id: this.normalizeProjectId(payload.projectId),
             name: payload.name.trim() || "Новый проект",
             description: payload.description.trim(),
+            directoryPath: projectDirectoryPath,
             dialogId: payload.dialogId,
             fileUUIDs: this.normalizeFileIds(payload.fileUUIDs),
             requiredTools: this.normalizeRequiredTools(payload.requiredTools),
@@ -88,6 +92,39 @@ export class ProjectsService {
         );
     }
 
+    private normalizeDirectoryPath(directoryPath: unknown): string {
+        if (typeof directoryPath !== "string") {
+            return "";
+        }
+
+        return directoryPath.trim();
+    }
+
+    private createProjectDirectory(baseDirectoryPath: unknown): string {
+        const normalizedBaseDirectory =
+            this.normalizeDirectoryPath(baseDirectoryPath);
+
+        if (!normalizedBaseDirectory) {
+            return "";
+        }
+
+        if (!fs.existsSync(normalizedBaseDirectory)) {
+            fs.mkdirSync(normalizedBaseDirectory, { recursive: true });
+        }
+
+        const folderUuid = randomUUID().replace(/-/g, "");
+        const projectDirectoryPath = path.join(
+            normalizedBaseDirectory,
+            folderUuid,
+        );
+
+        if (!fs.existsSync(projectDirectoryPath)) {
+            fs.mkdirSync(projectDirectoryPath, { recursive: true });
+        }
+
+        return projectDirectoryPath;
+    }
+
     private readProjects(): Project[] {
         if (!fs.existsSync(this.projectsPath)) {
             return [];
@@ -119,6 +156,13 @@ export class ProjectsService {
                     id: this.normalizeProjectId(parsed.id),
                     name: parsed.name.trim() || "Новый проект",
                     description: parsed.description,
+                    directoryPath: this.normalizeDirectoryPath(
+                        parsed.directoryPath ??
+                            (parsed as Partial<Record<string, unknown>>)
+                                .projectDirectoryPath ??
+                            (parsed as Partial<Record<string, unknown>>)
+                                .projectPath,
+                    ),
                     dialogId: parsed.dialogId,
                     fileUUIDs: this.normalizeFileIds(
                         parsed.fileUUIDs ??

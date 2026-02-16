@@ -100,6 +100,7 @@ export function ChatHeader({
                 className="max-w-6xl min-h-144"
                 footer={
                     <Button
+                        variant="primary"
                         className="rounded-xl px-4 py-2"
                         onClick={() => {
                             void handleSaveSettings();

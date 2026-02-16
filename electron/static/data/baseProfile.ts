@@ -9,5 +9,6 @@ export const defaultProfile: UserProfile = {
     maxToolCallsPerResponse: 10,
     userName: "Пользователь",
     userPrompt: "",
+    userLanguage: "Русский",
     activeDialogId: "",
 };

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useParams } from "react-router-dom";
 import { useChat } from "../../../hooks/agents";
-import { useFileSave, useProjects, useToasts } from "../../../hooks";
+import { useProjects, useToasts } from "../../../hooks";
+import { useFileSave } from "../../../hooks/files";
 import { Icon } from "@iconify/react";
 import { MessageComposer } from "../../components/molecules";
 import { Loader, Modal } from "../../components/atoms";
@@ -124,6 +125,23 @@ export const ProjectPage = observer(function ProjectPage() {
                 title={activeProject?.name || "Проект"}
                 onOpenDocuments={() => setIsDocumentsOpen(true)}
             />
+            <div className="mx-4 mt-1 rounded-xl border border-main-700/70 bg-main-900/40 px-3 py-2">
+                <div className="flex items-center gap-2">
+                    <Icon
+                        icon="mdi:folder-marker-outline"
+                        className="text-main-300"
+                        width={16}
+                        height={16}
+                    />
+                    <p className="text-xs text-main-400">Директория проекта</p>
+                </div>
+                <p
+                    className="mt-1 truncate text-sm text-main-100"
+                    title={activeProject?.directoryPath || "Не указана"}
+                >
+                    {activeProject?.directoryPath || "Не указана"}
+                </p>
+            </div>
             <MessageFeed
                 messages={messages}
                 sendMessage={sendMessage}

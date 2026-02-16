@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { createHighlighter } from "shiki";
 import { Button } from "../../atoms";
-import { useDownload, useToasts } from "../../../../hooks";
+import { useToasts } from "../../../../hooks";
+import { useFileDownload } from "../../../../hooks/files";
 
 interface ShikiCodeBlockProps {
     code: string;
@@ -64,7 +65,7 @@ const escapeHtml = (text: string) =>
 export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
     const toasts = useToasts();
     const normalizedLanguage = normalizeLanguage(language);
-    const downloadCode = useDownload(code, `${normalizedLanguage}.txt`);
+    const downloadCode = useFileDownload(code, `${normalizedLanguage}.txt`);
     const cacheKey = `${normalizedLanguage}:${code}`;
     const [html, setHtml] = useState<string>(
         highlightedHtmlCache.get(cacheKey) || "",

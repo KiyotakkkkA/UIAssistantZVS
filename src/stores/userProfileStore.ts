@@ -15,6 +15,7 @@ class UserProfileStore {
         maxToolCallsPerResponse: 4,
         userName: "Пользователь",
         userPrompt: "",
+        userLanguage: "Русский",
         activeDialogId: "",
     };
 

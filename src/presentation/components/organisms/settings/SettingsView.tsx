@@ -22,7 +22,10 @@ interface SettingsViewProps {
 }
 
 export type SettingsViewHandle = {
-    save: () => Promise<{ saved: boolean; scope: "chat" | "profile" | "general" }>;
+    save: () => Promise<{
+        saved: boolean;
+        scope: "chat" | "profile" | "general";
+    }>;
 };
 
 type SettingsRouteItem = {
@@ -84,9 +87,11 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
         const [profileDraft, setProfileDraft] = useState<{
             userName: string;
             userPrompt: string;
+            userLanguage: string;
         }>({
             userName: userProfile.userName,
             userPrompt: userProfile.userPrompt,
+            userLanguage: userProfile.userLanguage,
         });
 
         useEffect(() => {
@@ -109,8 +114,13 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
             setProfileDraft({
                 userName: userProfile.userName,
                 userPrompt: userProfile.userPrompt,
+                userLanguage: userProfile.userLanguage,
             });
-        }, [userProfile.userName, userProfile.userPrompt]);
+        }, [
+            userProfile.userName,
+            userProfile.userPrompt,
+            userProfile.userLanguage,
+        ]);
 
         useImperativeHandle(
             ref,
@@ -126,6 +136,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                             userName:
                                 profileDraft.userName.trim() || "Пользователь",
                             userPrompt: profileDraft.userPrompt,
+                            userLanguage: profileDraft.userLanguage,
                         });
                         return { saved: true, scope: "profile" };
                     }
@@ -133,7 +144,13 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     return { saved: false, scope: "general" };
                 },
             }),
-            [activeRoute, chatDraft, profileDraft, saveChatParams, updateUserProfile],
+            [
+                activeRoute,
+                chatDraft,
+                profileDraft,
+                saveChatParams,
+                updateUserProfile,
+            ],
         );
 
         const renderedPanel: Record<SettingsRoute, ReactNode> = useMemo(
@@ -190,6 +207,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     <SettingsProfilePanel
                         userName={profileDraft.userName}
                         userPrompt={profileDraft.userPrompt}
+                        userLanguage={profileDraft.userLanguage}
                         setUserName={(value) => {
                             setProfileDraft((prev) => ({
                                 ...prev,
@@ -200,6 +218,12 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                             setProfileDraft((prev) => ({
                                 ...prev,
                                 userPrompt: value,
+                            }));
+                        }}
+                        setUserLanguage={(value) => {
+                            setProfileDraft((prev) => ({
+                                ...prev,
+                                userLanguage: value,
                             }));
                         }}
                     />

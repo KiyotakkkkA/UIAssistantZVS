@@ -11,7 +11,11 @@ import { chatsStore } from "../../stores/chatsStore";
 import { toolsStore } from "../../stores/toolsStore";
 import { projectsStore } from "../../stores/projectsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
-import { Config } from "../../config";
+import {
+    getSystemPrompt,
+    getUserPrompt,
+    getProjectPrompt,
+} from "../../prompts/base";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {
@@ -153,23 +157,17 @@ export function useChat() {
                       {
                           id: createMessageId(),
                           author: "system",
-                          content: `SYSTEM_PROMPT:\n${Config.SYSTEM_PROMPT}\nИмя ассистента: ${
-                              userProfile.assistantName.trim() || "Чарли"
-                          }`,
+                          content: getSystemPrompt(userProfile.assistantName),
                           timestamp: getTimeStamp(),
                       },
                       {
                           id: createMessageId(),
                           author: "system",
-                          content: [
-                              "USER_PROMPT:",
-                              `Имя пользователя: ${
-                                  userProfile.userName.trim() || "Пользователь"
-                              }`,
-                              userProfile.userPrompt.trim(),
-                          ]
-                              .filter(Boolean)
-                              .join("\n"),
+                          content: getUserPrompt(
+                              userProfile.userName,
+                              userProfile.userPrompt,
+                              userProfile.userLanguage,
+                          ),
                           timestamp: getTimeStamp(),
                       },
                       ...(shouldAttachProjectPrompt
@@ -177,14 +175,11 @@ export function useChat() {
                                 {
                                     id: createMessageId(),
                                     author: "system" as const,
-                                    content: [
-                                        "PROJECT_PROMPT:",
-                                        `Название проекта: ${activeProject.name}`,
-                                        `Описание проекта: ${
-                                            activeProject.description ||
-                                            "Без описания"
-                                        }`,
-                                    ].join("\n"),
+                                    content: getProjectPrompt(
+                                        activeProject.name,
+                                        activeProject.description,
+                                        activeProject.directoryPath,
+                                    ),
                                     timestamp: getTimeStamp(),
                                 },
                             ]

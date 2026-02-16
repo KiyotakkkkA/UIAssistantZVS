@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { observer } from "mobx-react-lite";
 import { toolsStore } from "../../../stores/toolsStore";
-import { useUpload } from "../../../hooks";
+import { useFileUpload } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
 import {
     AutoFillSelector,
@@ -32,7 +32,7 @@ export const MessageComposer = observer(function MessageComposer({
         [],
     );
     const areaRef = useRef<HTMLTextAreaElement>(null);
-    const { isUploading, pickFiles } = useUpload();
+    const { isUploading, pickFiles } = useFileUpload();
 
     const formatFileSize = (bytes: number) => {
         if (bytes < 1024) {
@@ -48,7 +48,7 @@ export const MessageComposer = observer(function MessageComposer({
         return `${(kb / 1024).toFixed(1)} MB`;
     };
 
-    const attachImages = async () => {
+    const attachImages = useCallback(async () => {
         const selectedFiles = await pickFiles({
             accept: ["image/*"],
             multiple: true,
@@ -63,7 +63,7 @@ export const MessageComposer = observer(function MessageComposer({
         );
 
         setAttachedImages((prev) => [...prev, ...onlyImages]);
-    };
+    }, [pickFiles]);
 
     const removeAttachedImage = (index: number) => {
         setAttachedImages((prev) =>
@@ -87,7 +87,7 @@ export const MessageComposer = observer(function MessageComposer({
                 },
             },
         ],
-        [],
+        [attachImages],
     );
 
     const handleSend = () => {

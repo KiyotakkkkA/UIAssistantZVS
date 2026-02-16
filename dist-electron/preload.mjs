@@ -59,7 +59,8 @@ const appApi = {
     execShellCommand: (command, cwd) => electron.ipcRenderer.invoke("app:exec-shell-command", command, cwd)
   },
   upload: {
-    pickFiles: (options) => electron.ipcRenderer.invoke("app:pick-files", options)
+    pickFiles: (options) => electron.ipcRenderer.invoke("app:pick-files", options),
+    pickPath: (options) => electron.ipcRenderer.invoke("app:pick-path", options)
   },
   files: {
     saveFiles: (files) => electron.ipcRenderer.invoke("app:save-files", files),
@@ -68,6 +69,7 @@ const appApi = {
   },
   projects: {
     getProjectsList: () => electron.ipcRenderer.invoke("app:get-projects-list"),
+    getDefaultProjectsDirectory: () => electron.ipcRenderer.invoke("app:get-default-projects-directory"),
     getProjectById: (projectId) => electron.ipcRenderer.invoke("app:get-project-by-id", projectId),
     createProject: (payload) => electron.ipcRenderer.invoke("app:create-project", payload),
     deleteProject: (projectId) => electron.ipcRenderer.invoke("app:delete-project", projectId)

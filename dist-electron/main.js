@@ -14,6 +14,7 @@ const defaultProfile = {
   maxToolCallsPerResponse: 10,
   userName: "Пользователь",
   userPrompt: "",
+  userLanguage: "Русский",
   activeDialogId: ""
 };
 const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
@@ -262,6 +263,7 @@ class UserProfileService {
         } : {},
         ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
         ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
+        ...typeof parsed.userLanguage === "string" ? { userLanguage: parsed.userLanguage } : {},
         ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
       };
       return normalized;
@@ -578,10 +580,14 @@ class ProjectsService {
   }
   createProject(payload) {
     const now = (/* @__PURE__ */ new Date()).toISOString();
+    const projectDirectoryPath = this.createProjectDirectory(
+      payload.directoryPath
+    );
     const project = {
       id: this.normalizeProjectId(payload.projectId),
       name: payload.name.trim() || "Новый проект",
       description: payload.description.trim(),
+      directoryPath: projectDirectoryPath,
       dialogId: payload.dialogId,
       fileUUIDs: this.normalizeFileIds(payload.fileUUIDs),
       requiredTools: this.normalizeRequiredTools(payload.requiredTools),
@@ -624,6 +630,30 @@ class ProjectsService {
       (item) => typeof item === "string" && item.trim().length > 0
     );
   }
+  normalizeDirectoryPath(directoryPath) {
+    if (typeof directoryPath !== "string") {
+      return "";
+    }
+    return directoryPath.trim();
+  }
+  createProjectDirectory(baseDirectoryPath) {
+    const normalizedBaseDirectory = this.normalizeDirectoryPath(baseDirectoryPath);
+    if (!normalizedBaseDirectory) {
+      return "";
+    }
+    if (!fs.existsSync(normalizedBaseDirectory)) {
+      fs.mkdirSync(normalizedBaseDirectory, { recursive: true });
+    }
+    const folderUuid = randomUUID().replace(/-/g, "");
+    const projectDirectoryPath = path.join(
+      normalizedBaseDirectory,
+      folderUuid
+    );
+    if (!fs.existsSync(projectDirectoryPath)) {
+      fs.mkdirSync(projectDirectoryPath, { recursive: true });
+    }
+    return projectDirectoryPath;
+  }
   readProjects() {
     if (!fs.existsSync(this.projectsPath)) {
       return [];
@@ -643,6 +673,9 @@ class ProjectsService {
           id: this.normalizeProjectId(parsed.id),
           name: parsed.name.trim() || "Новый проект",
           description: parsed.description,
+          directoryPath: this.normalizeDirectoryPath(
+            parsed.directoryPath ?? parsed.projectDirectoryPath ?? parsed.projectPath
+          ),
           dialogId: parsed.dialogId,
           fileUUIDs: this.normalizeFileIds(
             parsed.fileUUIDs ?? parsed.fileUuids ?? parsed.fileIds
@@ -797,8 +830,14 @@ class UserDataService {
   dialogsService;
   projectsService;
   fileStorageService;
+  defaultProjectsDirectory;
   constructor(basePath) {
     const paths = createUserDataPaths(basePath);
+    this.defaultProjectsDirectory = path.join(
+      basePath,
+      "resources",
+      "projects"
+    );
     this.userProfileService = new UserProfileService(paths.profilePath);
     this.themesService = new ThemesService(paths.themesPath);
     this.dialogsService = new DialogsService(
@@ -869,15 +908,20 @@ class UserDataService {
   getProjectById(projectId) {
     return this.projectsService.getProjectById(projectId);
   }
+  getDefaultProjectsDirectory() {
+    return this.defaultProjectsDirectory;
+  }
   createProject(payload) {
     const projectId = `project_${randomUUID().replace(/-/g, "")}`;
     const dialog2 = this.dialogsService.createDialog(projectId);
     const nextTitle = payload.name.trim();
+    const selectedBaseDirectory = payload.directoryPath?.trim() || this.defaultProjectsDirectory;
     if (nextTitle) {
       this.dialogsService.renameDialog(dialog2.id, nextTitle);
     }
     return this.projectsService.createProject({
       ...payload,
+      directoryPath: selectedBaseDirectory,
       dialogId: dialog2.id,
       projectId
     });
@@ -1112,6 +1156,10 @@ app.whenReady().then(() => {
     () => userDataService.getProjectsList()
   );
   ipcMain.handle(
+    "app:get-default-projects-directory",
+    () => userDataService.getDefaultProjectsDirectory()
+  );
+  ipcMain.handle(
     "app:get-project-by-id",
     (_event, projectId) => userDataService.getProjectById(projectId)
   );
@@ -1191,6 +1239,23 @@ app.whenReady().then(() => {
         )
       );
       return files;
+    }
+  );
+  ipcMain.handle(
+    "app:pick-path",
+    async (event, options) => {
+      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const dialogProperties = [
+        options?.forFolders ? "openDirectory" : "openFile"
+      ];
+      const openDialogOptions = {
+        properties: dialogProperties
+      };
+      const selection = currentWindow ? await dialog.showOpenDialog(currentWindow, openDialogOptions) : await dialog.showOpenDialog(openDialogOptions);
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return null;
+      }
+      return selection.filePaths[0] ?? null;
     }
   );
   createWindow();

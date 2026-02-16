@@ -1,5 +1,8 @@
 import { useCallback, useState } from "react";
-import type { SavedFileRecord, UploadedFileData } from "../types/ElectronApi";
+import type {
+    SavedFileRecord,
+    UploadedFileData,
+} from "../../types/ElectronApi";
 
 export const useFileSave = () => {
     const [isSaving, setIsSaving] = useState(false);

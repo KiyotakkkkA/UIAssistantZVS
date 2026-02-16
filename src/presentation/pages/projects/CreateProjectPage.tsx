@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
 import { toolsStore } from "../../../stores/toolsStore";
-import { useFileSave, useProjects, useToasts } from "../../../hooks";
+import { useProjects, useToasts } from "../../../hooks";
+import { useFileSave } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
 import {
     AutoFillSelector,
@@ -10,6 +11,7 @@ import {
     InputBig,
     InputCheckbox,
     InputFile,
+    InputPath,
     InputSmall,
     Modal,
 } from "../../components/atoms";
@@ -23,6 +25,10 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
 
     const [projectName, setProjectName] = useState("");
     const [projectDescription, setProjectDescription] = useState("");
+    const [defaultProjectsDirectory, setDefaultProjectsDirectory] =
+        useState("");
+    const [useDefaultDirectory, setUseDefaultDirectory] = useState(true);
+    const [projectDirectoryPath, setProjectDirectoryPath] = useState("");
     const [toolsQuery, setToolsQuery] = useState("");
     const [documents, setDocuments] = useState<UploadedFileData[]>([]);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -33,10 +39,35 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
         [toolsQuery],
     );
 
+    useEffect(() => {
+        let isCancelled = false;
+
+        void (async () => {
+            const path =
+                await window.appApi?.projects.getDefaultProjectsDirectory();
+
+            if (isCancelled || !path) {
+                return;
+            }
+
+            setDefaultProjectsDirectory(path);
+            setProjectDirectoryPath(path);
+        })();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, []);
+
+    const selectedBaseDirectory = useDefaultDirectory
+        ? defaultProjectsDirectory
+        : projectDirectoryPath.trim();
+
     const formNewProjData = (fileUUIDs: string[]) => {
         return {
             name: projectName.trim(),
             description: projectDescription.trim(),
+            directoryPath: selectedBaseDirectory,
             requiredTools: toolsStore.requiredPromptTools,
             fileUUIDs,
         };
@@ -47,6 +78,14 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
             toasts.warning({
                 title: "Введите название",
                 description: "Название проекта не может быть пустым.",
+            });
+            return;
+        }
+
+        if (!selectedBaseDirectory) {
+            toasts.warning({
+                title: "Выберите директорию",
+                description: "Укажите директорию для создания папки проекта.",
             });
             return;
         }
@@ -224,6 +263,49 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                 </section>
 
                 <section className="space-y-2 border-l-3 border-main-600 pl-3">
+                    <p className="text-sm font-semibold text-main-100">
+                        Директория проекта
+                    </p>
+                    <div className="rounded-xl border border-main-700/70 bg-main-900/40 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-sm text-main-200">
+                                    Использовать директорию по умолчанию
+                                </p>
+                                <p className="mt-1 text-xs text-main-400">
+                                    {defaultProjectsDirectory ||
+                                        "Загрузка пути по умолчанию..."}
+                                </p>
+                            </div>
+                            <InputCheckbox
+                                checked={useDefaultDirectory}
+                                onChange={(checked) => {
+                                    setUseDefaultDirectory(checked);
+
+                                    if (checked) {
+                                        setProjectDirectoryPath(
+                                            defaultProjectsDirectory,
+                                        );
+                                    }
+                                }}
+                            />
+                        </div>
+
+                        {!useDefaultDirectory ? (
+                            <InputPath
+                                className="mt-3"
+                                label="Своя директория"
+                                helperText="Выберите базовую папку. Папка проекта с UUID будет создана внутри неё"
+                                value={projectDirectoryPath}
+                                onChange={setProjectDirectoryPath}
+                                placeholder="Директория не выбрана"
+                                forFolders
+                            />
+                        ) : null}
+                    </div>
+                </section>
+
+                <section className="space-y-2 border-l-3 border-main-600 pl-3">
                     <InputFile
                         label="Документы"
                         helperText="Добавьте материалы проекта через проводник"
@@ -289,6 +371,10 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     <p>
                         <span className="text-main-400">Документы:</span>{" "}
                         {documents.length}
+                    </p>
+                    <p>
+                        <span className="text-main-400">Директория:</span>{" "}
+                        {selectedBaseDirectory || "Не выбрана"}
                     </p>
                 </div>
             </Modal>
