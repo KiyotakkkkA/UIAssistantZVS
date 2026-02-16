@@ -644,7 +644,9 @@ class ProjectsService {
           name: parsed.name.trim() || "Новый проект",
           description: parsed.description,
           dialogId: parsed.dialogId,
-          fileUUIDs: this.normalizeFileIds(parsed.fileUUIDs),
+          fileUUIDs: this.normalizeFileIds(
+            parsed.fileUUIDs ?? parsed.fileUuids ?? parsed.fileIds
+          ),
           requiredTools: this.normalizeRequiredTools(
             parsed.requiredTools
           ),

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Avatar, Button, Loader, Modal } from "../../atoms";
 import {
     ChatUserBubbleCard,
@@ -79,6 +79,7 @@ export function MessageFeed({
 }: MessageFeedProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousLastMessageIdRef = useRef<string | null>(null);
+    const scrollContainerRef = useRef<HTMLElement | null>(null);
     const {
         editingMessageId,
         editingValue,

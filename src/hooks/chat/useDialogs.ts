@@ -61,6 +61,7 @@ export const useDialogs = () => {
     return {
         dialogs,
         activeDialogId,
+        isReady: chatsStore.isReady,
         isSwitchingDialog: chatsStore.isSwitchingDialog,
         canDeleteDialog,
         switchDialog,

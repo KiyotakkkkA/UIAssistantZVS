@@ -1,9 +1,12 @@
+import { useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { useChat } from "../../hooks/agents";
+import { useProjects } from "../../hooks";
 import { MessageComposer } from "../components/molecules";
 import { ChatHeader, MessageFeed } from "../components/organisms/chat";
 
 export const ChatPage = observer(function ChatPage() {
+    const { clearActiveProject } = useProjects();
     const {
         messages,
         sendMessage,
@@ -12,8 +15,12 @@ export const ChatPage = observer(function ChatPage() {
         isAwaitingFirstChunk,
     } = useChat();
 
+    useEffect(() => {
+        clearActiveProject();
+    }, [clearActiveProject]);
+
     return (
-        <section className="flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
+        <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
             <ChatHeader />
             <MessageFeed
                 messages={messages}

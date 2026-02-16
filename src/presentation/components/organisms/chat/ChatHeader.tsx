@@ -62,17 +62,15 @@ export function ChatHeader({
                     {onOpenDocuments ? (
                         <Button
                             label="Документы"
-                            className="px-3 py-2 text-xs"
+                            className="px-3 py-2 text-xs flex gap-2 items-center"
                             onClick={onOpenDocuments}
                         >
-                            <span className="inline-flex items-center gap-1">
-                                <Icon
-                                    icon="mdi:file-document-multiple-outline"
-                                    width="16"
-                                    height="16"
-                                />
-                                Документы
-                            </span>
+                            <Icon
+                                icon="mdi:file-document-multiple-outline"
+                                width="16"
+                                height="16"
+                            />
+                            Документы
                         </Button>
                     ) : null}
                     <Button label="Search" className="p-2">

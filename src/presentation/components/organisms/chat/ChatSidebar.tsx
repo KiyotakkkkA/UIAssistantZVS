@@ -18,13 +18,8 @@ export const ChatSidebar = observer(function ChatSidebar() {
         switchDialog,
         canDeleteDialog,
     } = useDialogs();
-    const {
-        projects,
-        activeProjectId,
-        switchProject,
-        clearActiveProject,
-        deleteProject,
-    } = useProjects();
+    const { projects, activeProjectId, clearActiveProject, deleteProject } =
+        useProjects();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editMode, setEditMode] = useState<"create" | "rename">("create");
@@ -45,7 +40,6 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
     const openCreateModal = () => {
         navigate("/dialogs");
-        clearActiveProject();
         setEditMode("create");
         setDialogName("");
         setTargetDialogId(null);
@@ -56,14 +50,12 @@ export const ChatSidebar = observer(function ChatSidebar() {
         navigate("/projects/create");
     };
 
-    const selectDialogAndOpenPage = async (dialogId: string) => {
-        clearActiveProject();
-        await switchDialog(dialogId);
+    const selectDialogAndOpenPage = (dialogId: string) => {
         navigate("/dialogs");
+        void switchDialog(dialogId);
     };
 
     const selectProjectAndOpenPage = async (projectId: string) => {
-        await switchProject(projectId);
         navigate(`/projects/${projectId}`);
     };
 

@@ -120,7 +120,13 @@ export class ProjectsService {
                     name: parsed.name.trim() || "Новый проект",
                     description: parsed.description,
                     dialogId: parsed.dialogId,
-                    fileUUIDs: this.normalizeFileIds(parsed.fileUUIDs),
+                    fileUUIDs: this.normalizeFileIds(
+                        parsed.fileUUIDs ??
+                            (parsed as Partial<Record<string, unknown>>)
+                                .fileUuids ??
+                            (parsed as Partial<Record<string, unknown>>)
+                                .fileIds,
+                    ),
                     requiredTools: this.normalizeRequiredTools(
                         parsed.requiredTools,
                     ),
