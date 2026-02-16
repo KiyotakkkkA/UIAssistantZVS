@@ -20,9 +20,9 @@ type DropdownOption = {
 };
 
 type DropdownProps = {
-    value: string;
+    value?: string;
     options: DropdownOption[];
-    onChange: (nextValue: string) => void;
+    onChange?: (nextValue: string) => void;
     placeholder?: string;
     searchable?: boolean;
     searchPlaceholder?: string;
@@ -135,7 +135,7 @@ export function Dropdown({
 
     const onSelect = (nextValue: string) => {
         const selected = options.find((item) => item.value === nextValue);
-        onChange(nextValue);
+        onChange?.(nextValue);
         selected?.onClick?.();
         setQuery("");
         if (closeOnSelect) {

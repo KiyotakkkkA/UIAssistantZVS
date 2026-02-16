@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useDialogs, useToasts } from "../../../../hooks";
-import { Button, InputSmall, Modal } from "../../atoms";
+import { Button, Dropdown, InputSmall, Modal } from "../../atoms";
 import { ConversationItem } from "../../molecules";
+import { Icon } from "@iconify/react";
 
 export const ChatSidebar = observer(function ChatSidebar() {
     const toasts = useToasts();
@@ -36,6 +37,20 @@ export const ChatSidebar = observer(function ChatSidebar() {
         setTargetDialogId(null);
         setIsEditModalOpen(true);
     };
+
+    const createOptionsList = [
+        {
+            value: "dialog",
+            label: "Новый диалог",
+            icon: <Icon icon="mdi:plus-circle-outline" width={20} />,
+            onClick: openCreateModal,
+        },
+        {
+            value: "project",
+            label: "Новый проект",
+            icon: <Icon icon="mdi:plus-box-multiple" width={20} />,
+        },
+    ];
 
     const openRenameModal = (dialogId: string) => {
         const current = dialogs.find((dialog) => dialog.id === dialogId);
@@ -119,20 +134,36 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
     return (
         <aside className="flex h-full w-[320px] flex-col bg-main-900/85 p-4 border-r border-main-300/20 backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 border-b border-main-600 pb-4 ">
                 <p className="text-xs uppercase tracking-[0.18em] text-main-400">
                     Рабочая область
                 </p>
-                <button
-                    type="button"
-                    className="cursor-pointer rounded-md px-2 py-1 text-xs text-main-200 hover:bg-main-800/70"
-                    onClick={openCreateModal}
-                >
-                    + Диалог
-                </button>
+                <Dropdown
+                    options={createOptionsList}
+                    menuPlacement="bottom"
+                    menuClassName="left-auto right-0"
+                    matchTriggerWidth={false}
+                    renderTrigger={({
+                        toggleOpen,
+                        triggerRef,
+                        disabled,
+                        ariaProps,
+                    }) => (
+                        <Button
+                            label="Создать"
+                            className="p-2 text-sm"
+                            ref={triggerRef}
+                            disabled={disabled}
+                            onClick={toggleOpen}
+                            {...ariaProps}
+                        >
+                            + Создать
+                        </Button>
+                    )}
+                />
             </div>
 
-            <div className="mt-6 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
                 {dialogs.map((conversation) => (
                     <ConversationItem
                         key={conversation.id}
