@@ -9,6 +9,9 @@ export class InitService {
     private readonly themesPath: string;
     private readonly chatsPath: string;
     private readonly dialogsPath: string;
+    private readonly projectsPath: string;
+    private readonly filesPath: string;
+    private readonly storageManifestPath: string;
     private readonly profilePath: string;
 
     constructor(basePath: string) {
@@ -17,6 +20,12 @@ export class InitService {
         this.themesPath = path.join(this.resourcesPath, "themes");
         this.chatsPath = path.join(this.resourcesPath, "chats");
         this.dialogsPath = path.join(this.chatsPath, "dialogs");
+        this.projectsPath = path.join(this.chatsPath, "projects");
+        this.filesPath = path.join(this.resourcesPath, "files");
+        this.storageManifestPath = path.join(
+            this.resourcesPath,
+            "storage.json",
+        );
         this.profilePath = path.join(this.resourcesPath, "profile.json");
     }
 
@@ -26,6 +35,7 @@ export class InitService {
         this.ensureProfile();
         this.ensureThemes();
         this.ensureChatsDirectory();
+        this.ensureFilesStorage();
     }
 
     private ensureDirectory(targetPath: string): void {
@@ -46,6 +56,7 @@ export class InitService {
     private ensureChatsDirectory(): void {
         this.ensureDirectory(this.chatsPath);
         this.ensureDirectory(this.dialogsPath);
+        this.ensureDirectory(this.projectsPath);
 
         const dialogFiles = fs
             .readdirSync(this.dialogsPath)
@@ -56,9 +67,23 @@ export class InitService {
         }
 
         const baseDialog = createBaseDialog();
-        const baseDialogPath = path.join(this.dialogsPath, `${baseDialog.id}.json`);
+        const baseDialogPath = path.join(
+            this.dialogsPath,
+            `${baseDialog.id}.json`,
+        );
 
         fs.writeFileSync(baseDialogPath, JSON.stringify(baseDialog, null, 2));
+    }
+
+    private ensureFilesStorage(): void {
+        this.ensureDirectory(this.filesPath);
+
+        if (!fs.existsSync(this.storageManifestPath)) {
+            fs.writeFileSync(
+                this.storageManifestPath,
+                JSON.stringify({}, null, 2),
+            );
+        }
     }
 
     private ensureThemes(): void {

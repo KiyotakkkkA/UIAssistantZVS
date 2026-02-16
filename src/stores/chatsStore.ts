@@ -93,6 +93,7 @@ class ChatsStore {
                         id: `dialog_${crypto.randomUUID().replace(/-/g, "")}`,
                         title: "Новый диалог",
                         messages: [],
+                        forProjectId: null,
                         createdAt: now,
                         updatedAt: now,
                     };
@@ -104,8 +105,8 @@ class ChatsStore {
             }
 
             const [dialogs, activeDialog] = await Promise.all([
-                api.getDialogsList(),
-                api.getActiveDialog(),
+                api.dialogs.getDialogsList(),
+                api.dialogs.getActiveDialog(),
             ]);
 
             runInAction(() => {
@@ -150,7 +151,7 @@ class ChatsStore {
         });
 
         try {
-            const dialog = await api.getDialogById(dialogId);
+            const dialog = await api.dialogs.getDialogById(dialogId);
 
             runInAction(() => {
                 this.replaceByDialog(dialog);
@@ -169,7 +170,7 @@ class ChatsStore {
             return null;
         }
 
-        const dialog = await api.createDialog();
+        const dialog = await api.dialogs.createDialog();
 
         runInAction(() => {
             this.replaceByDialog(dialog);
@@ -188,7 +189,7 @@ class ChatsStore {
             return null;
         }
 
-        const dialog = await api.renameDialog(dialogId, title);
+        const dialog = await api.dialogs.renameDialog(dialogId, title);
 
         runInAction(() => {
             if (this.activeDialog?.id === dialog.id) {
@@ -208,7 +209,7 @@ class ChatsStore {
             return;
         }
 
-        const result = await api.deleteDialog(dialogId);
+        const result = await api.dialogs.deleteDialog(dialogId);
 
         runInAction(() => {
             this.dialogs = result.dialogs;
@@ -228,7 +229,8 @@ class ChatsStore {
             return serializableDialog;
         }
 
-        const savedDialog = await api.saveDialogSnapshot(serializableDialog);
+        const savedDialog =
+            await api.dialogs.saveDialogSnapshot(serializableDialog);
 
         runInAction(() => {
             this.replaceByDialog(savedDialog);
@@ -241,6 +243,10 @@ class ChatsStore {
         return {
             id: String(dialog.id),
             title: String(dialog.title),
+            forProjectId:
+                typeof dialog.forProjectId === "string"
+                    ? dialog.forProjectId
+                    : null,
             createdAt: String(dialog.createdAt),
             updatedAt: String(dialog.updatedAt),
             messages: dialog.messages.map((message) => ({
@@ -283,6 +289,13 @@ class ChatsStore {
     }
 
     private upsertDialogListItem(dialog: ChatDialog): void {
+        if (dialog.forProjectId) {
+            this.dialogs = this.dialogs.filter(
+                (existing) => existing.id !== dialog.id,
+            );
+            return;
+        }
+
         const lastMessage =
             dialog.messages.length > 0
                 ? dialog.messages[dialog.messages.length - 1]

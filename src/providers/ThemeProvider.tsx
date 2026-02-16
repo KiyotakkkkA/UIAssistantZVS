@@ -32,26 +32,23 @@ export const ThemeProvider = observer(({ children }: ThemeProviderProps) => {
         Record<string, string>
     >({});
 
-    const setTheme = useCallback(
-        async (themeId: string) => {
-            const api = window.appApi;
+    const setTheme = useCallback(async (themeId: string) => {
+        const api = window.appApi;
 
-            if (!api) {
-                await userProfileStore.updateUserProfile({
-                    themePreference: themeId,
-                });
-                return;
-            }
-
-            const selectedTheme = await api.getThemeData(themeId);
-            applyThemePalette(selectedTheme.palette);
-            setPreferredThemeData(selectedTheme.palette);
+        if (!api) {
             await userProfileStore.updateUserProfile({
                 themePreference: themeId,
             });
-        },
-        [],
-    );
+            return;
+        }
+
+        const selectedTheme = await api.themes.getThemeData(themeId);
+        applyThemePalette(selectedTheme.palette);
+        setPreferredThemeData(selectedTheme.palette);
+        await userProfileStore.updateUserProfile({
+            themePreference: themeId,
+        });
+    }, []);
 
     useEffect(() => {
         void userProfileStore.initialize();
@@ -70,7 +67,7 @@ export const ThemeProvider = observer(({ children }: ThemeProviderProps) => {
                 return;
             }
 
-            const nextThemesList = await api.getThemesList();
+            const nextThemesList = await api.themes.getThemesList();
 
             if (!isMounted) {
                 return;
@@ -97,9 +94,8 @@ export const ThemeProvider = observer(({ children }: ThemeProviderProps) => {
                 return;
             }
 
-            const selectedTheme = await api.getThemeData(
-                themePreference,
-            );
+            const selectedTheme =
+                await api.themes.getThemeData(themePreference);
 
             if (!isMounted) {
                 return;

@@ -15,7 +15,7 @@ export const SettingsProfilePanel = ({
 }: SettingsProfilePanelProps) => {
     return (
         <div className="space-y-5">
-            <div className="rounded-2xl border border-main-700/60 bg-main-900/40 p-4">
+            <div className="rounded-2xl bg-main-900/40 p-4">
                 <h4 className="text-sm font-semibold text-main-100">Профиль</h4>
 
                 <div className="mt-4 space-y-4">

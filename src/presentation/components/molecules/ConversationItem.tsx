@@ -35,10 +35,8 @@ export function ConversationItem({
                     onSelect(id);
                 }
             }}
-            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer ${
-                active
-                    ? "bg-main-500/20"
-                    : "bg-transparent ring-transparent hover:bg-main-800/70"
+            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
+                active ? "bg-main-500/20" : "bg-transparent ring-transparen"
             }`}
         >
             <div className="flex items-center justify-between gap-2">

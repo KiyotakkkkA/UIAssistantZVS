@@ -54,8 +54,16 @@ export function ToolBubbleCard({
     return (
         <div className="w-full text-xs leading-relaxed text-main-200">
             <Accordeon
-                title={`Инструмент: ${payload.toolName || "unknown"}`}
-                subtitle="Аргументы и результат вызова инструмента"
+                title={
+                    execStatus === "pending"
+                        ? `ПОДТВЕРЖДЕНИЕ ${payload.toolName || "unknown"}`
+                        : `Инструмент: ${payload.toolName || "unknown"}`
+                }
+                subtitle={
+                    execStatus === "pending"
+                        ? `ИНСТРУМЕНТ ${payload.toolName || "unknown"} ТРЕБУЕТ РУЧНОГО ВМЕШАТЕЛЬСТВА : НАЖМИТЕ, ЧТОБЫ УВИДЕТЬ ПОДРОБНОСТИ`
+                        : `Аргументы и результат вызова инструмента`
+                }
             >
                 <div className="space-y-3">
                     {isCommandExec && (

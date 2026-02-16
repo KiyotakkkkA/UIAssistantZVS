@@ -1,5 +1,6 @@
 import path from "node:path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { readFile } from "node:fs/promises";
+import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -17,12 +18,13 @@ const defaultProfile = {
 };
 const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
 const createDialogId = () => createPrefixedId("dialog");
-const createBaseDialog = () => {
+const createBaseDialog = (forProjectId = null) => {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   return {
     id: createDialogId(),
     title: "Новый диалог",
     messages: [],
+    forProjectId,
     createdAt: now,
     updatedAt: now
   };
@@ -147,6 +149,9 @@ class InitService {
   themesPath;
   chatsPath;
   dialogsPath;
+  projectsPath;
+  filesPath;
+  storageManifestPath;
   profilePath;
   constructor(basePath) {
     this.basePath = basePath;
@@ -154,6 +159,12 @@ class InitService {
     this.themesPath = path.join(this.resourcesPath, "themes");
     this.chatsPath = path.join(this.resourcesPath, "chats");
     this.dialogsPath = path.join(this.chatsPath, "dialogs");
+    this.projectsPath = path.join(this.chatsPath, "projects");
+    this.filesPath = path.join(this.resourcesPath, "files");
+    this.storageManifestPath = path.join(
+      this.resourcesPath,
+      "storage.json"
+    );
     this.profilePath = path.join(this.resourcesPath, "profile.json");
   }
   initialize() {
@@ -162,6 +173,7 @@ class InitService {
     this.ensureProfile();
     this.ensureThemes();
     this.ensureChatsDirectory();
+    this.ensureFilesStorage();
   }
   ensureDirectory(targetPath) {
     if (!fs.existsSync(targetPath)) {
@@ -179,13 +191,26 @@ class InitService {
   ensureChatsDirectory() {
     this.ensureDirectory(this.chatsPath);
     this.ensureDirectory(this.dialogsPath);
+    this.ensureDirectory(this.projectsPath);
     const dialogFiles = fs.readdirSync(this.dialogsPath).filter((fileName) => fileName.endsWith(".json"));
     if (dialogFiles.length > 0) {
       return;
     }
     const baseDialog = createBaseDialog();
-    const baseDialogPath = path.join(this.dialogsPath, `${baseDialog.id}.json`);
+    const baseDialogPath = path.join(
+      this.dialogsPath,
+      `${baseDialog.id}.json`
+    );
     fs.writeFileSync(baseDialogPath, JSON.stringify(baseDialog, null, 2));
+  }
+  ensureFilesStorage() {
+    this.ensureDirectory(this.filesPath);
+    if (!fs.existsSync(this.storageManifestPath)) {
+      fs.writeFileSync(
+        this.storageManifestPath,
+        JSON.stringify({}, null, 2)
+      );
+    }
   }
   ensureThemes() {
     for (const entry of staticThemeEntries) {
@@ -199,182 +224,26 @@ class InitService {
     }
   }
 }
+const createUserDataPaths = (basePath) => {
+  const resourcesPath = path.join(basePath, "resources");
+  return {
+    resourcesPath,
+    themesPath: path.join(resourcesPath, "themes"),
+    dialogsPath: path.join(resourcesPath, "chats", "dialogs"),
+    projectsPath: path.join(resourcesPath, "chats", "projects"),
+    filesPath: path.join(resourcesPath, "files"),
+    storageManifestPath: path.join(resourcesPath, "storage.json"),
+    profilePath: path.join(resourcesPath, "profile.json")
+  };
+};
 const isChatDriver = (value) => {
   return value === "ollama" || value === "";
 };
-class UserDataService {
-  resourcesPath;
-  themesPath;
-  dialogsPath;
-  profilePath;
-  constructor(basePath) {
-    this.resourcesPath = path.join(basePath, "resources");
-    this.themesPath = path.join(this.resourcesPath, "themes");
-    this.dialogsPath = path.join(this.resourcesPath, "chats", "dialogs");
-    this.profilePath = path.join(this.resourcesPath, "profile.json");
+class UserProfileService {
+  constructor(profilePath) {
+    this.profilePath = profilePath;
   }
-  getActiveDialog() {
-    const profile = this.readUserProfile();
-    const dialogs = this.readDialogs();
-    if (profile.activeDialogId && dialogs.some((dialog) => dialog.id === profile.activeDialogId)) {
-      const activeDialog = dialogs.find(
-        (dialog) => dialog.id === profile.activeDialogId
-      ) ?? dialogs[0];
-      return activeDialog;
-    }
-    if (dialogs.length > 0) {
-      const fallbackActiveDialog = dialogs[0];
-      this.updateUserProfile({ activeDialogId: fallbackActiveDialog.id });
-      return fallbackActiveDialog;
-    }
-    const baseDialog = createBaseDialog();
-    this.writeDialog(baseDialog);
-    this.updateUserProfile({ activeDialogId: baseDialog.id });
-    return baseDialog;
-  }
-  getDialogsList() {
-    return this.readDialogs().map(
-      (dialog) => this.toDialogListItem(dialog)
-    );
-  }
-  getDialogById(dialogId) {
-    const dialogs = this.readDialogs();
-    const dialog = dialogs.find((item) => item.id === dialogId);
-    if (dialog) {
-      this.updateUserProfile({ activeDialogId: dialog.id });
-      return dialog;
-    }
-    return this.getActiveDialog();
-  }
-  createDialog() {
-    const baseDialog = createBaseDialog();
-    this.writeDialog(baseDialog);
-    this.updateUserProfile({ activeDialogId: baseDialog.id });
-    return baseDialog;
-  }
-  renameDialog(dialogId, nextTitle) {
-    const dialog = this.getDialogById(dialogId);
-    const trimmedTitle = nextTitle.trim();
-    const updatedDialog = {
-      ...dialog,
-      title: trimmedTitle || dialog.title,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.writeDialog(updatedDialog);
-    return updatedDialog;
-  }
-  deleteDialog(dialogId) {
-    const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
-    if (fs.existsSync(dialogPath)) {
-      fs.unlinkSync(dialogPath);
-    }
-    let dialogs = this.readDialogs();
-    if (dialogs.length === 0) {
-      const fallbackDialog = createBaseDialog();
-      this.writeDialog(fallbackDialog);
-      dialogs = [fallbackDialog];
-    }
-    this.updateUserProfile({ activeDialogId: dialogs[0].id });
-    return {
-      dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
-      activeDialog: dialogs[0]
-    };
-  }
-  deleteMessageFromDialog(dialogId, messageId) {
-    const dialog = this.getDialogById(dialogId);
-    const targetMessage = dialog.messages.find(
-      (message) => message.id === messageId
-    );
-    if (!targetMessage) {
-      return dialog;
-    }
-    const nextMessages = dialog.messages.filter(
-      (message) => message.id !== messageId && message.answeringAt !== messageId
-    );
-    const updatedDialog = {
-      ...dialog,
-      messages: nextMessages,
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.writeDialog(updatedDialog);
-    return updatedDialog;
-  }
-  truncateDialogFromMessage(dialogId, messageId) {
-    const dialog = this.getDialogById(dialogId);
-    const messageIndex = dialog.messages.findIndex(
-      (message) => message.id === messageId
-    );
-    if (messageIndex === -1) {
-      return dialog;
-    }
-    const updatedDialog = {
-      ...dialog,
-      messages: dialog.messages.slice(0, messageIndex),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.writeDialog(updatedDialog);
-    return updatedDialog;
-  }
-  saveDialogSnapshot(dialog) {
-    const normalizedMessages = dialog.messages.map(
-      (message) => this.normalizeMessage(message)
-    );
-    const normalizedDialog = {
-      id: this.normalizeDialogId(dialog.id),
-      title: typeof dialog.title === "string" && dialog.title.trim() ? dialog.title : "Новый диалог",
-      messages: normalizedMessages,
-      createdAt: typeof dialog.createdAt === "string" && dialog.createdAt ? dialog.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
-      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-    };
-    this.writeDialog(normalizedDialog);
-    this.updateUserProfile({ activeDialogId: normalizedDialog.id });
-    return normalizedDialog;
-  }
-  getBootData() {
-    const userProfile = this.readUserProfile();
-    const preferredThemeData = this.resolveThemePalette(
-      userProfile.themePreference
-    );
-    return {
-      userProfile,
-      preferredThemeData
-    };
-  }
-  getThemesList() {
-    const themes = this.readThemes();
-    if (themes.length === 0) {
-      return staticThemesList;
-    }
-    return themes.map((theme) => ({
-      id: theme.id,
-      name: theme.name
-    }));
-  }
-  getThemeData(themeId) {
-    const themes = this.readThemes();
-    const preferredTheme = themes.find((theme) => theme.id === themeId);
-    if (preferredTheme) {
-      return preferredTheme;
-    }
-    const fallbackTheme = staticThemesMap[themeId];
-    if (fallbackTheme) {
-      return fallbackTheme;
-    }
-    return staticThemesMap[defaultProfile.themePreference];
-  }
-  updateUserProfile(nextProfile) {
-    const currentProfile = this.readUserProfile();
-    const mergedProfile = {
-      ...currentProfile,
-      ...nextProfile
-    };
-    fs.writeFileSync(
-      this.profilePath,
-      JSON.stringify(mergedProfile, null, 2)
-    );
-    return mergedProfile;
-  }
-  readUserProfile() {
+  getUserProfile() {
     if (!fs.existsSync(this.profilePath)) {
       return defaultProfile;
     }
@@ -400,6 +269,53 @@ class UserDataService {
       return defaultProfile;
     }
   }
+  updateUserProfile(nextProfile) {
+    const currentProfile = this.getUserProfile();
+    const mergedProfile = {
+      ...currentProfile,
+      ...nextProfile
+    };
+    fs.writeFileSync(
+      this.profilePath,
+      JSON.stringify(mergedProfile, null, 2)
+    );
+    return mergedProfile;
+  }
+}
+class ThemesService {
+  constructor(themesPath) {
+    this.themesPath = themesPath;
+  }
+  getThemesList() {
+    const themes = this.readThemes();
+    if (themes.length === 0) {
+      return staticThemesList;
+    }
+    return themes.map((theme) => ({
+      id: theme.id,
+      name: theme.name
+    }));
+  }
+  getThemeData(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme;
+    }
+    const fallbackTheme = staticThemesMap[themeId];
+    if (fallbackTheme) {
+      return fallbackTheme;
+    }
+    return staticThemesMap[defaultProfile.themePreference];
+  }
+  resolveThemePalette(themeId) {
+    const themes = this.readThemes();
+    const preferredTheme = themes.find((theme) => theme.id === themeId);
+    if (preferredTheme) {
+      return preferredTheme.palette;
+    }
+    return staticThemesMap[defaultProfile.themePreference].palette;
+  }
   readThemes() {
     if (!fs.existsSync(this.themesPath)) {
       return [];
@@ -419,6 +335,145 @@ class UserDataService {
       }
     }
     return result;
+  }
+}
+class DialogsService {
+  constructor(dialogsPath, onActiveDialogIdUpdate) {
+    this.dialogsPath = dialogsPath;
+    this.onActiveDialogIdUpdate = onActiveDialogIdUpdate;
+  }
+  getActiveDialog(activeDialogId) {
+    const dialogs = this.readDialogs();
+    if (activeDialogId) {
+      const activeDialog = dialogs.find(
+        (dialog2) => dialog2.id === activeDialogId
+      );
+      if (activeDialog) {
+        return activeDialog;
+      }
+    }
+    const availableDialogs = dialogs.filter(
+      (dialog2) => dialog2.forProjectId === null
+    );
+    if (availableDialogs.length > 0) {
+      const fallbackActiveDialog = availableDialogs[0];
+      this.onActiveDialogIdUpdate(fallbackActiveDialog.id);
+      return fallbackActiveDialog;
+    }
+    const baseDialog = createBaseDialog();
+    this.writeDialog(baseDialog);
+    this.onActiveDialogIdUpdate(baseDialog.id);
+    return baseDialog;
+  }
+  getDialogsList() {
+    return this.readDialogs().filter((dialog2) => dialog2.forProjectId === null).map((dialog2) => this.toDialogListItem(dialog2));
+  }
+  getDialogById(dialogId, activeDialogId) {
+    const dialogs = this.readDialogs();
+    const dialog2 = dialogs.find((item) => item.id === dialogId);
+    if (dialog2) {
+      this.onActiveDialogIdUpdate(dialog2.id);
+      return dialog2;
+    }
+    return this.getActiveDialog(activeDialogId);
+  }
+  createDialog(forProjectId = null) {
+    const baseDialog = createBaseDialog(forProjectId);
+    this.writeDialog(baseDialog);
+    this.onActiveDialogIdUpdate(baseDialog.id);
+    return baseDialog;
+  }
+  linkDialogToProject(dialogId, projectId) {
+    const dialogs = this.readDialogs();
+    const targetDialog = dialogs.find((dialog2) => dialog2.id === dialogId);
+    if (!targetDialog || targetDialog.forProjectId === projectId) {
+      return;
+    }
+    this.writeDialog({
+      ...targetDialog,
+      forProjectId: projectId,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
+  renameDialog(dialogId, nextTitle, activeDialogId) {
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const trimmedTitle = nextTitle.trim();
+    const updatedDialog = {
+      ...dialog2,
+      title: trimmedTitle || dialog2.title,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
+  deleteDialog(dialogId) {
+    const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
+    if (fs.existsSync(dialogPath)) {
+      fs.unlinkSync(dialogPath);
+    }
+    let dialogs = this.readDialogs();
+    if (dialogs.length === 0) {
+      const fallbackDialog2 = createBaseDialog();
+      this.writeDialog(fallbackDialog2);
+      dialogs = [fallbackDialog2];
+    }
+    const fallbackDialog = dialogs.find((dialog2) => dialog2.forProjectId === null) || dialogs[0];
+    this.onActiveDialogIdUpdate(fallbackDialog.id);
+    return {
+      dialogs: dialogs.filter((dialog2) => dialog2.forProjectId === null).map((dialog2) => this.toDialogListItem(dialog2)),
+      activeDialog: fallbackDialog
+    };
+  }
+  deleteMessageFromDialog(dialogId, messageId, activeDialogId) {
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const targetMessage = dialog2.messages.find(
+      (message) => message.id === messageId
+    );
+    if (!targetMessage) {
+      return dialog2;
+    }
+    const nextMessages = dialog2.messages.filter(
+      (message) => message.id !== messageId && message.answeringAt !== messageId
+    );
+    const updatedDialog = {
+      ...dialog2,
+      messages: nextMessages,
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
+  truncateDialogFromMessage(dialogId, messageId, activeDialogId) {
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const messageIndex = dialog2.messages.findIndex(
+      (message) => message.id === messageId
+    );
+    if (messageIndex === -1) {
+      return dialog2;
+    }
+    const updatedDialog = {
+      ...dialog2,
+      messages: dialog2.messages.slice(0, messageIndex),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(updatedDialog);
+    return updatedDialog;
+  }
+  saveDialogSnapshot(dialog2) {
+    const normalizedMessages = dialog2.messages.map(
+      (message) => this.normalizeMessage(message)
+    );
+    const normalizedDialog = {
+      id: this.normalizeDialogId(dialog2.id),
+      title: typeof dialog2.title === "string" && dialog2.title.trim() ? dialog2.title : "Новый диалог",
+      messages: normalizedMessages,
+      forProjectId: this.normalizeForProjectId(dialog2.forProjectId),
+      createdAt: typeof dialog2.createdAt === "string" && dialog2.createdAt ? dialog2.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeDialog(normalizedDialog);
+    this.onActiveDialogIdUpdate(normalizedDialog.id);
+    return normalizedDialog;
   }
   readDialogs() {
     if (!fs.existsSync(this.dialogsPath)) {
@@ -441,6 +496,9 @@ class UserDataService {
           id: this.normalizeDialogId(parsed.id),
           title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Новый диалог",
           messages: normalizedMessages,
+          forProjectId: this.normalizeForProjectId(
+            parsed.forProjectId
+          ),
           createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
           updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : (/* @__PURE__ */ new Date()).toISOString()
         });
@@ -453,18 +511,24 @@ class UserDataService {
     );
     return dialogs;
   }
-  writeDialog(dialog) {
+  writeDialog(dialog2) {
     if (!fs.existsSync(this.dialogsPath)) {
       fs.mkdirSync(this.dialogsPath, { recursive: true });
     }
-    const dialogPath = path.join(this.dialogsPath, `${dialog.id}.json`);
-    fs.writeFileSync(dialogPath, JSON.stringify(dialog, null, 2));
+    const dialogPath = path.join(this.dialogsPath, `${dialog2.id}.json`);
+    fs.writeFileSync(dialogPath, JSON.stringify(dialog2, null, 2));
   }
   normalizeDialogId(id) {
     if (typeof id === "string" && id.startsWith("dialog_")) {
       return id;
     }
     return `dialog_${randomUUID().replace(/-/g, "")}`;
+  }
+  normalizeForProjectId(forProjectId) {
+    if (typeof forProjectId === "string" && forProjectId.startsWith("project_")) {
+      return forProjectId;
+    }
+    return null;
   }
   normalizeMessage(message) {
     const rawAuthor = message.author;
@@ -485,26 +549,384 @@ class UserDataService {
       ...toolTrace ? { toolTrace } : {}
     };
   }
-  resolveThemePalette(themeId) {
-    const themes = this.readThemes();
-    const preferredTheme = themes.find((theme) => theme.id === themeId);
-    if (preferredTheme) {
-      return preferredTheme.palette;
-    }
-    return staticThemesMap[defaultProfile.themePreference].palette;
-  }
-  toDialogListItem(dialog) {
-    const lastMessage = dialog.messages.length > 0 ? dialog.messages[dialog.messages.length - 1] : null;
+  toDialogListItem(dialog2) {
+    const lastMessage = dialog2.messages.length > 0 ? dialog2.messages[dialog2.messages.length - 1] : null;
     return {
-      id: dialog.id,
-      title: dialog.title,
+      id: dialog2.id,
+      title: dialog2.title,
       preview: lastMessage?.content?.trim() || "Пустой диалог — отправьте первое сообщение",
-      time: new Date(dialog.updatedAt).toLocaleTimeString("ru-RU", {
+      time: new Date(dialog2.updatedAt).toLocaleTimeString("ru-RU", {
         hour: "2-digit",
         minute: "2-digit"
       }),
-      updatedAt: dialog.updatedAt
+      updatedAt: dialog2.updatedAt
     };
+  }
+}
+class ProjectsService {
+  constructor(projectsPath) {
+    this.projectsPath = projectsPath;
+  }
+  getProjectsList() {
+    return this.readProjects().map(
+      (project) => this.toProjectListItem(project)
+    );
+  }
+  getProjectById(projectId) {
+    const projects = this.readProjects();
+    return projects.find((project) => project.id === projectId) ?? null;
+  }
+  createProject(payload) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const project = {
+      id: this.normalizeProjectId(payload.projectId),
+      name: payload.name.trim() || "Новый проект",
+      description: payload.description.trim(),
+      dialogId: payload.dialogId,
+      fileUUIDs: this.normalizeFileIds(payload.fileUUIDs),
+      requiredTools: this.normalizeRequiredTools(payload.requiredTools),
+      createdAt: now,
+      updatedAt: now
+    };
+    this.writeProject(project);
+    return project;
+  }
+  deleteProject(projectId) {
+    const project = this.getProjectById(projectId);
+    if (!project) {
+      return null;
+    }
+    const projectPath = path.join(this.projectsPath, `${project.id}.json`);
+    if (fs.existsSync(projectPath)) {
+      fs.unlinkSync(projectPath);
+    }
+    return project;
+  }
+  normalizeProjectId(id) {
+    if (typeof id === "string" && id.startsWith("project_")) {
+      return id;
+    }
+    return `project_${randomUUID().replace(/-/g, "")}`;
+  }
+  normalizeFileIds(fileIds) {
+    if (!Array.isArray(fileIds)) {
+      return [];
+    }
+    return fileIds.filter(
+      (item) => typeof item === "string"
+    );
+  }
+  normalizeRequiredTools(requiredTools) {
+    if (!Array.isArray(requiredTools)) {
+      return [];
+    }
+    return requiredTools.filter(
+      (item) => typeof item === "string" && item.trim().length > 0
+    );
+  }
+  readProjects() {
+    if (!fs.existsSync(this.projectsPath)) {
+      return [];
+    }
+    const files = fs.readdirSync(this.projectsPath).filter((fileName) => fileName.endsWith(".json"));
+    const projects = [];
+    for (const fileName of files) {
+      const filePath = path.join(this.projectsPath, fileName);
+      try {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        if (typeof parsed.name !== "string" || typeof parsed.description !== "string" || typeof parsed.dialogId !== "string") {
+          continue;
+        }
+        projects.push({
+          id: this.normalizeProjectId(parsed.id),
+          name: parsed.name.trim() || "Новый проект",
+          description: parsed.description,
+          dialogId: parsed.dialogId,
+          fileUUIDs: this.normalizeFileIds(parsed.fileUUIDs),
+          requiredTools: this.normalizeRequiredTools(
+            parsed.requiredTools
+          ),
+          createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : now,
+          updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : now
+        });
+      } catch {
+        continue;
+      }
+    }
+    projects.sort(
+      (left, right) => right.updatedAt.localeCompare(left.updatedAt)
+    );
+    return projects;
+  }
+  writeProject(project) {
+    if (!fs.existsSync(this.projectsPath)) {
+      fs.mkdirSync(this.projectsPath, { recursive: true });
+    }
+    const projectPath = path.join(this.projectsPath, `${project.id}.json`);
+    fs.writeFileSync(projectPath, JSON.stringify(project, null, 2));
+  }
+  toProjectListItem(project) {
+    return {
+      id: project.id,
+      title: project.name,
+      preview: project.description.trim() || "Проект без описания",
+      time: new Date(project.updatedAt).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      updatedAt: project.updatedAt,
+      dialogId: project.dialogId
+    };
+  }
+}
+class FileStorageService {
+  constructor(filesPath, manifestPath) {
+    this.filesPath = filesPath;
+    this.manifestPath = manifestPath;
+  }
+  saveFiles(files) {
+    const manifest = this.readManifest();
+    const saved = [];
+    for (const file of files) {
+      const fileId = randomUUID().replace(/-/g, "");
+      const fileExt = path.extname(file.name || "");
+      const encryptedName = `${fileId}${fileExt}`;
+      const absolutePath = path.join(this.filesPath, encryptedName);
+      const buffer = this.parseDataUrl(file.dataUrl);
+      fs.writeFileSync(absolutePath, buffer);
+      manifest[fileId] = {
+        path: absolutePath,
+        originalName: file.name,
+        size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
+        savedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      saved.push({
+        id: fileId,
+        ...manifest[fileId]
+      });
+    }
+    this.writeManifest(manifest);
+    return saved;
+  }
+  getFilesByIds(fileIds) {
+    const manifest = this.readManifest();
+    return fileIds.map((fileId) => {
+      const entry = manifest[fileId];
+      if (!entry) {
+        return null;
+      }
+      return {
+        id: fileId,
+        ...entry
+      };
+    }).filter(Boolean);
+  }
+  getFileById(fileId) {
+    const manifest = this.readManifest();
+    const entry = manifest[fileId];
+    if (!entry) {
+      return null;
+    }
+    return {
+      id: fileId,
+      ...entry
+    };
+  }
+  deleteFilesByIds(fileIds) {
+    if (!fileIds.length) {
+      return;
+    }
+    const manifest = this.readManifest();
+    for (const fileId of fileIds) {
+      const entry = manifest[fileId];
+      if (!entry) {
+        continue;
+      }
+      if (fs.existsSync(entry.path)) {
+        fs.unlinkSync(entry.path);
+      }
+      delete manifest[fileId];
+    }
+    this.writeManifest(manifest);
+  }
+  parseDataUrl(dataUrl) {
+    if (typeof dataUrl !== "string") {
+      return Buffer.from("");
+    }
+    const marker = ";base64,";
+    const markerIndex = dataUrl.indexOf(marker);
+    if (markerIndex === -1) {
+      return Buffer.from(dataUrl);
+    }
+    const base64 = dataUrl.slice(markerIndex + marker.length);
+    return Buffer.from(base64, "base64");
+  }
+  ensureStorage() {
+    if (!fs.existsSync(this.filesPath)) {
+      fs.mkdirSync(this.filesPath, { recursive: true });
+    }
+    if (!fs.existsSync(this.manifestPath)) {
+      fs.writeFileSync(this.manifestPath, JSON.stringify({}, null, 2));
+    }
+  }
+  readManifest() {
+    this.ensureStorage();
+    try {
+      const rawManifest = fs.readFileSync(this.manifestPath, "utf-8");
+      const parsed = JSON.parse(rawManifest);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return {};
+      }
+      return parsed;
+    } catch {
+      return {};
+    }
+  }
+  writeManifest(manifest) {
+    this.ensureStorage();
+    fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2));
+  }
+}
+class UserDataService {
+  userProfileService;
+  themesService;
+  dialogsService;
+  projectsService;
+  fileStorageService;
+  constructor(basePath) {
+    const paths = createUserDataPaths(basePath);
+    this.userProfileService = new UserProfileService(paths.profilePath);
+    this.themesService = new ThemesService(paths.themesPath);
+    this.dialogsService = new DialogsService(
+      paths.dialogsPath,
+      (dialogId) => {
+        this.userProfileService.updateUserProfile({
+          activeDialogId: dialogId
+        });
+      }
+    );
+    this.projectsService = new ProjectsService(paths.projectsPath);
+    this.fileStorageService = new FileStorageService(
+      paths.filesPath,
+      paths.storageManifestPath
+    );
+    this.syncProjectDialogs();
+  }
+  getActiveDialog() {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.getActiveDialog(profile.activeDialogId);
+  }
+  getDialogsList() {
+    return this.dialogsService.getDialogsList();
+  }
+  getDialogById(dialogId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.getDialogById(
+      dialogId,
+      profile.activeDialogId
+    );
+  }
+  createDialog() {
+    return this.dialogsService.createDialog();
+  }
+  renameDialog(dialogId, nextTitle) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.renameDialog(
+      dialogId,
+      nextTitle,
+      profile.activeDialogId
+    );
+  }
+  deleteDialog(dialogId) {
+    return this.dialogsService.deleteDialog(dialogId);
+  }
+  deleteMessageFromDialog(dialogId, messageId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.deleteMessageFromDialog(
+      dialogId,
+      messageId,
+      profile.activeDialogId
+    );
+  }
+  truncateDialogFromMessage(dialogId, messageId) {
+    const profile = this.userProfileService.getUserProfile();
+    return this.dialogsService.truncateDialogFromMessage(
+      dialogId,
+      messageId,
+      profile.activeDialogId
+    );
+  }
+  saveDialogSnapshot(dialog2) {
+    return this.dialogsService.saveDialogSnapshot(dialog2);
+  }
+  getProjectsList() {
+    return this.projectsService.getProjectsList();
+  }
+  getProjectById(projectId) {
+    return this.projectsService.getProjectById(projectId);
+  }
+  createProject(payload) {
+    const projectId = `project_${randomUUID().replace(/-/g, "")}`;
+    const dialog2 = this.dialogsService.createDialog(projectId);
+    const nextTitle = payload.name.trim();
+    if (nextTitle) {
+      this.dialogsService.renameDialog(dialog2.id, nextTitle);
+    }
+    return this.projectsService.createProject({
+      ...payload,
+      dialogId: dialog2.id,
+      projectId
+    });
+  }
+  deleteProject(projectId) {
+    const deletedProject = this.projectsService.deleteProject(projectId);
+    if (deletedProject) {
+      this.fileStorageService.deleteFilesByIds(deletedProject.fileUUIDs);
+      this.dialogsService.deleteDialog(deletedProject.dialogId);
+    }
+    return {
+      projects: this.projectsService.getProjectsList(),
+      deletedProjectId: projectId
+    };
+  }
+  saveFiles(files) {
+    return this.fileStorageService.saveFiles(files);
+  }
+  getFilesByIds(fileIds) {
+    return this.fileStorageService.getFilesByIds(fileIds);
+  }
+  getFileById(fileId) {
+    return this.fileStorageService.getFileById(fileId);
+  }
+  getBootData() {
+    const userProfile = this.userProfileService.getUserProfile();
+    const preferredThemeData = this.themesService.resolveThemePalette(
+      userProfile.themePreference
+    );
+    return {
+      userProfile,
+      preferredThemeData
+    };
+  }
+  getThemesList() {
+    return this.themesService.getThemesList();
+  }
+  getThemeData(themeId) {
+    return this.themesService.getThemeData(themeId);
+  }
+  updateUserProfile(nextProfile) {
+    return this.userProfileService.updateUserProfile(nextProfile);
+  }
+  syncProjectDialogs() {
+    const projects = this.projectsService.getProjectsList();
+    for (const project of projects) {
+      this.dialogsService.linkDialogToProject(
+        project.dialogId,
+        project.id
+      );
+    }
   }
 }
 const decodeOutput = (buffer) => {
@@ -577,6 +999,30 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win;
 let userDataService;
 let commandExecService;
+const getMimeTypeByExtension = (filePath) => {
+  const extension = path.extname(filePath).toLowerCase();
+  const mimeByExtension = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".avif": "image/avif"
+  };
+  return mimeByExtension[extension] || "application/octet-stream";
+};
+const imageExtensions = [
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "svg",
+  "avif"
+];
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
@@ -657,11 +1103,93 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "app:save-dialog-snapshot",
-    (_event, dialog) => userDataService.saveDialogSnapshot(dialog)
+    (_event, dialog2) => userDataService.saveDialogSnapshot(dialog2)
   );
+  ipcMain.handle(
+    "app:get-projects-list",
+    () => userDataService.getProjectsList()
+  );
+  ipcMain.handle(
+    "app:get-project-by-id",
+    (_event, projectId) => userDataService.getProjectById(projectId)
+  );
+  ipcMain.handle(
+    "app:create-project",
+    (_event, payload) => userDataService.createProject(payload)
+  );
+  ipcMain.handle(
+    "app:delete-project",
+    (_event, projectId) => userDataService.deleteProject(projectId)
+  );
+  ipcMain.handle(
+    "app:save-files",
+    (_event, files) => userDataService.saveFiles(files)
+  );
+  ipcMain.handle(
+    "app:get-files-by-ids",
+    (_event, fileIds) => userDataService.getFilesByIds(fileIds)
+  );
+  ipcMain.handle("app:open-saved-file", async (_event, fileId) => {
+    const file = userDataService.getFileById(fileId);
+    if (!file) {
+      return false;
+    }
+    const openResult = await shell.openPath(file.path);
+    return openResult === "";
+  });
   ipcMain.handle(
     "app:exec-shell-command",
     (_event, command, cwd) => commandExecService.execute(command, cwd)
+  );
+  ipcMain.handle(
+    "app:pick-files",
+    async (event, options) => {
+      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const accept = options?.accept ?? [];
+      const filters = accept.length > 0 ? [
+        {
+          name: "Allowed files",
+          extensions: accept.flatMap(
+            (item) => item.split(",").map(
+              (part) => part.trim().toLowerCase()
+            )
+          ).flatMap(
+            (item) => item === "image/*" ? imageExtensions : [item]
+          ).map(
+            (item) => item.startsWith(".") ? item.slice(1) : item.replace(/^[*]/, "").replace(/^[.]/, "")
+          ).filter((item) => item && item !== "*")
+        }
+      ] : [];
+      const dialogProperties = [
+        "openFile"
+      ];
+      if (options?.multiple) {
+        dialogProperties.push("multiSelections");
+      }
+      const openDialogOptions = {
+        properties: dialogProperties,
+        filters
+      };
+      const selection = currentWindow ? await dialog.showOpenDialog(currentWindow, openDialogOptions) : await dialog.showOpenDialog(openDialogOptions);
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return [];
+      }
+      const files = await Promise.all(
+        selection.filePaths.map(
+          async (filePath) => {
+            const buffer = await readFile(filePath);
+            const mimeType = getMimeTypeByExtension(filePath);
+            return {
+              name: path.basename(filePath),
+              mimeType,
+              size: buffer.byteLength,
+              dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`
+            };
+          }
+        )
+      );
+      return files;
+    }
   );
   createWindow();
 });

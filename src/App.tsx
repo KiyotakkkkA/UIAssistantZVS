@@ -1,7 +1,8 @@
-import { ChatPage } from "./presentation/pages/ChatPage";
+import { RouterProvider } from "react-router-dom";
+import { router } from "./routes";
 
 function App() {
-    return <ChatPage />;
+    return <RouterProvider router={router} />;
 }
 
 export default App;

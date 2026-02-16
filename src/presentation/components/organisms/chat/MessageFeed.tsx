@@ -77,9 +77,8 @@ export function MessageFeed({
     sendMessage,
     showLoader = false,
 }: MessageFeedProps) {
-    const scrollContainerRef = useRef<HTMLElement>(null);
-    const hasMountedRef = useRef(false);
-    const previousUserMessagesCountRef = useRef(0);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const previousLastMessageIdRef = useRef<string | null>(null);
     const {
         editingMessageId,
         editingValue,
@@ -97,33 +96,26 @@ export function MessageFeed({
         rejectCommandExec,
     } = useMessages({ sendMessage });
 
-    useLayoutEffect(() => {
-        const userMessagesCount = messages.filter(
-            (message) => message.author === "user",
-        ).length;
+    useEffect(() => {
+        const lastMessage = messages[messages.length - 1];
 
-        if (!hasMountedRef.current) {
-            hasMountedRef.current = true;
-            previousUserMessagesCountRef.current = userMessagesCount;
+        if (!lastMessage) {
+            previousLastMessageIdRef.current = null;
             return;
         }
 
-        const hasNewUserMessage =
-            userMessagesCount > previousUserMessagesCountRef.current;
+        const previousLastMessageId = previousLastMessageIdRef.current;
+        const isNewLastMessage = previousLastMessageId !== lastMessage.id;
+        const shouldSmoothScroll =
+            previousLastMessageId !== null &&
+            isNewLastMessage &&
+            lastMessage.author === "user";
 
-        previousUserMessagesCountRef.current = userMessagesCount;
-
-        if (!hasNewUserMessage) {
-            return;
+        if (shouldSmoothScroll) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }
 
-        const container = scrollContainerRef.current;
-
-        if (!container) {
-            return;
-        }
-
-        container.scrollTop = container.scrollHeight;
+        previousLastMessageIdRef.current = lastMessage.id;
     }, [messages]);
 
     return (

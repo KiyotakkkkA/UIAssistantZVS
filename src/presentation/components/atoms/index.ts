@@ -8,3 +8,5 @@ export * from "./Modal";
 export * from "./Select";
 export * from "./Dropdown";
 export * from "./Accordeon";
+export * from "./AutoFillSelector";
+export * from "./InputFile";
