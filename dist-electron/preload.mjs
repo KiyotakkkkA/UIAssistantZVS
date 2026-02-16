@@ -57,6 +57,9 @@ const appApi = {
   },
   shell: {
     execShellCommand: (command, cwd) => electron.ipcRenderer.invoke("app:exec-shell-command", command, cwd)
+  },
+  upload: {
+    pickFiles: (options) => electron.ipcRenderer.invoke("app:pick-files", options)
   }
 };
 electron.contextBridge.exposeInMainWorld("appApi", appApi);

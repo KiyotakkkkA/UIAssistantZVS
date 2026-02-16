@@ -1,5 +1,6 @@
 import path from "node:path";
-import { app, BrowserWindow, ipcMain } from "electron";
+import { readFile } from "node:fs/promises";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -318,7 +319,7 @@ class DialogsService {
     const dialogs = this.readDialogs();
     if (activeDialogId) {
       const activeDialog = dialogs.find(
-        (dialog) => dialog.id === activeDialogId
+        (dialog2) => dialog2.id === activeDialogId
       );
       if (activeDialog) {
         return activeDialog;
@@ -336,15 +337,15 @@ class DialogsService {
   }
   getDialogsList() {
     return this.readDialogs().map(
-      (dialog) => this.toDialogListItem(dialog)
+      (dialog2) => this.toDialogListItem(dialog2)
     );
   }
   getDialogById(dialogId, activeDialogId) {
     const dialogs = this.readDialogs();
-    const dialog = dialogs.find((item) => item.id === dialogId);
-    if (dialog) {
-      this.onActiveDialogIdUpdate(dialog.id);
-      return dialog;
+    const dialog2 = dialogs.find((item) => item.id === dialogId);
+    if (dialog2) {
+      this.onActiveDialogIdUpdate(dialog2.id);
+      return dialog2;
     }
     return this.getActiveDialog(activeDialogId);
   }
@@ -355,11 +356,11 @@ class DialogsService {
     return baseDialog;
   }
   renameDialog(dialogId, nextTitle, activeDialogId) {
-    const dialog = this.getDialogById(dialogId, activeDialogId);
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
     const trimmedTitle = nextTitle.trim();
     const updatedDialog = {
-      ...dialog,
-      title: trimmedTitle || dialog.title,
+      ...dialog2,
+      title: trimmedTitle || dialog2.title,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(updatedDialog);
@@ -378,23 +379,23 @@ class DialogsService {
     }
     this.onActiveDialogIdUpdate(dialogs[0].id);
     return {
-      dialogs: dialogs.map((dialog) => this.toDialogListItem(dialog)),
+      dialogs: dialogs.map((dialog2) => this.toDialogListItem(dialog2)),
       activeDialog: dialogs[0]
     };
   }
   deleteMessageFromDialog(dialogId, messageId, activeDialogId) {
-    const dialog = this.getDialogById(dialogId, activeDialogId);
-    const targetMessage = dialog.messages.find(
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const targetMessage = dialog2.messages.find(
       (message) => message.id === messageId
     );
     if (!targetMessage) {
-      return dialog;
+      return dialog2;
     }
-    const nextMessages = dialog.messages.filter(
+    const nextMessages = dialog2.messages.filter(
       (message) => message.id !== messageId && message.answeringAt !== messageId
     );
     const updatedDialog = {
-      ...dialog,
+      ...dialog2,
       messages: nextMessages,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
@@ -402,30 +403,30 @@ class DialogsService {
     return updatedDialog;
   }
   truncateDialogFromMessage(dialogId, messageId, activeDialogId) {
-    const dialog = this.getDialogById(dialogId, activeDialogId);
-    const messageIndex = dialog.messages.findIndex(
+    const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const messageIndex = dialog2.messages.findIndex(
       (message) => message.id === messageId
     );
     if (messageIndex === -1) {
-      return dialog;
+      return dialog2;
     }
     const updatedDialog = {
-      ...dialog,
-      messages: dialog.messages.slice(0, messageIndex),
+      ...dialog2,
+      messages: dialog2.messages.slice(0, messageIndex),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(updatedDialog);
     return updatedDialog;
   }
-  saveDialogSnapshot(dialog) {
-    const normalizedMessages = dialog.messages.map(
+  saveDialogSnapshot(dialog2) {
+    const normalizedMessages = dialog2.messages.map(
       (message) => this.normalizeMessage(message)
     );
     const normalizedDialog = {
-      id: this.normalizeDialogId(dialog.id),
-      title: typeof dialog.title === "string" && dialog.title.trim() ? dialog.title : "Новый диалог",
+      id: this.normalizeDialogId(dialog2.id),
+      title: typeof dialog2.title === "string" && dialog2.title.trim() ? dialog2.title : "Новый диалог",
       messages: normalizedMessages,
-      createdAt: typeof dialog.createdAt === "string" && dialog.createdAt ? dialog.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
+      createdAt: typeof dialog2.createdAt === "string" && dialog2.createdAt ? dialog2.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(normalizedDialog);
@@ -465,12 +466,12 @@ class DialogsService {
     );
     return dialogs;
   }
-  writeDialog(dialog) {
+  writeDialog(dialog2) {
     if (!fs.existsSync(this.dialogsPath)) {
       fs.mkdirSync(this.dialogsPath, { recursive: true });
     }
-    const dialogPath = path.join(this.dialogsPath, `${dialog.id}.json`);
-    fs.writeFileSync(dialogPath, JSON.stringify(dialog, null, 2));
+    const dialogPath = path.join(this.dialogsPath, `${dialog2.id}.json`);
+    fs.writeFileSync(dialogPath, JSON.stringify(dialog2, null, 2));
   }
   normalizeDialogId(id) {
     if (typeof id === "string" && id.startsWith("dialog_")) {
@@ -497,17 +498,17 @@ class DialogsService {
       ...toolTrace ? { toolTrace } : {}
     };
   }
-  toDialogListItem(dialog) {
-    const lastMessage = dialog.messages.length > 0 ? dialog.messages[dialog.messages.length - 1] : null;
+  toDialogListItem(dialog2) {
+    const lastMessage = dialog2.messages.length > 0 ? dialog2.messages[dialog2.messages.length - 1] : null;
     return {
-      id: dialog.id,
-      title: dialog.title,
+      id: dialog2.id,
+      title: dialog2.title,
       preview: lastMessage?.content?.trim() || "Пустой диалог — отправьте первое сообщение",
-      time: new Date(dialog.updatedAt).toLocaleTimeString("ru-RU", {
+      time: new Date(dialog2.updatedAt).toLocaleTimeString("ru-RU", {
         hour: "2-digit",
         minute: "2-digit"
       }),
-      updatedAt: dialog.updatedAt
+      updatedAt: dialog2.updatedAt
     };
   }
 }
@@ -572,8 +573,8 @@ class UserDataService {
       profile.activeDialogId
     );
   }
-  saveDialogSnapshot(dialog) {
-    return this.dialogsService.saveDialogSnapshot(dialog);
+  saveDialogSnapshot(dialog2) {
+    return this.dialogsService.saveDialogSnapshot(dialog2);
   }
   getBootData() {
     const userProfile = this.userProfileService.getUserProfile();
@@ -665,6 +666,30 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win;
 let userDataService;
 let commandExecService;
+const getMimeTypeByExtension = (filePath) => {
+  const extension = path.extname(filePath).toLowerCase();
+  const mimeByExtension = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".avif": "image/avif"
+  };
+  return mimeByExtension[extension] || "application/octet-stream";
+};
+const imageExtensions = [
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "svg",
+  "avif"
+];
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
@@ -745,11 +770,61 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "app:save-dialog-snapshot",
-    (_event, dialog) => userDataService.saveDialogSnapshot(dialog)
+    (_event, dialog2) => userDataService.saveDialogSnapshot(dialog2)
   );
   ipcMain.handle(
     "app:exec-shell-command",
     (_event, command, cwd) => commandExecService.execute(command, cwd)
+  );
+  ipcMain.handle(
+    "app:pick-files",
+    async (event, options) => {
+      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const accept = options?.accept ?? [];
+      const filters = accept.length > 0 ? [
+        {
+          name: "Allowed files",
+          extensions: accept.flatMap(
+            (item) => item.split(",").map(
+              (part) => part.trim().toLowerCase()
+            )
+          ).flatMap(
+            (item) => item === "image/*" ? imageExtensions : [item]
+          ).map(
+            (item) => item.startsWith(".") ? item.slice(1) : item.replace(/^[*]/, "").replace(/^[.]/, "")
+          ).filter((item) => item && item !== "*")
+        }
+      ] : [];
+      const dialogProperties = [
+        "openFile"
+      ];
+      if (options?.multiple) {
+        dialogProperties.push("multiSelections");
+      }
+      const openDialogOptions = {
+        properties: dialogProperties,
+        filters
+      };
+      const selection = currentWindow ? await dialog.showOpenDialog(currentWindow, openDialogOptions) : await dialog.showOpenDialog(openDialogOptions);
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return [];
+      }
+      const files = await Promise.all(
+        selection.filePaths.map(
+          async (filePath) => {
+            const buffer = await readFile(filePath);
+            const mimeType = getMimeTypeByExtension(filePath);
+            return {
+              name: path.basename(filePath),
+              mimeType,
+              size: buffer.byteLength,
+              dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`
+            };
+          }
+        )
+      );
+      return files;
+    }
   );
   createWindow();
 });

@@ -83,6 +83,10 @@ const appApi: AppApi = {
         execShellCommand: (command: string, cwd?: string) =>
             ipcRenderer.invoke("app:exec-shell-command", command, cwd),
     },
+    upload: {
+        pickFiles: (options?: { accept?: string[]; multiple?: boolean }) =>
+            ipcRenderer.invoke("app:pick-files", options),
+    },
 };
 
 contextBridge.exposeInMainWorld("appApi", appApi);

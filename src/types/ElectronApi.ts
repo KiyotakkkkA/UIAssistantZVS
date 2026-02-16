@@ -14,6 +14,13 @@ export type ExecShellCommandResult = {
     stderr: string;
 };
 
+export type UploadedFileData = {
+    name: string;
+    mimeType: string;
+    size: number;
+    dataUrl: string;
+};
+
 export type AppApiBootNamespace = {
     getBootData: () => Promise<BootData>;
 };
@@ -59,6 +66,13 @@ export type AppApiShellNamespace = {
     ) => Promise<ExecShellCommandResult>;
 };
 
+export type AppApiUploadNamespace = {
+    pickFiles: (options?: {
+        accept?: string[];
+        multiple?: boolean;
+    }) => Promise<UploadedFileData[]>;
+};
+
 export type AppApi = {
     boot: AppApiBootNamespace;
     themes: AppApiThemesNamespace;
@@ -66,4 +80,5 @@ export type AppApi = {
     dialogs: AppApiDialogsNamespace;
     tools: AppApiToolsNamespace;
     shell: AppApiShellNamespace;
+    upload: AppApiUploadNamespace;
 };
