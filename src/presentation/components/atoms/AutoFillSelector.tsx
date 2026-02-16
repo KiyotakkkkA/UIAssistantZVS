@@ -173,7 +173,7 @@ export const AutoFillSelector = ({
             </div>
 
             <div
-                className={`absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-xl border border-main-700/70 bg-main-800/95 transition-all duration-200 ${
+                className={`absolute left-0 right-0 z-30 mt-2 overflow-hidden rounded-xl border border-main-700 bg-main-800 transition-all duration-200 ${
                     isOpen
                         ? "max-h-64 opacity-100"
                         : "pointer-events-none max-h-0 opacity-0"
@@ -197,10 +197,10 @@ export const AutoFillSelector = ({
                                     toggleValue(option.value);
                                     setQuery("");
                                 }}
-                                className={`flex w-full items-start justify-between gap-3 px-3 py-2 text-left text-sm transition-colors ${
+                                className={`flex w-full cursor-pointer items-start justify-between gap-3 px-3 py-2 text-left text-sm transition-colors ${
                                     isSelected
-                                        ? "bg-main-700/60 text-main-100"
-                                        : "text-main-300 hover:bg-main-700/80 hover:text-main-100"
+                                        ? "bg-main-700 text-main-100"
+                                        : "text-main-300 hover:bg-main-700 hover:text-main-100"
                                 }`}
                             >
                                 <span className="min-w-0">

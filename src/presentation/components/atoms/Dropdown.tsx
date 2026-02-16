@@ -204,7 +204,7 @@ export function Dropdown({
                 role="listbox"
                 tabIndex={-1}
                 style={menuStyle}
-                className={`absolute left-0 z-30 rounded-xl bg-main-800/95 p-1.5 transition-all duration-180 ${menuPositionClassName} ${menuClassName}`}
+                className={`absolute left-0 z-30 rounded-xl bg-main-800 p-1.5 transition-all duration-180 ${menuPositionClassName} ${menuClassName}`}
             >
                 <div className="space-y-1.5 overflow-x-hidden rounded-lg">
                     {searchable ? (

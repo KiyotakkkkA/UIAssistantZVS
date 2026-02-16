@@ -106,7 +106,7 @@ export const MessageComposer = observer(function MessageComposer({
                             onChange={() => setAttachValue("")}
                             options={attachOptions}
                             menuPlacement="top"
-                            menuClassName="w-62"
+                            menuClassName="w-66"
                             matchTriggerWidth={false}
                             renderTrigger={({
                                 toggleOpen,
