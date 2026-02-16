@@ -78,6 +78,7 @@ export function MessageFeed({
     showLoader = false,
 }: MessageFeedProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const previousLastMessageIdRef = useRef<string | null>(null);
     const {
         editingMessageId,
         editingValue,
@@ -96,7 +97,25 @@ export function MessageFeed({
     } = useMessages({ sendMessage });
 
     useEffect(() => {
-        messagesEndRef?.current?.scrollIntoView({ behavior: "smooth" });
+        const lastMessage = messages[messages.length - 1];
+
+        if (!lastMessage) {
+            previousLastMessageIdRef.current = null;
+            return;
+        }
+
+        const previousLastMessageId = previousLastMessageIdRef.current;
+        const isNewLastMessage = previousLastMessageId !== lastMessage.id;
+        const shouldSmoothScroll =
+            previousLastMessageId !== null &&
+            isNewLastMessage &&
+            lastMessage.author === "user";
+
+        if (shouldSmoothScroll) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+
+        previousLastMessageIdRef.current = lastMessage.id;
     }, [messages]);
 
     return (

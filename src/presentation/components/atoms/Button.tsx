@@ -1,13 +1,18 @@
 import { forwardRef, type ReactNode } from "react";
 
 type ButtonVariants = "primary" | "secondary";
-type ButtonShape = "rounded-md" | "rounded-lg" | "rounded-full";
+type ButtonShape =
+    | "rounded-md"
+    | "rounded-lg"
+    | "rounded-full"
+    | "rounded-l-full"
+    | "rounded-r-full";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     children: ReactNode;
     label?: string;
     variant?: ButtonVariants | "";
-    shape?: ButtonShape;
+    shape?: ButtonShape | "";
     className?: string;
 }
 
@@ -34,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 ref={ref}
                 type="button"
                 aria-label={label}
-                className={`inline-flex items-center justify-center rounded-full transition-colors border cursor-pointer ${variant ? variants[variant] : ""} ${className} ${shape}`}
+                className={`inline-flex ${shape} items-center justify-center transition-colors border cursor-pointer ${variant ? variants[variant] : ""} ${className}`}
                 {...props}
             >
                 {children}

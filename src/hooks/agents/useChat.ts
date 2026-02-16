@@ -140,6 +140,8 @@ export function useChat() {
 
             const requestBaseHistory = [...messagesRef.current];
             const isFirstDialogMessage = requestBaseHistory.length === 0;
+            const requiredToolsInstruction =
+                toolsStore.requiredPromptInstruction;
 
             const initialSystemMessages: ChatMessage[] = isFirstDialogMessage
                 ? [
@@ -168,10 +170,26 @@ export function useChat() {
                   ]
                 : [];
 
-            const historyForRequest = [
+            const historyForStorage = [
                 ...initialSystemMessages,
                 ...requestBaseHistory,
                 userMessage,
+            ];
+            const requestConstraintMessages: ChatMessage[] =
+                requiredToolsInstruction
+                    ? [
+                          {
+                              id: createMessageId(),
+                              author: "system",
+                              content: requiredToolsInstruction,
+                              timestamp: getTimeStamp(),
+                          },
+                      ]
+                    : [];
+
+            const historyForRequest = [
+                ...historyForStorage,
+                ...requestConstraintMessages,
             ];
             const answerMessage: ChatMessage = {
                 id: assistantMessageId,
@@ -182,7 +200,7 @@ export function useChat() {
                 answeringAt: userMessage.id,
             };
 
-            commitMessages([...historyForRequest, answerMessage]);
+            commitMessages([...historyForStorage, answerMessage]);
             setIsStreaming(true);
             setIsAwaitingFirstChunk(true);
             cancellationRequestedRef.current = false;

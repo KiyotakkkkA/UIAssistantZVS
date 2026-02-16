@@ -1,5 +1,6 @@
 import type { ToolPackageDescriptor } from "../../../../utils/ToolsBuilder";
-import { ToolFunctionCard } from "./ToolFunctionCard";
+import { Accordeon } from "../../atoms";
+import { ShikiCodeBlock } from "../render/ShikiCodeBlock";
 
 type ToolPackageCardProps = {
     pkg: ToolPackageDescriptor;
@@ -17,10 +18,22 @@ export function ToolPackageCard({ pkg }: ToolPackageCardProps) {
 
             <div className="space-y-3">
                 {pkg.tools.map((tool) => (
-                    <ToolFunctionCard
+                    <Accordeon
                         key={`${pkg.id}_${tool.schema.function.name}`}
-                        schema={tool.schema}
-                    />
+                        title={tool.schema.function.name}
+                        subtitle={
+                            tool.schema.function.description || "Без описания"
+                        }
+                    >
+                        <ShikiCodeBlock
+                            language="json"
+                            code={JSON.stringify(
+                                tool.schema.function.parameters,
+                                null,
+                                2,
+                            )}
+                        />
+                    </Accordeon>
                 ))}
             </div>
         </article>

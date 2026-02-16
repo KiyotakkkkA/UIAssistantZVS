@@ -5,6 +5,8 @@ import {
     useMemo,
     useRef,
     useState,
+    type Ref,
+    type ReactNode,
     type CSSProperties,
 } from "react";
 import { Button } from "./Button";
@@ -13,6 +15,8 @@ import { InputSmall } from "./InputSmall";
 type DropdownOption = {
     value: string;
     label: string;
+    icon?: ReactNode;
+    onClick?: () => void;
 };
 
 type DropdownProps = {
@@ -29,6 +33,21 @@ type DropdownProps = {
     optionClassName?: string;
     disabled?: boolean;
     ariaLabel?: string;
+    menuPlacement?: "bottom" | "top";
+    closeOnSelect?: boolean;
+    matchTriggerWidth?: boolean;
+    renderTrigger?: (args: {
+        open: boolean;
+        toggleOpen: () => void;
+        triggerRef: Ref<HTMLButtonElement>;
+        disabled: boolean;
+        ariaProps: {
+            "aria-haspopup": "listbox";
+            "aria-expanded": boolean;
+            "aria-controls": string;
+            "aria-label"?: string;
+        };
+    }) => ReactNode;
 };
 
 export function Dropdown({
@@ -45,6 +64,10 @@ export function Dropdown({
     optionClassName = "",
     disabled = false,
     ariaLabel,
+    menuPlacement = "bottom",
+    closeOnSelect = true,
+    matchTriggerWidth = true,
+    renderTrigger,
 }: DropdownProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState("");
@@ -111,44 +134,77 @@ export function Dropdown({
     };
 
     const onSelect = (nextValue: string) => {
+        const selected = options.find((item) => item.value === nextValue);
         onChange(nextValue);
+        selected?.onClick?.();
         setQuery("");
-        setOpen(false);
+        if (closeOnSelect) {
+            setOpen(false);
+        }
     };
 
-    const menuStyle: CSSProperties | undefined = menuWidth
-        ? { minWidth: `${menuWidth}px`, width: `${menuWidth}px` }
-        : undefined;
+    const menuStyle: CSSProperties | undefined =
+        matchTriggerWidth && menuWidth
+            ? { minWidth: `${menuWidth}px`, width: `${menuWidth}px` }
+            : undefined;
+
+    const menuPositionClassName =
+        menuPlacement === "top"
+            ? `bottom-full mb-2 origin-bottom ${
+                  open
+                      ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+                      : "pointer-events-none translate-y-1 scale-98 opacity-0"
+              }`
+            : `top-full mt-2 origin-top ${
+                  open
+                      ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+                      : "pointer-events-none -translate-y-1 scale-98 opacity-0"
+              }`;
 
     return (
         <div ref={rootRef} className={`relative min-w-0 ${className}`}>
-            <Button
-                variant=""
-                ref={triggerRef}
-                aria-haspopup="listbox"
-                aria-expanded={open}
-                aria-controls={menuId}
-                aria-label={ariaLabel}
-                disabled={disabled}
-                onClick={toggleOpen}
-                className={`min-h-10 min-w-34 justify-between gap-3 border-transparent rounded-xl px-3 py-2 text-main-100 ${triggerClassName}`}
-            >
-                <span className="min-w-0 truncate text-left">
-                    {selectedOption?.label ?? placeholder ?? "Выберите"}
-                </span>
-                <Icon
-                    icon="mdi:chevron-down"
-                    className={`shrink-0 text-main-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
-                    aria-hidden
-                />
-            </Button>
+            {renderTrigger ? (
+                renderTrigger({
+                    open,
+                    toggleOpen,
+                    triggerRef,
+                    disabled,
+                    ariaProps: {
+                        "aria-haspopup": "listbox",
+                        "aria-expanded": open,
+                        "aria-controls": menuId,
+                        "aria-label": ariaLabel,
+                    },
+                })
+            ) : (
+                <Button
+                    variant=""
+                    ref={triggerRef}
+                    aria-haspopup="listbox"
+                    aria-expanded={open}
+                    aria-controls={menuId}
+                    aria-label={ariaLabel}
+                    disabled={disabled}
+                    onClick={toggleOpen}
+                    className={`min-h-10 min-w-34 justify-between gap-3 border-transparent rounded-xl px-3 py-2 text-main-100 ${triggerClassName}`}
+                >
+                    <span className="min-w-0 truncate text-left">
+                        {selectedOption?.label ?? placeholder ?? "Выберите"}
+                    </span>
+                    <Icon
+                        icon="mdi:chevron-down"
+                        className={`shrink-0 text-main-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+                        aria-hidden
+                    />
+                </Button>
+            )}
 
             <div
                 id={menuId}
                 role="listbox"
                 tabIndex={-1}
                 style={menuStyle}
-                className={`absolute left-0 top-full z-30 mt-2 origin-top rounded-xl bg-main-800/95 p-1.5 transition-all duration-180 ${open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1 scale-98 opacity-0"} ${menuClassName}`}
+                className={`absolute left-0 z-30 rounded-xl bg-main-800/95 p-1.5 transition-all duration-180 ${menuPositionClassName} ${menuClassName}`}
             >
                 <div className="space-y-1.5 overflow-x-hidden rounded-lg">
                     {searchable ? (
@@ -181,16 +237,25 @@ export function Dropdown({
                                             : "bg-transparent text-main-300 hover:bg-main-700/80 hover:text-main-100"
                                     } ${optionClassName}`}
                                 >
-                                    <span className="min-w-0 truncate">
-                                        {option.label}
+                                    <span className="flex min-w-0 items-center gap-2 truncate">
+                                        {option.icon ? (
+                                            <span className="shrink-0 text-main-300">
+                                                {option.icon}
+                                            </span>
+                                        ) : null}
+                                        <span className="min-w-0 truncate">
+                                            {option.label}
+                                        </span>
                                     </span>
-                                    {active ? (
-                                        <Icon
-                                            icon="mdi:check"
-                                            className="shrink-0 text-main-200"
-                                            aria-hidden
-                                        />
-                                    ) : null}
+                                    <span className="shrink-0">
+                                        {active ? (
+                                            <Icon
+                                                icon="mdi:check"
+                                                className="text-main-200"
+                                                aria-hidden
+                                            />
+                                        ) : null}
+                                    </span>
                                 </Button>
                             );
                         })}
