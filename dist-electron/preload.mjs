@@ -51,10 +51,6 @@ const appApi = {
     ),
     saveDialogSnapshot: (dialog) => electron.ipcRenderer.invoke("app:save-dialog-snapshot", dialog)
   },
-  tools: {
-    webSearchTool: (request, ollamaToken) => electron.ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
-    webFetchTool: (url, ollamaToken) => electron.ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken)
-  },
   shell: {
     execShellCommand: (command, cwd) => electron.ipcRenderer.invoke("app:exec-shell-command", command, cwd)
   },
@@ -65,7 +61,8 @@ const appApi = {
   files: {
     saveFiles: (files) => electron.ipcRenderer.invoke("app:save-files", files),
     getFilesByIds: (fileIds) => electron.ipcRenderer.invoke("app:get-files-by-ids", fileIds),
-    openFile: (fileId) => electron.ipcRenderer.invoke("app:open-saved-file", fileId)
+    openFile: (fileId) => electron.ipcRenderer.invoke("app:open-saved-file", fileId),
+    openPath: (targetPath) => electron.ipcRenderer.invoke("app:open-path", targetPath)
   },
   projects: {
     getProjectsList: () => electron.ipcRenderer.invoke("app:get-projects-list"),

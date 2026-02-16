@@ -46,9 +46,10 @@ export class UserDataService {
         this.themesService = new ThemesService(paths.themesPath);
         this.dialogsService = new DialogsService(
             paths.dialogsPath,
-            (dialogId) => {
+            ({ activeDialogId, activeProjectId }) => {
                 this.userProfileService.updateUserProfile({
-                    activeDialogId: dialogId,
+                    activeDialogId,
+                    activeProjectId,
                 });
             },
         );
@@ -122,7 +123,19 @@ export class UserDataService {
     }
 
     getProjectById(projectId: string): Project | null {
-        return this.projectsService.getProjectById(projectId);
+        const project = this.projectsService.getProjectById(projectId);
+
+        if (project) {
+            this.userProfileService.updateUserProfile({
+                activeProjectId: project.id,
+            });
+        } else {
+            this.userProfileService.updateUserProfile({
+                activeProjectId: null,
+            });
+        }
+
+        return project;
     }
 
     getDefaultProjectsDirectory(): string {
@@ -154,6 +167,14 @@ export class UserDataService {
         if (deletedProject) {
             this.fileStorageService.deleteFilesByIds(deletedProject.fileUUIDs);
             this.dialogsService.deleteDialog(deletedProject.dialogId);
+
+            const profile = this.userProfileService.getUserProfile();
+
+            if (profile.activeProjectId === projectId) {
+                this.userProfileService.updateUserProfile({
+                    activeProjectId: null,
+                });
+            }
         }
 
         return {

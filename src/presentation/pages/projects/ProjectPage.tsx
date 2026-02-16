@@ -6,7 +6,7 @@ import { useProjects, useToasts } from "../../../hooks";
 import { useFileSave } from "../../../hooks/files";
 import { Icon } from "@iconify/react";
 import { MessageComposer } from "../../components/molecules";
-import { Loader, Modal } from "../../components/atoms";
+import { Button, Loader, Modal } from "../../components/atoms";
 import { ChatHeader, MessageFeed } from "../../components/organisms/chat";
 import type { SavedFileRecord } from "../../../types/ElectronApi";
 
@@ -14,7 +14,7 @@ export const ProjectPage = observer(function ProjectPage() {
     const { projectId = "" } = useParams();
     const toasts = useToasts();
     const { switchProject, activeProject } = useProjects();
-    const { getFilesByIds, openFile } = useFileSave();
+    const { getFilesByIds, openFile, openPath } = useFileSave();
 
     const {
         messages,
@@ -110,6 +110,29 @@ export const ProjectPage = observer(function ProjectPage() {
         });
     };
 
+    const openProjectDirectory = async () => {
+        const directoryPath = activeProject?.directoryPath?.trim();
+
+        if (!directoryPath) {
+            toasts.warning({
+                title: "Директория не указана",
+                description: "У проекта отсутствует путь директории.",
+            });
+            return;
+        }
+
+        const isOpened = await openPath(directoryPath);
+
+        if (isOpened) {
+            return;
+        }
+
+        toasts.warning({
+            title: "Не удалось открыть папку",
+            description: "Папка недоступна или была перемещена.",
+        });
+    };
+
     if (isProjectLoading) {
         return (
             <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
@@ -125,22 +148,44 @@ export const ProjectPage = observer(function ProjectPage() {
                 title={activeProject?.name || "Проект"}
                 onOpenDocuments={() => setIsDocumentsOpen(true)}
             />
-            <div className="mx-4 mt-1 rounded-xl border border-main-700/70 bg-main-900/40 px-3 py-2">
-                <div className="flex items-center gap-2">
+            <div className="mx-4 mt-1 rounded-xl border border-main-700/70 bg-main-900/40 px-3 py-2 flex gap-2 items-center justify-between">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <Icon
+                            icon="mdi:folder-marker-outline"
+                            className="text-main-300"
+                            width={16}
+                            height={16}
+                        />
+                        <p className="text-xs text-main-400">
+                            Директория проекта
+                        </p>
+                    </div>
+                    <div className="mt-1">
+                        <p
+                            className="min-w-0 flex-1 truncate text-sm text-main-100"
+                            title={activeProject?.directoryPath || "Не указана"}
+                        >
+                            {activeProject?.directoryPath || "Не указана"}
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    variant="primary"
+                    shape="rounded-lg"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => {
+                        void openProjectDirectory();
+                    }}
+                >
                     <Icon
-                        icon="mdi:folder-marker-outline"
-                        className="text-main-300"
+                        className="mr-2"
+                        icon="mdi:folder-open-outline"
                         width={16}
                         height={16}
                     />
-                    <p className="text-xs text-main-400">Директория проекта</p>
-                </div>
-                <p
-                    className="mt-1 truncate text-sm text-main-100"
-                    title={activeProject?.directoryPath || "Не указана"}
-                >
-                    {activeProject?.directoryPath || "Не указана"}
-                </p>
+                    Открыть папку
+                </Button>
             </div>
             <MessageFeed
                 messages={messages}

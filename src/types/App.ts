@@ -11,6 +11,7 @@ export type UserProfile = {
     userPrompt: string;
     userLanguage: string;
     activeDialogId: string;
+    activeProjectId: string | null;
 };
 
 export type ThemeData = {

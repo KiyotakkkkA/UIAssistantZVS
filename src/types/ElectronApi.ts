@@ -71,11 +71,6 @@ export type AppApiDialogsNamespace = {
     saveDialogSnapshot: (dialog: ChatDialog) => Promise<ChatDialog>;
 };
 
-export type AppApiToolsNamespace = {
-    webSearchTool: (request: string, ollamaToken: string) => Promise<unknown>;
-    webFetchTool: (url: string, ollamaToken: string) => Promise<unknown>;
-};
-
 export type AppApiShellNamespace = {
     execShellCommand: (
         command: string,
@@ -95,6 +90,7 @@ export type AppApiFilesNamespace = {
     saveFiles: (files: UploadedFileData[]) => Promise<SavedFileRecord[]>;
     getFilesByIds: (fileIds: string[]) => Promise<SavedFileRecord[]>;
     openFile: (fileId: string) => Promise<boolean>;
+    openPath: (targetPath: string) => Promise<boolean>;
 };
 
 export type AppApiProjectsNamespace = {
@@ -110,7 +106,6 @@ export type AppApi = {
     themes: AppApiThemesNamespace;
     profile: AppApiProfileNamespace;
     dialogs: AppApiDialogsNamespace;
-    tools: AppApiToolsNamespace;
     shell: AppApiShellNamespace;
     upload: AppApiUploadNamespace;
     files: AppApiFilesNamespace;

@@ -45,10 +45,24 @@ export const useFileSave = () => {
         return await api(fileId);
     }, []);
 
+    const openPath = useCallback(
+        async (targetPath: string): Promise<boolean> => {
+            const api = window.appApi?.files.openPath;
+
+            if (!api) {
+                return false;
+            }
+
+            return await api(targetPath);
+        },
+        [],
+    );
+
     return {
         isSaving,
         saveFiles,
         getFilesByIds,
         openFile,
+        openPath,
     };
 };

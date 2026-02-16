@@ -248,6 +248,8 @@ export const ChatSidebar = observer(function ChatSidebar() {
                 {projects.length > 0 ? (
                     projects.map((project) => {
                         const isActive = project.id === activeProjectId;
+                        const isActiveDialog =
+                            project.dialogId === activeDialogId;
 
                         return (
                             <div
@@ -269,7 +271,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
                                     }
                                 }}
                                 className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
-                                    isActive
+                                    isActive && isActiveDialog
                                         ? "bg-main-500/20"
                                         : "bg-transparent"
                                 }`}

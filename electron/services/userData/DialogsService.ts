@@ -9,12 +9,15 @@ import type {
     DeleteDialogResult,
 } from "../../../src/types/Chat";
 
-type ActiveDialogIdUpdater = (dialogId: string) => void;
+type ActiveDialogContextUpdater = (payload: {
+    activeDialogId: string;
+    activeProjectId: string | null;
+}) => void;
 
 export class DialogsService {
     constructor(
         private readonly dialogsPath: string,
-        private readonly onActiveDialogIdUpdate: ActiveDialogIdUpdater,
+        private readonly onActiveDialogContextUpdate: ActiveDialogContextUpdater,
     ) {}
 
     getActiveDialog(activeDialogId?: string): ChatDialog {
@@ -36,13 +39,19 @@ export class DialogsService {
 
         if (availableDialogs.length > 0) {
             const fallbackActiveDialog = availableDialogs[0];
-            this.onActiveDialogIdUpdate(fallbackActiveDialog.id);
+            this.onActiveDialogContextUpdate({
+                activeDialogId: fallbackActiveDialog.id,
+                activeProjectId: fallbackActiveDialog.forProjectId,
+            });
             return fallbackActiveDialog;
         }
 
         const baseDialog = createBaseDialog();
         this.writeDialog(baseDialog);
-        this.onActiveDialogIdUpdate(baseDialog.id);
+        this.onActiveDialogContextUpdate({
+            activeDialogId: baseDialog.id,
+            activeProjectId: baseDialog.forProjectId,
+        });
         return baseDialog;
     }
 
@@ -57,7 +66,10 @@ export class DialogsService {
         const dialog = dialogs.find((item) => item.id === dialogId);
 
         if (dialog) {
-            this.onActiveDialogIdUpdate(dialog.id);
+            this.onActiveDialogContextUpdate({
+                activeDialogId: dialog.id,
+                activeProjectId: dialog.forProjectId,
+            });
             return dialog;
         }
 
@@ -67,7 +79,10 @@ export class DialogsService {
     createDialog(forProjectId: string | null = null): ChatDialog {
         const baseDialog = createBaseDialog(forProjectId);
         this.writeDialog(baseDialog);
-        this.onActiveDialogIdUpdate(baseDialog.id);
+        this.onActiveDialogContextUpdate({
+            activeDialogId: baseDialog.id,
+            activeProjectId: baseDialog.forProjectId,
+        });
         return baseDialog;
     }
 
@@ -123,7 +138,10 @@ export class DialogsService {
             dialogs.find((dialog) => dialog.forProjectId === null) ||
             dialogs[0];
 
-        this.onActiveDialogIdUpdate(fallbackDialog.id);
+        this.onActiveDialogContextUpdate({
+            activeDialogId: fallbackDialog.id,
+            activeProjectId: fallbackDialog.forProjectId,
+        });
 
         return {
             dialogs: dialogs
@@ -208,7 +226,10 @@ export class DialogsService {
         };
 
         this.writeDialog(normalizedDialog);
-        this.onActiveDialogIdUpdate(normalizedDialog.id);
+        this.onActiveDialogContextUpdate({
+            activeDialogId: normalizedDialog.id,
+            activeProjectId: normalizedDialog.forProjectId,
+        });
         return normalizedDialog;
     }
 

@@ -17,6 +17,7 @@ class UserProfileStore {
         userPrompt: "",
         userLanguage: "Русский",
         activeDialogId: "",
+        activeProjectId: null,
     };
 
     private isInitializing = false;

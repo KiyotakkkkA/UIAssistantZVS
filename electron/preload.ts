@@ -74,12 +74,6 @@ const appApi: AppApi = {
         saveDialogSnapshot: (dialog: ChatDialog): Promise<ChatDialog> =>
             ipcRenderer.invoke("app:save-dialog-snapshot", dialog),
     },
-    tools: {
-        webSearchTool: (request: string, ollamaToken: string) =>
-            ipcRenderer.invoke("app:web-search-tool", request, ollamaToken),
-        webFetchTool: (url: string, ollamaToken: string) =>
-            ipcRenderer.invoke("app:web-fetch-tool", url, ollamaToken),
-    },
     shell: {
         execShellCommand: (command: string, cwd?: string) =>
             ipcRenderer.invoke("app:exec-shell-command", command, cwd),
@@ -95,6 +89,8 @@ const appApi: AppApi = {
         getFilesByIds: (fileIds) =>
             ipcRenderer.invoke("app:get-files-by-ids", fileIds),
         openFile: (fileId) => ipcRenderer.invoke("app:open-saved-file", fileId),
+        openPath: (targetPath: string) =>
+            ipcRenderer.invoke("app:open-path", targetPath),
     },
     projects: {
         getProjectsList: () => ipcRenderer.invoke("app:get-projects-list"),

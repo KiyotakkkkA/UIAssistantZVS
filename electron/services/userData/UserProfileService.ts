@@ -54,6 +54,16 @@ export class UserProfileService {
                 ...(typeof parsed.activeDialogId === "string"
                     ? { activeDialogId: parsed.activeDialogId }
                     : {}),
+                ...(typeof parsed.activeProjectId === "string" ||
+                parsed.activeProjectId === null
+                    ? {
+                          activeProjectId:
+                              typeof parsed.activeProjectId === "string" &&
+                              parsed.activeProjectId.trim().length > 0
+                                  ? parsed.activeProjectId
+                                  : null,
+                      }
+                    : {}),
             };
 
             return normalized;

@@ -15,7 +15,8 @@ const defaultProfile = {
   userName: "Пользователь",
   userPrompt: "",
   userLanguage: "Русский",
-  activeDialogId: ""
+  activeDialogId: "",
+  activeProjectId: null
 };
 const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
 const createDialogId = () => createPrefixedId("dialog");
@@ -264,7 +265,10 @@ class UserProfileService {
         ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
         ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
         ...typeof parsed.userLanguage === "string" ? { userLanguage: parsed.userLanguage } : {},
-        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {}
+        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {},
+        ...typeof parsed.activeProjectId === "string" || parsed.activeProjectId === null ? {
+          activeProjectId: typeof parsed.activeProjectId === "string" && parsed.activeProjectId.trim().length > 0 ? parsed.activeProjectId : null
+        } : {}
       };
       return normalized;
     } catch {
@@ -340,9 +344,9 @@ class ThemesService {
   }
 }
 class DialogsService {
-  constructor(dialogsPath, onActiveDialogIdUpdate) {
+  constructor(dialogsPath, onActiveDialogContextUpdate) {
     this.dialogsPath = dialogsPath;
-    this.onActiveDialogIdUpdate = onActiveDialogIdUpdate;
+    this.onActiveDialogContextUpdate = onActiveDialogContextUpdate;
   }
   getActiveDialog(activeDialogId) {
     const dialogs = this.readDialogs();
@@ -359,12 +363,18 @@ class DialogsService {
     );
     if (availableDialogs.length > 0) {
       const fallbackActiveDialog = availableDialogs[0];
-      this.onActiveDialogIdUpdate(fallbackActiveDialog.id);
+      this.onActiveDialogContextUpdate({
+        activeDialogId: fallbackActiveDialog.id,
+        activeProjectId: fallbackActiveDialog.forProjectId
+      });
       return fallbackActiveDialog;
     }
     const baseDialog = createBaseDialog();
     this.writeDialog(baseDialog);
-    this.onActiveDialogIdUpdate(baseDialog.id);
+    this.onActiveDialogContextUpdate({
+      activeDialogId: baseDialog.id,
+      activeProjectId: baseDialog.forProjectId
+    });
     return baseDialog;
   }
   getDialogsList() {
@@ -374,7 +384,10 @@ class DialogsService {
     const dialogs = this.readDialogs();
     const dialog2 = dialogs.find((item) => item.id === dialogId);
     if (dialog2) {
-      this.onActiveDialogIdUpdate(dialog2.id);
+      this.onActiveDialogContextUpdate({
+        activeDialogId: dialog2.id,
+        activeProjectId: dialog2.forProjectId
+      });
       return dialog2;
     }
     return this.getActiveDialog(activeDialogId);
@@ -382,7 +395,10 @@ class DialogsService {
   createDialog(forProjectId = null) {
     const baseDialog = createBaseDialog(forProjectId);
     this.writeDialog(baseDialog);
-    this.onActiveDialogIdUpdate(baseDialog.id);
+    this.onActiveDialogContextUpdate({
+      activeDialogId: baseDialog.id,
+      activeProjectId: baseDialog.forProjectId
+    });
     return baseDialog;
   }
   linkDialogToProject(dialogId, projectId) {
@@ -420,7 +436,10 @@ class DialogsService {
       dialogs = [fallbackDialog2];
     }
     const fallbackDialog = dialogs.find((dialog2) => dialog2.forProjectId === null) || dialogs[0];
-    this.onActiveDialogIdUpdate(fallbackDialog.id);
+    this.onActiveDialogContextUpdate({
+      activeDialogId: fallbackDialog.id,
+      activeProjectId: fallbackDialog.forProjectId
+    });
     return {
       dialogs: dialogs.filter((dialog2) => dialog2.forProjectId === null).map((dialog2) => this.toDialogListItem(dialog2)),
       activeDialog: fallbackDialog
@@ -474,7 +493,10 @@ class DialogsService {
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(normalizedDialog);
-    this.onActiveDialogIdUpdate(normalizedDialog.id);
+    this.onActiveDialogContextUpdate({
+      activeDialogId: normalizedDialog.id,
+      activeProjectId: normalizedDialog.forProjectId
+    });
     return normalizedDialog;
   }
   readDialogs() {
@@ -842,9 +864,10 @@ class UserDataService {
     this.themesService = new ThemesService(paths.themesPath);
     this.dialogsService = new DialogsService(
       paths.dialogsPath,
-      (dialogId) => {
+      ({ activeDialogId, activeProjectId }) => {
         this.userProfileService.updateUserProfile({
-          activeDialogId: dialogId
+          activeDialogId,
+          activeProjectId
         });
       }
     );
@@ -906,7 +929,17 @@ class UserDataService {
     return this.projectsService.getProjectsList();
   }
   getProjectById(projectId) {
-    return this.projectsService.getProjectById(projectId);
+    const project = this.projectsService.getProjectById(projectId);
+    if (project) {
+      this.userProfileService.updateUserProfile({
+        activeProjectId: project.id
+      });
+    } else {
+      this.userProfileService.updateUserProfile({
+        activeProjectId: null
+      });
+    }
+    return project;
   }
   getDefaultProjectsDirectory() {
     return this.defaultProjectsDirectory;
@@ -931,6 +964,12 @@ class UserDataService {
     if (deletedProject) {
       this.fileStorageService.deleteFilesByIds(deletedProject.fileUUIDs);
       this.dialogsService.deleteDialog(deletedProject.dialogId);
+      const profile = this.userProfileService.getUserProfile();
+      if (profile.activeProjectId === projectId) {
+        this.userProfileService.updateUserProfile({
+          activeProjectId: null
+        });
+      }
     }
     return {
       projects: this.projectsService.getProjectsList(),
@@ -1185,6 +1224,13 @@ app.whenReady().then(() => {
       return false;
     }
     const openResult = await shell.openPath(file.path);
+    return openResult === "";
+  });
+  ipcMain.handle("app:open-path", async (_event, targetPath) => {
+    if (!targetPath || typeof targetPath !== "string") {
+      return false;
+    }
+    const openResult = await shell.openPath(targetPath);
     return openResult === "";
   });
   ipcMain.handle(

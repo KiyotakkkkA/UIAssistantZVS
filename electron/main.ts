@@ -185,6 +185,14 @@ app.whenReady().then(() => {
         const openResult = await shell.openPath(file.path);
         return openResult === "";
     });
+    ipcMain.handle("app:open-path", async (_event, targetPath: string) => {
+        if (!targetPath || typeof targetPath !== "string") {
+            return false;
+        }
+
+        const openResult = await shell.openPath(targetPath);
+        return openResult === "";
+    });
     ipcMain.handle(
         "app:exec-shell-command",
         (_event, command: string, cwd?: string) =>

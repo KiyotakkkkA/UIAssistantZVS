@@ -11,4 +11,5 @@ export const defaultProfile: UserProfile = {
     userPrompt: "",
     userLanguage: "Русский",
     activeDialogId: "",
+    activeProjectId: null,
 };

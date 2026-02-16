@@ -34,10 +34,19 @@ class ProjectsStore {
                 return;
             }
 
-            const projects = await api.projects.getProjectsList();
+            const [projects, bootData] = await Promise.all([
+                api.projects.getProjectsList(),
+                api.boot.getBootData(),
+            ]);
+
+            const activeProjectId = bootData.userProfile.activeProjectId;
+            const activeProject = activeProjectId
+                ? await api.projects.getProjectById(activeProjectId)
+                : null;
 
             runInAction(() => {
                 this.projects = projects;
+                this.activeProject = activeProject;
                 this.isReady = true;
             });
         } finally {
