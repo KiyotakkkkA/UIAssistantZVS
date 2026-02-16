@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
+import { useNavigate } from "react-router-dom";
 import { useDialogs, useToasts } from "../../../../hooks";
 import { Button, Dropdown, InputSmall, Modal } from "../../atoms";
 import { ConversationItem } from "../../molecules";
 import { Icon } from "@iconify/react";
 
 export const ChatSidebar = observer(function ChatSidebar() {
+    const navigate = useNavigate();
     const toasts = useToasts();
     const {
         dialogs,
@@ -32,10 +34,20 @@ export const ChatSidebar = observer(function ChatSidebar() {
     );
 
     const openCreateModal = () => {
+        navigate("/dialogs");
         setEditMode("create");
         setDialogName("");
         setTargetDialogId(null);
         setIsEditModalOpen(true);
+    };
+
+    const openProjectsPage = () => {
+        navigate("/projects");
+    };
+
+    const selectDialogAndOpenPage = async (dialogId: string) => {
+        await switchDialog(dialogId);
+        navigate("/dialogs");
     };
 
     const createOptionsList = [
@@ -49,6 +61,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
             value: "project",
             label: "Новый проект",
             icon: <Icon icon="mdi:plus-box-multiple" width={20} />,
+            onClick: openProjectsPage,
         },
     ];
 
@@ -168,7 +181,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
                     <ConversationItem
                         key={conversation.id}
                         active={conversation.id === activeDialogId}
-                        onSelect={switchDialog}
+                        onSelect={selectDialogAndOpenPage}
                         onRename={openRenameModal}
                         onDelete={openDeleteModal}
                         canDelete={canDeleteDialog}
