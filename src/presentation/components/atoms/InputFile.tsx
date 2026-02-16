@@ -29,6 +29,22 @@ const formatFileSize = (bytes: number) => {
     return `${mb.toFixed(1)} MB`;
 };
 
+const resolveNotImageTypeIcon = (filename: string) => {
+    const extIcons = {
+        pdf: "mdi:file-pdf",
+        doc: "mdi:file-word",
+        docx: "mdi:file-word",
+        xls: "mdi:file-excel",
+        xlsx: "mdi:file-excel",
+        ppt: "mdi:file-powerpoint",
+        pptx: "mdi:file-powerpoint",
+    };
+
+    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+
+    return extIcons[ext as keyof typeof extIcons] || "mdi:file-outline";
+};
+
 export function InputFile({
     label = "Документы",
     helperText,
@@ -131,9 +147,11 @@ export function InputFile({
                                         ) : (
                                             <div className="flex h-full w-full items-center justify-center text-main-300">
                                                 <Icon
-                                                    icon="mdi:file-outline"
-                                                    width="18"
-                                                    height="18"
+                                                    icon={resolveNotImageTypeIcon(
+                                                        file.name,
+                                                    )}
+                                                    width="20"
+                                                    height="20"
                                                 />
                                             </div>
                                         )}

@@ -155,7 +155,7 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
                     <InputFile
                         label="Документы"
                         helperText="Добавьте материалы проекта через проводник"
-                        accept={["image/*"]}
+                        accept={["image/*", ".pdf", ".docx"]}
                         multiple
                     />
                 </section>
