@@ -54,10 +54,9 @@ export function useChat() {
         () => ({
             ollama: createOllamaAdapter({
                 model: ollamaModel,
-                token: ollamaToken,
             }),
         }),
-        [ollamaModel, ollamaToken],
+        [ollamaModel],
     );
 
     const commitMessages = (nextMessages: ChatMessage[]) => {
@@ -334,17 +333,6 @@ export function useChat() {
                         const messageId = toolTraceMessageIds.get(callId);
 
                         updateMessages((prev) => {
-                            const nextContent = JSON.stringify(
-                                {
-                                    callId,
-                                    toolName,
-                                    args,
-                                    result,
-                                },
-                                null,
-                                2,
-                            );
-
                             if (!messageId) {
                                 return [
                                     ...prev,
@@ -366,7 +354,7 @@ export function useChat() {
                                                 ? getCommandRequestMeta(args)
                                                 : {}),
                                         },
-                                        content: nextContent,
+                                        content: "",
                                         timestamp: getTimeStamp(),
                                     },
                                 ];
@@ -390,7 +378,7 @@ export function useChat() {
                                                   ? getCommandRequestMeta(args)
                                                   : {}),
                                           },
-                                          content: nextContent,
+                                          content: "",
                                       }
                                     : message,
                             );

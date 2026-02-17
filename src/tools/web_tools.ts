@@ -1,23 +1,13 @@
-import { Config } from "../config";
+import { createOllamaRequest } from "../hooks/agents/adapters/ollamaAdapter";
 import { ToolsBuilder } from "../utils/ToolsBuilder";
 
 const postToolRequest = async (
     endpoint: "web_search" | "web_fetch",
     payload: Record<string, unknown>,
-    ollamaToken: string,
 ) => {
-    if (!ollamaToken.trim()) {
-        throw new Error("Для вызова web tools требуется ollamaToken");
-    }
-
-    const ollamaBaseUrl = `${Config.OLLAMA_BASE_URL}`;
-
-    const response = await fetch(`${ollamaBaseUrl}/${endpoint}`, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${ollamaToken}`,
-            "Content-Type": "application/json",
-        },
+    const request = createOllamaRequest(endpoint);
+    const response = await fetch(request.url, {
+        ...request.init,
         body: JSON.stringify(payload),
     });
 
@@ -51,15 +41,11 @@ export const webToolsPackage = () => {
                 },
                 required: ["request"],
             }),
-            execute: async (args, context) => {
+            execute: async (args) => {
                 const request =
                     typeof args.request === "string" ? args.request : "";
 
-                return postToolRequest(
-                    "web_search",
-                    { query: request },
-                    context.ollamaToken,
-                );
+                return postToolRequest("web_search", { query: request });
             },
         })
         .addTool({
@@ -71,14 +57,10 @@ export const webToolsPackage = () => {
                 },
                 required: ["url"],
             }),
-            execute: async (args, context) => {
+            execute: async (args) => {
                 const url = typeof args.url === "string" ? args.url : "";
 
-                return postToolRequest(
-                    "web_fetch",
-                    { url },
-                    context.ollamaToken,
-                );
+                return postToolRequest("web_fetch", { url });
             },
         })
         .done();

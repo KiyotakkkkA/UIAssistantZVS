@@ -11,6 +11,17 @@ type ChatHeaderProps = {
     onOpenDocuments?: () => void;
 };
 
+const scopeToastsMeta = {
+    chat: {
+        title: "Сохранено!",
+        description: "Настройки чата успешно обновлены.",
+    },
+    profile: {
+        title: "Сохранено!",
+        description: "Пользовательские данные успешно обновлены.",
+    },
+};
+
 export function ChatHeader({
     title = "Чат с моделью",
     onOpenDocuments,
@@ -28,25 +39,16 @@ export function ChatHeader({
             return;
         }
 
-        if (result.scope === "chat") {
-            toasts.success({
-                title: "Интеграция сохранена",
-                description: "Параметры провайдера успешно сохранены.",
-            });
-            return;
-        }
-
-        if (result.scope === "profile") {
-            toasts.success({
-                title: "Профиль сохранён",
-                description: "Пользовательские данные обновлены.",
-            });
+        if (scopeToastsMeta[result.scope as keyof typeof scopeToastsMeta]) {
+            toasts.success(
+                scopeToastsMeta[result.scope as keyof typeof scopeToastsMeta],
+            );
             return;
         }
 
         toasts.info({
             title: "Изменений нет",
-            description: "Для этой вкладки сохранение не требуется.",
+            description: "Здесь нечего сохранять...",
         });
     };
 

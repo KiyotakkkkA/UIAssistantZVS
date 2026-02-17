@@ -1,10 +1,119 @@
-import api from "../../../services/api";
-import type { ChatMessage, OllamaMessage } from "../../../types/Chat";
+import { Config } from "../../../config";
+import { userProfileStore } from "../../../stores/userProfileStore";
+import type {
+    ChatMessage,
+    OllamaChatChunk,
+    OllamaMessage,
+    StreamChatParams,
+} from "../../../types/Chat";
 import type { ChatProviderAdapter } from "../../../types/AIRequests";
 
 type CreateOllamaAdapterParams = {
     model: string;
-    token: string;
+    format?: StreamChatParams["format"];
+};
+
+export const createOllamaRequest = (endpoint: string) => {
+    const ollamaToken = userProfileStore.userProfile.ollamaToken.trim();
+    const normalizedEndpoint = endpoint.replace(/^\/+/, "");
+
+    return {
+        url: `${Config.OLLAMA_BASE_URL}/${normalizedEndpoint}`,
+        init: {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...(ollamaToken && {
+                    Authorization: `Bearer ${ollamaToken}`,
+                }),
+            },
+        } satisfies RequestInit,
+    };
+};
+
+const streamChatOllama = async ({
+    model,
+    messages,
+    tools,
+    format,
+    signal,
+    onChunk,
+}: Omit<StreamChatParams, "token">) => {
+    const request = createOllamaRequest("chat");
+    const response = await fetch(request.url, {
+        ...request.init,
+        body: JSON.stringify({
+            model,
+            messages,
+            stream: true,
+            think: true,
+            ...(tools && tools.length > 0 ? { tools } : {}),
+            ...(format ? { format } : {}),
+        }),
+        signal,
+    });
+
+    if (!response.ok) {
+        const body = await response.text();
+        throw new Error(
+            body || `Ollama request failed with status ${response.status}`,
+        );
+    }
+
+    if (!response.body) {
+        throw new Error("Streaming response body is not available");
+    }
+
+    const decoder = new TextDecoder();
+    const reader = response.body.getReader();
+    let buffer = "";
+
+    let isReading = true;
+
+    while (isReading) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+            isReading = false;
+            continue;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+
+            if (!trimmed) {
+                continue;
+            }
+
+            const chunk = JSON.parse(trimmed) as OllamaChatChunk;
+
+            if (chunk.error) {
+                throw new Error(chunk.error);
+            }
+
+            onChunk?.(chunk);
+
+            if (chunk.done) {
+                return;
+            }
+        }
+    }
+
+    const rest = buffer.trim();
+
+    if (rest) {
+        const chunk = JSON.parse(rest) as OllamaChatChunk;
+
+        if (chunk.error) {
+            throw new Error(chunk.error);
+        }
+
+        onChunk?.(chunk);
+    }
 };
 
 const toOllamaMessages = (messages: ChatMessage[]): OllamaMessage[] =>
@@ -26,7 +135,7 @@ const toOllamaMessages = (messages: ChatMessage[]): OllamaMessage[] =>
 
 export const createOllamaAdapter = ({
     model,
-    token,
+    format,
 }: CreateOllamaAdapterParams): ChatProviderAdapter => {
     return {
         send: async ({
@@ -56,11 +165,11 @@ export const createOllamaAdapter = ({
                     };
                 }[] = [];
 
-                await api.streamChatOllama({
+                await streamChatOllama({
                     model,
-                    token,
                     messages,
                     tools,
+                    format,
                     signal,
                     onChunk: (chunk) => {
                         const contentChunk = chunk.message?.content || "";

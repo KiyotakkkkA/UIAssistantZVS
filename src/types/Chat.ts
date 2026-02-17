@@ -77,6 +77,8 @@ export type OllamaToolDefinition = {
     };
 };
 
+export type OllamaResponseFormat = "json" | Record<string, unknown>;
+
 export type OllamaToolCall = {
     type?: "function";
     function: {
@@ -117,6 +119,7 @@ export interface StreamChatParams {
     token?: string;
     messages: OllamaMessage[];
     tools?: OllamaToolDefinition[];
+    format?: OllamaResponseFormat;
     signal?: AbortSignal;
     onChunk?: (chunk: OllamaChatChunk) => void;
 }
