@@ -156,6 +156,15 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                     <div className="flex items-center gap-1">
                         <Button
                             variant="secondary"
+                            label="Download code"
+                            shape="rounded-lg"
+                            className="p-1"
+                            onClick={handleDownload}
+                        >
+                            <Icon icon="mdi:download" width="14" height="14" />
+                        </Button>
+                        <Button
+                            variant="secondary"
                             label="Copy code"
                             shape="rounded-lg"
                             className="p-1"
@@ -166,15 +175,6 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                                 width="14"
                                 height="14"
                             />
-                        </Button>
-                        <Button
-                            variant="secondary"
-                            label="Download code"
-                            shape="rounded-lg"
-                            className="p-1"
-                            onClick={handleDownload}
-                        >
-                            <Icon icon="mdi:download" width="14" height="14" />
                         </Button>
                     </div>
                 </div>
@@ -194,21 +194,23 @@ export function ShikiCodeBlock({ code, language }: ShikiCodeBlockProps) {
                 <div className="flex items-center gap-1">
                     <Button
                         variant="secondary"
-                        label="Copy code"
-                        shape="rounded-lg"
-                        className="p-1"
-                        onClick={() => copyMessage(code)}
-                    >
-                        <Icon icon="mdi:content-copy" width="14" height="14" />
-                    </Button>
-                    <Button
-                        variant="secondary"
                         label="Download code"
                         shape="rounded-lg"
-                        className="p-1"
+                        className="p-1 text-xs gap-1"
                         onClick={handleDownload}
                     >
                         <Icon icon="mdi:download" width="14" height="14" />
+                        Скачать
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        label="Copy code"
+                        shape="rounded-lg"
+                        className="p-1 text-xs gap-1"
+                        onClick={() => copyMessage(code)}
+                    >
+                        <Icon icon="mdi:content-copy" width="14" height="14" />
+                        Копировать
                     </Button>
                 </div>
             </div>

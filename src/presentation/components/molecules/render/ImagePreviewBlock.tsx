@@ -176,18 +176,19 @@ export function ImagePreviewBlock({
                             variant="secondary"
                             label="Download image"
                             shape="rounded-lg"
-                            className="p-1"
+                            className="p-1 text-xs gap-1"
                             onClick={() => {
                                 void handleDownload();
                             }}
                         >
                             <Icon icon="mdi:download" width="14" height="14" />
+                            Скачать
                         </Button>
                         <Button
                             variant="secondary"
                             label="View image"
                             shape="rounded-lg"
-                            className="p-1"
+                            className="p-1 text-xs gap-1"
                             onClick={() => {
                                 void handleOpenPreview();
                             }}
@@ -197,12 +198,13 @@ export function ImagePreviewBlock({
                                 width="14"
                                 height="14"
                             />
+                            Перейти
                         </Button>
                         <Button
                             variant="secondary"
                             label="Expand image"
                             shape="rounded-lg"
-                            className="p-1"
+                            className="p-1 text-xs gap-1"
                             onClick={() => {
                                 setIsExpanded((prev) => !prev);
                                 resetView();
@@ -217,6 +219,7 @@ export function ImagePreviewBlock({
                                 width="14"
                                 height="14"
                             />
+                            {isExpanded ? "Свернуть" : "Развернуть"}
                         </Button>
                     </div>
                 </div>
