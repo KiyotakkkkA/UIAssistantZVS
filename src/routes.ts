@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { createHashRouter, Navigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import { ChatPage } from "./presentation/pages/ChatPage";
-import { ProjectsPage } from "./presentation/pages/ProjectsPage";
+import { CreateProjectPage } from "./presentation/pages/projects/CreateProjectPage";
 import { WorkspaceLayout } from "./presentation/layouts/WorkspaceLayout";
 import { ProjectPage } from "./presentation/pages/projects/ProjectPage";
 import { userProfileStore } from "./stores/userProfileStore";
@@ -42,7 +42,7 @@ export const router = createHashRouter([
             },
             {
                 path: "/projects/create",
-                element: createElement(ProjectsPage),
+                element: createElement(CreateProjectPage),
             },
             {
                 path: "/projects/:projectId",

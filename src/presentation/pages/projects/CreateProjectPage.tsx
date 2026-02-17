@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
 import { toolsStore } from "../../../stores/toolsStore";
@@ -6,7 +6,6 @@ import { useProjects, useToasts } from "../../../hooks";
 import { useFileSave } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
 import {
-    AutoFillSelector,
     Button,
     InputBig,
     InputCheckbox,
@@ -15,7 +14,7 @@ import {
     InputSmall,
     Modal,
 } from "../../components/atoms";
-import { Icon } from "@iconify/react";
+import { RequiredToolsPickForm } from "../../components/molecules/forms";
 
 export const CreateProjectPage = observer(function CreateProjectPage() {
     const navigate = useNavigate();
@@ -33,11 +32,6 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
     const [documents, setDocuments] = useState<UploadedFileData[]>([]);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
-
-    const filteredPackages = useMemo(
-        () => toolsStore.getFilteredPackages(toolsQuery),
-        [toolsQuery],
-    );
 
     useEffect(() => {
         let isCancelled = false;
@@ -128,256 +122,167 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-main-900/60">
-            <div className="flex-1 space-y-6 overflow-y-auto p-1">
-                <div>
-                    <h2 className="text-lg font-semibold text-main-100">
-                        Создание проекта
-                    </h2>
-                    <p className="mt-2 text-sm text-main-300">
-                        Заполните базовые параметры проекта.
-                    </p>
-                </div>
-
-                <section className="space-y-2 border-l-3 border-main-600 pl-3">
-                    <p className="text-sm font-semibold text-main-100">
-                        Название проекта
-                    </p>
-                    <InputSmall
-                        value={projectName}
-                        onChange={(event) => setProjectName(event.target.value)}
-                        placeholder="Название проекта"
-                    />
-                </section>
-
-                <section className="space-y-2 border-l-3 border-main-600 pl-3">
-                    <p className="text-sm font-semibold text-main-100">
-                        Описание проекта
-                    </p>
-                    <InputBig
-                        value={projectDescription}
-                        onChange={setProjectDescription}
-                        className="h-28! rounded-xl! border border-main-700/70 bg-main-800/70 px-3 py-2 text-main-100 placeholder:text-main-500"
-                        placeholder="Опишите цель и контекст проекта"
-                    />
-                </section>
-
-                <section className="space-y-4 border-l-3 border-main-600 pl-3">
-                    <p className="text-sm font-semibold text-main-100">
-                        Используемые инструменты
-                    </p>
-
-                    <InputSmall
-                        value={toolsQuery}
-                        onChange={(event) => setToolsQuery(event.target.value)}
-                        placeholder="Поиск по пакетам и инструментам"
-                    />
-
-                    <div className="rounded-xl border border-main-700/70 bg-main-900/50 p-3">
-                        <p className="text-sm font-semibold text-main-100">
-                            Инструменты для обязательного использования
+        <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-main-900/70 p-4 backdrop-blur-md">
+            <div className="flex h-full flex-col overflow-hidden rounded-2xl bg-main-900/60">
+                <div className="flex-1 space-y-6 overflow-y-auto p-1">
+                    <div>
+                        <h2 className="text-lg font-semibold text-main-100">
+                            Создание проекта
+                        </h2>
+                        <p className="mt-2 text-sm text-main-300">
+                            Заполните базовые параметры проекта.
                         </p>
-                        <p className="mt-1 text-xs text-main-400">
-                            Выбранные инструменты будут обязательно использованы
-                            при ответе во време работы над задачей.
-                        </p>
-                        <AutoFillSelector
-                            className="mt-3"
-                            options={toolsStore.enabledToolOptions}
-                            value={toolsStore.requiredPromptTools}
-                            onChange={toolsStore.setRequiredPromptTools}
-                            placeholder="Выберите инструменты"
-                        />
                     </div>
 
-                    {filteredPackages.length === 0 ? (
-                        <div className="rounded-xl border border-main-700/70 bg-main-900/45 p-4 text-sm text-main-400">
-                            По вашему запросу ничего не найдено.
-                        </div>
-                    ) : (
-                        filteredPackages.map((pkg) => (
-                            <article
-                                key={pkg.id}
-                                className="rounded-2xl bg-main-900/45 p-4"
-                            >
-                                <div className="mb-3">
-                                    <div className="flex gap-2 items-center">
-                                        <Icon icon="mdi:tools" />
-                                        <p className="text-base font-semibold text-main-100">
-                                            {pkg.title}
-                                        </p>
-                                    </div>
+                    <section className="space-y-2 border-l-3 border-main-600 pl-3">
+                        <p className="text-sm font-semibold text-main-100">
+                            Название проекта
+                        </p>
+                        <InputSmall
+                            value={projectName}
+                            onChange={(event) =>
+                                setProjectName(event.target.value)
+                            }
+                            placeholder="Название проекта"
+                        />
+                    </section>
+
+                    <section className="space-y-2 border-l-3 border-main-600 pl-3">
+                        <p className="text-sm font-semibold text-main-100">
+                            Описание проекта
+                        </p>
+                        <InputBig
+                            value={projectDescription}
+                            onChange={setProjectDescription}
+                            className="h-28! rounded-xl! border border-main-700/70 bg-main-800/70 px-3 py-2 text-main-100 placeholder:text-main-500"
+                            placeholder="Опишите цель и контекст проекта"
+                        />
+                    </section>
+
+                    <RequiredToolsPickForm
+                        toolsQuery={toolsQuery}
+                        onToolsQueryChange={setToolsQuery}
+                        withSectionFrame
+                    />
+
+                    <section className="space-y-2 border-l-3 border-main-600 pl-3">
+                        <p className="text-sm font-semibold text-main-100">
+                            Директория проекта
+                        </p>
+                        <div className="rounded-xl border border-main-700/70 bg-main-900/40 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm text-main-200">
+                                        Использовать директорию по умолчанию
+                                    </p>
                                     <p className="mt-1 text-xs text-main-400">
-                                        {pkg.description}
+                                        {defaultProjectsDirectory ||
+                                            "Загрузка пути по умолчанию..."}
                                     </p>
                                 </div>
+                                <InputCheckbox
+                                    checked={useDefaultDirectory}
+                                    onChange={(checked) => {
+                                        setUseDefaultDirectory(checked);
 
-                                <div className="space-y-2">
-                                    {pkg.tools.map((tool) => {
-                                        const toolName =
-                                            tool.schema.function.name;
-                                        const isEnabled =
-                                            toolsStore.isToolEnabled(toolName);
-
-                                        return (
-                                            <div
-                                                key={`${pkg.id}_${toolName}`}
-                                                className="flex items-start justify-between gap-3 rounded-xl border border-main-700/70 bg-main-900/60 p-3"
-                                            >
-                                                <div>
-                                                    <div className="flex gap-2 items-center">
-                                                        <Icon icon="mdi:toolbox" />
-                                                        <p className="text-sm font-semibold text-main-100">
-                                                            {toolName}
-                                                        </p>
-                                                    </div>
-                                                    <p className="mt-1 text-xs text-main-400">
-                                                        {tool.schema.function
-                                                            .description ||
-                                                            "Без описания"}
-                                                    </p>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-main-400">
-                                                        {isEnabled
-                                                            ? "Включен"
-                                                            : "Выключен"}
-                                                    </span>
-                                                    <InputCheckbox
-                                                        checked={isEnabled}
-                                                        onChange={(checked) =>
-                                                            toolsStore.setToolEnabled(
-                                                                toolName,
-                                                                checked,
-                                                            )
-                                                        }
-                                                    />
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </article>
-                        ))
-                    )}
-                </section>
-
-                <section className="space-y-2 border-l-3 border-main-600 pl-3">
-                    <p className="text-sm font-semibold text-main-100">
-                        Директория проекта
-                    </p>
-                    <div className="rounded-xl border border-main-700/70 bg-main-900/40 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm text-main-200">
-                                    Использовать директорию по умолчанию
-                                </p>
-                                <p className="mt-1 text-xs text-main-400">
-                                    {defaultProjectsDirectory ||
-                                        "Загрузка пути по умолчанию..."}
-                                </p>
+                                        if (checked) {
+                                            setProjectDirectoryPath(
+                                                defaultProjectsDirectory,
+                                            );
+                                        }
+                                    }}
+                                />
                             </div>
-                            <InputCheckbox
-                                checked={useDefaultDirectory}
-                                onChange={(checked) => {
-                                    setUseDefaultDirectory(checked);
 
-                                    if (checked) {
-                                        setProjectDirectoryPath(
-                                            defaultProjectsDirectory,
-                                        );
-                                    }
-                                }}
-                            />
+                            {!useDefaultDirectory ? (
+                                <InputPath
+                                    className="mt-3"
+                                    label="Своя директория"
+                                    helperText="Выберите базовую папку. Папка проекта с UUID будет создана внутри неё"
+                                    value={projectDirectoryPath}
+                                    onChange={setProjectDirectoryPath}
+                                    placeholder="Директория не выбрана"
+                                    forFolders
+                                />
+                            ) : null}
                         </div>
+                    </section>
 
-                        {!useDefaultDirectory ? (
-                            <InputPath
-                                className="mt-3"
-                                label="Своя директория"
-                                helperText="Выберите базовую папку. Папка проекта с UUID будет создана внутри неё"
-                                value={projectDirectoryPath}
-                                onChange={setProjectDirectoryPath}
-                                placeholder="Директория не выбрана"
-                                forFolders
-                            />
-                        ) : null}
-                    </div>
-                </section>
-
-                <section className="space-y-2 border-l-3 border-main-600 pl-3">
-                    <InputFile
-                        label="Документы"
-                        helperText="Добавьте материалы проекта через проводник"
-                        value={documents}
-                        onChange={setDocuments}
-                        accept={["image/*", ".pdf", ".docx"]}
-                        multiple
-                    />
-                </section>
-            </div>
-
-            <div className="p-4">
-                <Button
-                    variant="primary"
-                    shape="rounded-lg"
-                    className="h-9 px-4"
-                    disabled={isCreating || isSaving}
-                    onClick={openConfirmModal}
-                >
-                    Создать проект
-                </Button>
-            </div>
-
-            <Modal
-                open={isConfirmOpen}
-                onClose={() => setIsConfirmOpen(false)}
-                title="Подтверждение создания проекта"
-                className="max-w-md"
-                footer={
-                    <>
-                        <Button
-                            variant="secondary"
-                            shape="rounded-lg"
-                            className="h-9 px-4"
-                            onClick={() => setIsConfirmOpen(false)}
-                        >
-                            Отмена
-                        </Button>
-                        <Button
-                            variant="primary"
-                            shape="rounded-lg"
-                            className="h-9 px-4"
-                            disabled={isCreating || isSaving}
-                            onClick={() => {
-                                void confirmCreateProject();
-                            }}
-                        >
-                            {isCreating || isSaving
-                                ? "Создание..."
-                                : "Подтвердить"}
-                        </Button>
-                    </>
-                }
-            >
-                <div className="space-y-2 text-sm text-main-300">
-                    <p>
-                        Подтвердите создание проекта с выбранными параметрами.
-                    </p>
-                    <p>
-                        <span className="text-main-400">Название:</span>{" "}
-                        {projectName.trim()}
-                    </p>
-                    <p>
-                        <span className="text-main-400">Документы:</span>{" "}
-                        {documents.length}
-                    </p>
-                    <p>
-                        <span className="text-main-400">Директория:</span>{" "}
-                        {selectedBaseDirectory || "Не выбрана"}
-                    </p>
+                    <section className="space-y-2 border-l-3 border-main-600 pl-3">
+                        <InputFile
+                            label="Документы"
+                            helperText="Добавьте материалы проекта через проводник"
+                            value={documents}
+                            onChange={setDocuments}
+                            accept={["image/*", ".pdf", ".docx"]}
+                            multiple
+                        />
+                    </section>
                 </div>
-            </Modal>
-        </div>
+
+                <div className="p-4">
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        disabled={isCreating || isSaving}
+                        onClick={openConfirmModal}
+                    >
+                        Создать проект
+                    </Button>
+                </div>
+
+                <Modal
+                    open={isConfirmOpen}
+                    onClose={() => setIsConfirmOpen(false)}
+                    title="Подтверждение создания проекта"
+                    className="max-w-md"
+                    footer={
+                        <>
+                            <Button
+                                variant="secondary"
+                                shape="rounded-lg"
+                                className="h-9 px-4"
+                                onClick={() => setIsConfirmOpen(false)}
+                            >
+                                Отмена
+                            </Button>
+                            <Button
+                                variant="primary"
+                                shape="rounded-lg"
+                                className="h-9 px-4"
+                                disabled={isCreating || isSaving}
+                                onClick={() => {
+                                    void confirmCreateProject();
+                                }}
+                            >
+                                {isCreating || isSaving
+                                    ? "Создание..."
+                                    : "Подтвердить"}
+                            </Button>
+                        </>
+                    }
+                >
+                    <div className="space-y-2 text-sm text-main-300">
+                        <p>
+                            Подтвердите создание проекта с выбранными
+                            параметрами.
+                        </p>
+                        <p>
+                            <span className="text-main-400">Название:</span>{" "}
+                            {projectName.trim()}
+                        </p>
+                        <p>
+                            <span className="text-main-400">Документы:</span>{" "}
+                            {documents.length}
+                        </p>
+                        <p>
+                            <span className="text-main-400">Директория:</span>{" "}
+                            {selectedBaseDirectory || "Не выбрана"}
+                        </p>
+                    </div>
+                </Modal>
+            </div>
+        </section>
     );
 });
