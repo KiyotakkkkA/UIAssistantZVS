@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import fs$1, { readFile } from "node:fs/promises";
 import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
@@ -1108,6 +1108,39 @@ const imageExtensions = [
   "svg",
   "avif"
 ];
+const extensionByMime = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "image/bmp": ".bmp",
+  "image/svg+xml": ".svg",
+  "image/avif": ".avif"
+};
+const isRemoteUrl = (value) => /^https?:\/\//i.test(value);
+const isDataUrl = (value) => /^data:/i.test(value);
+const isFileUrl = (value) => /^file:\/\//i.test(value);
+const ensureImageExt = (fileName, mimeType) => {
+  const ext = path.extname(fileName).toLowerCase();
+  if (ext) {
+    return fileName;
+  }
+  return `${fileName}${extensionByMime[mimeType] || ".png"}`;
+};
+const parseDataUrl = (src) => {
+  const marker = ";base64,";
+  const markerIndex = src.indexOf(marker);
+  if (markerIndex === -1) {
+    throw new Error("Invalid data URL");
+  }
+  const header = src.slice(0, markerIndex);
+  const mimeType = header.slice(5) || "application/octet-stream";
+  const base64 = src.slice(markerIndex + marker.length);
+  return {
+    mimeType,
+    buffer: Buffer.from(base64, "base64")
+  };
+};
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
@@ -1233,6 +1266,93 @@ app.whenReady().then(() => {
     const openResult = await shell.openPath(targetPath);
     return openResult === "";
   });
+  ipcMain.handle("app:open-external-url", async (_event, url) => {
+    if (!url || typeof url !== "string") {
+      return false;
+    }
+    try {
+      await shell.openExternal(url);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  ipcMain.handle(
+    "app:save-image-from-source",
+    async (event, payload) => {
+      const source = typeof payload?.src === "string" ? payload.src.trim() : "";
+      if (!source) {
+        return null;
+      }
+      const preferredFileName = typeof payload.preferredFileName === "string" ? payload.preferredFileName.trim() : "";
+      let sourceKind = "local";
+      let buffer;
+      let mimeType = "application/octet-stream";
+      let fileName = preferredFileName || "image";
+      if (isDataUrl(source)) {
+        sourceKind = "data-url";
+        const parsed = parseDataUrl(source);
+        buffer = parsed.buffer;
+        mimeType = parsed.mimeType;
+        fileName = ensureImageExt(fileName, mimeType);
+      } else if (isRemoteUrl(source)) {
+        sourceKind = "remote";
+        const response = await fetch(source);
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch image (${response.status})`
+          );
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+        mimeType = response.headers.get("content-type") || mimeType;
+        const remoteName = path.basename(
+          new URL(source).pathname || "image"
+        );
+        fileName = preferredFileName || remoteName || "image";
+        fileName = ensureImageExt(fileName, mimeType);
+      } else {
+        sourceKind = "local";
+        const localPath = isFileUrl(source) ? fileURLToPath(source) : source;
+        buffer = await fs$1.readFile(localPath);
+        mimeType = getMimeTypeByExtension(localPath);
+        fileName = preferredFileName || path.basename(localPath);
+        fileName = ensureImageExt(fileName, mimeType);
+      }
+      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const defaultPath = app.getPath("downloads");
+      const targetPathByDialog = currentWindow ? await dialog.showSaveDialog(currentWindow, {
+        title: "Сохранить изображение",
+        defaultPath: path.join(defaultPath, fileName),
+        filters: [
+          {
+            name: "Images",
+            extensions: imageExtensions
+          }
+        ]
+      }) : await dialog.showSaveDialog({
+        title: "Сохранить изображение",
+        defaultPath: path.join(defaultPath, fileName),
+        filters: [
+          {
+            name: "Images",
+            extensions: imageExtensions
+          }
+        ]
+      });
+      if (targetPathByDialog.canceled || !targetPathByDialog.filePath) {
+        return null;
+      }
+      await fs$1.writeFile(targetPathByDialog.filePath, buffer);
+      return {
+        savedPath: targetPathByDialog.filePath,
+        fileName: path.basename(targetPathByDialog.filePath),
+        mimeType,
+        size: buffer.byteLength,
+        sourceKind
+      };
+    }
+  );
   ipcMain.handle(
     "app:exec-shell-command",
     (_event, command, cwd) => commandExecService.execute(command, cwd)

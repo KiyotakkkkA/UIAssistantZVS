@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { ImagePreviewBlock } from "./ImagePreviewBlock";
 import { ShikiCodeBlock } from "./ShikiCodeBlock";
 
 interface MarkdownStaticContentProps {
@@ -77,6 +78,24 @@ export function MarkdownStaticContent({
                             {children}
                         </a>
                     ),
+                    img: ({ src, alt }) => {
+                        const imageSrc = typeof src === "string" ? src : "";
+
+                        if (!imageSrc) {
+                            return null;
+                        }
+
+                        const nonLocalSrc = /^https?:\/\//i.test(imageSrc);
+
+                        return (
+                            <ImagePreviewBlock
+                                src={imageSrc}
+                                title={alt || "Image Preview"}
+                                nonLocalSrc={nonLocalSrc}
+                                downloadFileName="preview-image.svg"
+                            />
+                        );
+                    },
                     h1: ({ children }) => (
                         <h1 className="mb-2 text-base font-semibold">
                             {children}

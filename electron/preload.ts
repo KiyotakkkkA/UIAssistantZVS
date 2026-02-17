@@ -86,11 +86,15 @@ const appApi: AppApi = {
     },
     files: {
         saveFiles: (files) => ipcRenderer.invoke("app:save-files", files),
+        saveImageFromSource: (payload) =>
+            ipcRenderer.invoke("app:save-image-from-source", payload),
         getFilesByIds: (fileIds) =>
             ipcRenderer.invoke("app:get-files-by-ids", fileIds),
         openFile: (fileId) => ipcRenderer.invoke("app:open-saved-file", fileId),
         openPath: (targetPath: string) =>
             ipcRenderer.invoke("app:open-path", targetPath),
+        openExternalUrl: (url: string) =>
+            ipcRenderer.invoke("app:open-external-url", url),
     },
     projects: {
         getProjectsList: () => ipcRenderer.invoke("app:get-projects-list"),

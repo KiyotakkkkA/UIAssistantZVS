@@ -60,9 +60,11 @@ const appApi = {
   },
   files: {
     saveFiles: (files) => electron.ipcRenderer.invoke("app:save-files", files),
+    saveImageFromSource: (payload) => electron.ipcRenderer.invoke("app:save-image-from-source", payload),
     getFilesByIds: (fileIds) => electron.ipcRenderer.invoke("app:get-files-by-ids", fileIds),
     openFile: (fileId) => electron.ipcRenderer.invoke("app:open-saved-file", fileId),
-    openPath: (targetPath) => electron.ipcRenderer.invoke("app:open-path", targetPath)
+    openPath: (targetPath) => electron.ipcRenderer.invoke("app:open-path", targetPath),
+    openExternalUrl: (url) => electron.ipcRenderer.invoke("app:open-external-url", url)
   },
   projects: {
     getProjectsList: () => electron.ipcRenderer.invoke("app:get-projects-list"),

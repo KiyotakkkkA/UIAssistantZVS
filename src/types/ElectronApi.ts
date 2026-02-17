@@ -38,6 +38,19 @@ export type SavedFileRecord = FileManifestEntry & {
     id: string;
 };
 
+export type SaveImageFromSourcePayload = {
+    src: string;
+    preferredFileName?: string;
+};
+
+export type SaveImageFromSourceResult = {
+    savedPath: string;
+    fileName: string;
+    mimeType: string;
+    size: number;
+    sourceKind: "remote" | "local" | "data-url";
+};
+
 export type AppApiBootNamespace = {
     getBootData: () => Promise<BootData>;
 };
@@ -88,9 +101,13 @@ export type AppApiUploadNamespace = {
 
 export type AppApiFilesNamespace = {
     saveFiles: (files: UploadedFileData[]) => Promise<SavedFileRecord[]>;
+    saveImageFromSource: (
+        payload: SaveImageFromSourcePayload,
+    ) => Promise<SaveImageFromSourceResult | null>;
     getFilesByIds: (fileIds: string[]) => Promise<SavedFileRecord[]>;
     openFile: (fileId: string) => Promise<boolean>;
     openPath: (targetPath: string) => Promise<boolean>;
+    openExternalUrl: (url: string) => Promise<boolean>;
 };
 
 export type AppApiProjectsNamespace = {
