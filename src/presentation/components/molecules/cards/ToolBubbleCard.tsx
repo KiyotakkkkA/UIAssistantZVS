@@ -74,11 +74,23 @@ export function ToolBubbleCard({
                             <p className="text-[11px] text-main-300">
                                 Директория: {cwd}
                             </p>
-                            <p className="text-[11px] text-main-300">
-                                Команда: {command || "(не указана)"}
+                            <p className="text-[11px] text-main-400">
+                                <ShikiCodeBlock
+                                    code={command}
+                                    language="powershell"
+                                />
                             </p>
-                            <p className="text-[11px] text-main-300">
-                                Права администратора: {isAdmin ? "да" : "нет"}
+                            <p className="text-[11px] text-main-400">
+                                Права администратора:{" "}
+                                <span
+                                    className={
+                                        isAdmin
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                    }
+                                >
+                                    {isAdmin ? "Да" : "Нет"}
+                                </span>
                             </p>
 
                             {execStatus === "pending" && (
@@ -109,7 +121,14 @@ export function ToolBubbleCard({
                             {(execStatus === "accepted" ||
                                 execStatus === "cancelled") && (
                                 <p className="text-[11px] text-main-400">
-                                    Статус: {execStatus}
+                                    Статус:{" "}
+                                    <span
+                                        className={`${execStatus === "accepted" ? "text-green-400" : "text-red-400"}`}
+                                    >
+                                        {execStatus === "accepted"
+                                            ? "Подтверждено"
+                                            : "Отклонено"}
+                                    </span>
                                 </p>
                             )}
                         </div>

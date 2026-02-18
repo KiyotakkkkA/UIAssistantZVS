@@ -35,6 +35,7 @@ const getHighlighter = () => {
                 "sql",
                 "xml",
                 "lua",
+                "powershell",
             ],
         });
     }
