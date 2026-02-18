@@ -9,6 +9,8 @@ const defaultProfile = {
   themePreference: "dark-main",
   ollamaModel: "gpt-oss:20b",
   ollamaToken: "",
+  telegramId: "",
+  telegramBotToken: "",
   chatDriver: "ollama",
   assistantName: "Чарли",
   maxToolCallsPerResponse: 10,
@@ -257,6 +259,8 @@ class UserProfileService {
         ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
         ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
         ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
+        ...typeof parsed.telegramId === "string" ? { telegramId: parsed.telegramId } : {},
+        ...typeof parsed.telegramBotToken === "string" ? { telegramBotToken: parsed.telegramBotToken } : {},
         ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
         ...typeof parsed.assistantName === "string" ? { assistantName: parsed.assistantName } : {},
         ...typeof parsed.maxToolCallsPerResponse === "number" && Number.isFinite(parsed.maxToolCallsPerResponse) ? {

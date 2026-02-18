@@ -7,8 +7,7 @@ import {
     type ReactNode,
 } from "react";
 import { Icon } from "@iconify/react";
-import { useChatParams, useUserProfile } from "../../../../hooks";
-import type { ChatDriver } from "../../../../types/App";
+import { useUserProfile } from "../../../../hooks";
 import { SettingsChatPanel } from "./SettingsChatPanel";
 import { SettingsInterfacePanel } from "./SettingsInterfacePanel";
 import { SettingsProfilePanel } from "./SettingsProfilePanel";
@@ -60,29 +59,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
     ({ themePreference, themeOptions, setTheme }, ref) => {
         const [activeRoute, setActiveRoute] =
             useState<SettingsRoute>("interface");
-        const {
-            chatDriver,
-            ollamaModel,
-            ollamaToken,
-            assistantName,
-            maxToolCallsPerResponse,
-            saveChatParams,
-        } = useChatParams();
         const { userProfile, updateUserProfile } = useUserProfile();
-
-        const [chatDraft, setChatDraft] = useState<{
-            chatDriver: ChatDriver;
-            ollamaModel: string;
-            ollamaToken: string;
-            assistantName: string;
-            maxToolCallsPerResponse: number;
-        }>({
-            chatDriver,
-            ollamaModel,
-            ollamaToken,
-            assistantName,
-            maxToolCallsPerResponse,
-        });
 
         const [profileDraft, setProfileDraft] = useState<{
             userName: string;
@@ -93,22 +70,6 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
             userPrompt: userProfile.userPrompt,
             userLanguage: userProfile.userLanguage,
         });
-
-        useEffect(() => {
-            setChatDraft({
-                chatDriver,
-                ollamaModel,
-                ollamaToken,
-                assistantName,
-                maxToolCallsPerResponse,
-            });
-        }, [
-            chatDriver,
-            ollamaModel,
-            ollamaToken,
-            assistantName,
-            maxToolCallsPerResponse,
-        ]);
 
         useEffect(() => {
             setProfileDraft({
@@ -127,7 +88,6 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
             () => ({
                 save: async () => {
                     if (activeRoute === "chat") {
-                        await saveChatParams(chatDraft);
                         return { saved: true, scope: "chat" };
                     }
 
@@ -144,13 +104,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     return { saved: false, scope: "general" };
                 },
             }),
-            [
-                activeRoute,
-                chatDraft,
-                profileDraft,
-                saveChatParams,
-                updateUserProfile,
-            ],
+            [activeRoute, profileDraft, updateUserProfile],
         );
 
         const renderedPanel: Record<SettingsRoute, ReactNode> = useMemo(
@@ -162,47 +116,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                         setTheme={setTheme}
                     />
                 ),
-                chat: (
-                    <SettingsChatPanel
-                        chatDriver={chatDraft.chatDriver}
-                        ollamaModel={chatDraft.ollamaModel}
-                        ollamaToken={chatDraft.ollamaToken}
-                        setChatDriver={(driver) => {
-                            setChatDraft((prev) => ({
-                                ...prev,
-                                chatDriver: driver,
-                            }));
-                        }}
-                        setOllamaModel={(value) => {
-                            setChatDraft((prev) => ({
-                                ...prev,
-                                ollamaModel: value,
-                            }));
-                        }}
-                        setOllamaToken={(value) => {
-                            setChatDraft((prev) => ({
-                                ...prev,
-                                ollamaToken: value,
-                            }));
-                        }}
-                        assistantName={chatDraft.assistantName}
-                        maxToolCallsPerResponse={
-                            chatDraft.maxToolCallsPerResponse
-                        }
-                        setAssistantName={(value) => {
-                            setChatDraft((prev) => ({
-                                ...prev,
-                                assistantName: value,
-                            }));
-                        }}
-                        setMaxToolCallsPerResponse={(value) => {
-                            setChatDraft((prev) => ({
-                                ...prev,
-                                maxToolCallsPerResponse: value,
-                            }));
-                        }}
-                    />
-                ),
+                chat: <SettingsChatPanel />,
                 profile: (
                     <SettingsProfilePanel
                         userName={profileDraft.userName}
@@ -229,7 +143,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     />
                 ),
             }),
-            [chatDraft, profileDraft, setTheme, themeOptions, themePreference],
+            [profileDraft, setTheme, themeOptions, themePreference],
         );
 
         return (

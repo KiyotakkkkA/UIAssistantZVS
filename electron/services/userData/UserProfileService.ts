@@ -29,6 +29,12 @@ export class UserProfileService {
                 ...(typeof parsed.ollamaToken === "string"
                     ? { ollamaToken: parsed.ollamaToken }
                     : {}),
+                ...(typeof parsed.telegramId === "string"
+                    ? { telegramId: parsed.telegramId }
+                    : {}),
+                ...(typeof parsed.telegramBotToken === "string"
+                    ? { telegramBotToken: parsed.telegramBotToken }
+                    : {}),
                 ...(isChatDriver(parsed.chatDriver)
                     ? { chatDriver: parsed.chatDriver }
                     : {}),

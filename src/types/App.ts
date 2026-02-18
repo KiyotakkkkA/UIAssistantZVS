@@ -4,6 +4,8 @@ export type UserProfile = {
     themePreference: string;
     ollamaModel: string;
     ollamaToken: string;
+    telegramId: string;
+    telegramBotToken: string;
     chatDriver: ChatDriver;
     assistantName: string;
     maxToolCallsPerResponse: number;

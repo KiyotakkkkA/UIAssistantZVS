@@ -8,6 +8,8 @@ export const useChatParams = () => {
         chatDriver: userProfileStore.userProfile.chatDriver,
         ollamaModel: userProfileStore.userProfile.ollamaModel,
         ollamaToken: userProfileStore.userProfile.ollamaToken,
+        telegramId: userProfileStore.userProfile.telegramId,
+        telegramBotToken: userProfileStore.userProfile.telegramBotToken,
         assistantName: userProfileStore.userProfile.assistantName,
         maxToolCallsPerResponse:
             userProfileStore.userProfile.maxToolCallsPerResponse,
@@ -20,27 +22,20 @@ export const useChatParams = () => {
         setOllamaToken: async (value: string) => {
             await userProfileStore.updateUserProfile({ ollamaToken: value });
         },
+        setTelegramId: async (value: string) => {
+            await userProfileStore.updateUserProfile({ telegramId: value });
+        },
+        setTelegramBotToken: async (value: string) => {
+            await userProfileStore.updateUserProfile({
+                telegramBotToken: value,
+            });
+        },
         setAssistantName: async (value: string) => {
             await userProfileStore.updateUserProfile({ assistantName: value });
         },
         setMaxToolCallsPerResponse: async (value: number) => {
             await userProfileStore.updateUserProfile({
                 maxToolCallsPerResponse: value,
-            });
-        },
-        saveChatParams: async (next: {
-            chatDriver: ChatDriver;
-            ollamaModel: string;
-            ollamaToken: string;
-            assistantName: string;
-            maxToolCallsPerResponse: number;
-        }) => {
-            await userProfileStore.updateUserProfile({
-                chatDriver: next.chatDriver,
-                ollamaModel: next.ollamaModel,
-                ollamaToken: next.ollamaToken,
-                assistantName: next.assistantName,
-                maxToolCallsPerResponse: next.maxToolCallsPerResponse,
             });
         },
     }));

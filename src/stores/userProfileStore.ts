@@ -10,6 +10,8 @@ class UserProfileStore {
         themePreference: DEFAULT_THEME_ID,
         ollamaModel: DEFAULT_OLLAMA_MODEL,
         ollamaToken: "",
+        telegramId: "",
+        telegramBotToken: "",
         chatDriver: "ollama",
         assistantName: "Чарли",
         maxToolCallsPerResponse: 4,

@@ -4,6 +4,8 @@ export const defaultProfile: UserProfile = {
     themePreference: "dark-main",
     ollamaModel: "gpt-oss:20b",
     ollamaToken: "",
+    telegramId: "",
+    telegramBotToken: "",
     chatDriver: "ollama",
     assistantName: "Чарли",
     maxToolCallsPerResponse: 10,
