@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { Avatar, Button, InputBig } from "../../atoms";
+import { Avatar, Button, InputBig } from "../../../atoms";
 
 type ChatUserBubbleCardProps = {
     messageId: string;

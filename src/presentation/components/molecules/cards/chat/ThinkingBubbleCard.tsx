@@ -1,4 +1,4 @@
-import { Accordeon } from "../../atoms";
+import { Accordeon } from "../../../atoms";
 
 type ThinkingBubbleCardProps = {
     content: string;

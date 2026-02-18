@@ -19,11 +19,19 @@ import type {
     Project,
     ProjectListItem,
 } from "../../src/types/Project";
+import type {
+    CreateScenarioPayload,
+    DeleteScenarioResult,
+    Scenario,
+    ScenarioListItem,
+    UpdateScenarioPayload,
+} from "../../src/types/Scenario";
 import type { ElectronPaths } from "../paths";
 import { UserProfileService } from "./userData/UserProfileService";
 import { ThemesService } from "./userData/ThemesService";
 import { DialogsService } from "./userData/DialogsService";
 import { ProjectsService } from "./userData/ProjectsService";
+import { ScenariosService } from "./userData/ScenariosService";
 import { FileStorageService } from "./FileStorageService";
 import { DatabaseService } from "./DatabaseService";
 
@@ -32,6 +40,7 @@ export class UserDataService {
     private readonly themesService: ThemesService;
     private readonly dialogsService: DialogsService;
     private readonly projectsService: ProjectsService;
+    private readonly scenariosService: ScenariosService;
     private readonly fileStorageService: FileStorageService;
     private readonly databaseService: DatabaseService;
     private readonly defaultProjectsDirectory: string;
@@ -49,10 +58,13 @@ export class UserDataService {
                 this.userProfileService.updateUserProfile({
                     activeDialogId,
                     activeProjectId,
+                    activeScenarioId: null,
+                    lastActiveTab: activeProjectId ? "projects" : "dialogs",
                 });
             },
         );
         this.projectsService = new ProjectsService(this.databaseService);
+        this.scenariosService = new ScenariosService(this.databaseService);
         this.fileStorageService = new FileStorageService(
             paths.filesPath,
             this.databaseService,
@@ -63,7 +75,9 @@ export class UserDataService {
 
     getActiveDialog(): ChatDialog {
         const profile = this.userProfileService.getUserProfile();
-        return this.dialogsService.getActiveDialog(profile.activeDialogId);
+        return this.dialogsService.getActiveDialog(
+            profile.activeDialogId ?? undefined,
+        );
     }
 
     getDialogsList(): ChatDialogListItem[] {
@@ -74,7 +88,7 @@ export class UserDataService {
         const profile = this.userProfileService.getUserProfile();
         return this.dialogsService.getDialogById(
             dialogId,
-            profile.activeDialogId,
+            profile.activeDialogId ?? undefined,
         );
     }
 
@@ -87,7 +101,7 @@ export class UserDataService {
         return this.dialogsService.renameDialog(
             dialogId,
             nextTitle,
-            profile.activeDialogId,
+            profile.activeDialogId ?? undefined,
         );
     }
 
@@ -100,7 +114,7 @@ export class UserDataService {
         return this.dialogsService.deleteMessageFromDialog(
             dialogId,
             messageId,
-            profile.activeDialogId,
+            profile.activeDialogId ?? undefined,
         );
     }
 
@@ -109,7 +123,7 @@ export class UserDataService {
         return this.dialogsService.truncateDialogFromMessage(
             dialogId,
             messageId,
-            profile.activeDialogId,
+            profile.activeDialogId ?? undefined,
         );
     }
 
@@ -127,6 +141,8 @@ export class UserDataService {
         if (project) {
             this.userProfileService.updateUserProfile({
                 activeProjectId: project.id,
+                activeScenarioId: null,
+                lastActiveTab: "projects",
             });
         } else {
             this.userProfileService.updateUserProfile({
@@ -152,12 +168,19 @@ export class UserDataService {
             this.dialogsService.renameDialog(dialog.id, nextTitle);
         }
 
-        return this.projectsService.createProject({
+        const project = this.projectsService.createProject({
             ...payload,
             directoryPath: selectedBaseDirectory,
             dialogId: dialog.id,
             projectId,
         });
+
+        this.userProfileService.updateUserProfile({
+            activeScenarioId: null,
+            lastActiveTab: "projects",
+        });
+
+        return project;
     }
 
     deleteProject(projectId: string): DeleteProjectResult {
@@ -172,6 +195,8 @@ export class UserDataService {
             if (profile.activeProjectId === projectId) {
                 this.userProfileService.updateUserProfile({
                     activeProjectId: null,
+                    activeScenarioId: null,
+                    lastActiveTab: "dialogs",
                 });
             }
         }
@@ -179,6 +204,84 @@ export class UserDataService {
         return {
             projects: this.projectsService.getProjectsList(),
             deletedProjectId: projectId,
+        };
+    }
+
+    getScenariosList(): ScenarioListItem[] {
+        return this.scenariosService.getScenariosList();
+    }
+
+    getScenarioById(scenarioId: string): Scenario | null {
+        const scenario = this.scenariosService.getScenarioById(scenarioId);
+
+        if (scenario) {
+            this.userProfileService.updateUserProfile({
+                activeScenarioId: scenario.id,
+                lastActiveTab: "scenario",
+                activeDialogId: null,
+                activeProjectId: null,
+            });
+        } else {
+            this.userProfileService.updateUserProfile({
+                activeScenarioId: null,
+            });
+        }
+
+        return scenario;
+    }
+
+    createScenario(payload: CreateScenarioPayload): Scenario {
+        const scenario = this.scenariosService.createScenario(payload);
+
+        this.userProfileService.updateUserProfile({
+            activeScenarioId: scenario.id,
+            lastActiveTab: "scenario",
+            activeDialogId: null,
+            activeProjectId: null,
+        });
+
+        return scenario;
+    }
+
+    updateScenario(
+        scenarioId: string,
+        payload: UpdateScenarioPayload,
+    ): Scenario | null {
+        const scenario = this.scenariosService.updateScenario(
+            scenarioId,
+            payload,
+        );
+
+        if (scenario) {
+            this.userProfileService.updateUserProfile({
+                activeScenarioId: scenario.id,
+                lastActiveTab: "scenario",
+                activeDialogId: null,
+                activeProjectId: null,
+            });
+        }
+
+        return scenario;
+    }
+
+    deleteScenario(scenarioId: string): DeleteScenarioResult {
+        const deletedScenario =
+            this.scenariosService.deleteScenario(scenarioId);
+
+        if (deletedScenario) {
+            const profile = this.userProfileService.getUserProfile();
+
+            if (profile.activeScenarioId === deletedScenario.id) {
+                this.userProfileService.updateUserProfile({
+                    activeScenarioId: null,
+                    lastActiveTab: "dialogs",
+                });
+            }
+        }
+
+        return {
+            scenarios: this.scenariosService.getScenariosList(),
+            deletedScenarioId: scenarioId,
         };
     }
 

@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { Button } from "../atoms";
+import { Button } from "../../../atoms";
 
 type ConversationItemProps = {
     id: string;

@@ -107,6 +107,50 @@ export class DatabaseService {
             .run(projectId);
     }
 
+    upsertScenarioRaw(scenarioId: string, payload: unknown): void {
+        const payloadRecord =
+            payload && typeof payload === "object"
+                ? (payload as Record<string, unknown>)
+                : {};
+        const updatedAt =
+            typeof payloadRecord.updatedAt === "string" &&
+            payloadRecord.updatedAt
+                ? payloadRecord.updatedAt
+                : new Date().toISOString();
+
+        this.database
+            .prepare(
+                `
+                INSERT INTO scenarios (id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                `,
+            )
+            .run(scenarioId, JSON.stringify(payload), updatedAt);
+    }
+
+    getScenariosRaw(): unknown[] {
+        const rows = this.database
+            .prepare(
+                `SELECT payload_json
+                 FROM scenarios
+                 ORDER BY updated_at DESC`,
+            )
+            .all() as Array<{ payload_json: string }>;
+
+        return rows
+            .map((row) => this.tryParseJson(row.payload_json))
+            .filter((row) => row !== null);
+    }
+
+    deleteScenario(scenarioId: string): void {
+        this.database
+            .prepare(`DELETE FROM scenarios WHERE id = ?`)
+            .run(scenarioId);
+    }
+
     upsertFile(fileId: string, entry: FileManifestEntry): void {
         this.database
             .prepare(
@@ -284,6 +328,12 @@ export class DatabaseService {
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS scenarios (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS files (
                 id TEXT PRIMARY KEY,
                 path TEXT NOT NULL,
@@ -302,6 +352,7 @@ export class DatabaseService {
 
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_scenarios_updated_at ON scenarios(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
         `);
     }

@@ -3,7 +3,7 @@ import { Icon } from "@iconify/react";
 import { useTheme, useToasts } from "../../../../hooks";
 import { toolsStore } from "../../../../stores/toolsStore";
 import { Button, Modal } from "../../atoms";
-import { ToolPackageCard } from "../../molecules/cards";
+import { ToolPackageCard } from "../../molecules/cards/chat";
 import { SettingsView, type SettingsViewHandle } from "../settings";
 
 type ChatHeaderProps = {

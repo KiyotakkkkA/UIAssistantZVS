@@ -73,6 +73,13 @@ const appApi = {
     createProject: (payload) => electron.ipcRenderer.invoke("app:create-project", payload),
     deleteProject: (projectId) => electron.ipcRenderer.invoke("app:delete-project", projectId)
   },
+  scenarios: {
+    getScenariosList: () => electron.ipcRenderer.invoke("app:get-scenarios-list"),
+    getScenarioById: (scenarioId) => electron.ipcRenderer.invoke("app:get-scenario-by-id", scenarioId),
+    createScenario: (payload) => electron.ipcRenderer.invoke("app:create-scenario", payload),
+    updateScenario: (scenarioId, payload) => electron.ipcRenderer.invoke("app:update-scenario", scenarioId, payload),
+    deleteScenario: (scenarioId) => electron.ipcRenderer.invoke("app:delete-scenario", scenarioId)
+  },
   cache: {
     getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),
     setCacheEntry: (key, entry) => electron.ipcRenderer.invoke("app:set-cache-entry", key, entry)

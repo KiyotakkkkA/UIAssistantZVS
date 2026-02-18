@@ -10,6 +10,13 @@ import type {
     Project,
     ProjectListItem,
 } from "./Project";
+import type {
+    CreateScenarioPayload,
+    DeleteScenarioResult,
+    Scenario,
+    ScenarioListItem,
+    UpdateScenarioPayload,
+} from "./Scenario";
 
 export type ExecShellCommandResult = {
     command: string;
@@ -125,6 +132,17 @@ export type AppApiProjectsNamespace = {
     deleteProject: (projectId: string) => Promise<DeleteProjectResult>;
 };
 
+export type AppApiScenariosNamespace = {
+    getScenariosList: () => Promise<ScenarioListItem[]>;
+    getScenarioById: (scenarioId: string) => Promise<Scenario | null>;
+    createScenario: (payload: CreateScenarioPayload) => Promise<Scenario>;
+    updateScenario: (
+        scenarioId: string,
+        payload: UpdateScenarioPayload,
+    ) => Promise<Scenario | null>;
+    deleteScenario: (scenarioId: string) => Promise<DeleteScenarioResult>;
+};
+
 export type AppApiCacheNamespace = {
     getCacheEntry: (key: string) => Promise<AppCacheEntry | null>;
     setCacheEntry: (key: string, entry: AppCacheEntry) => Promise<void>;
@@ -139,5 +157,6 @@ export type AppApi = {
     upload: AppApiUploadNamespace;
     files: AppApiFilesNamespace;
     projects: AppApiProjectsNamespace;
+    scenarios: AppApiScenariosNamespace;
     cache: AppApiCacheNamespace;
 };

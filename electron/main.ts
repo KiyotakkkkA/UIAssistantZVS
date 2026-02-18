@@ -16,6 +16,10 @@ import type {
     UploadedFileData,
 } from "../src/types/ElectronApi";
 import type { CreateProjectPayload } from "../src/types/Project";
+import type {
+    CreateScenarioPayload,
+    UpdateScenarioPayload,
+} from "../src/types/Scenario";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,21 +47,15 @@ let win: BrowserWindow | null;
 let userDataService: UserDataService;
 let commandExecService: CommandExecService;
 
-const getMimeTypeByExtension = (filePath: string): string => {
-    const extension = path.extname(filePath).toLowerCase();
-
-    const mimeByExtension: Record<string, string> = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-        ".bmp": "image/bmp",
-        ".svg": "image/svg+xml",
-        ".avif": "image/avif",
-    };
-
-    return mimeByExtension[extension] || "application/octet-stream";
+const mimeByExtension: Record<string, string> = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".avif": "image/avif",
 };
 
 const imageExtensions = [
@@ -79,6 +77,12 @@ const extensionByMime: Record<string, string> = {
     "image/bmp": ".bmp",
     "image/svg+xml": ".svg",
     "image/avif": ".avif",
+};
+
+const getMimeTypeByExtension = (filePath: string): string => {
+    const extension = path.extname(filePath).toLowerCase();
+
+    return mimeByExtension[extension] || "application/octet-stream";
 };
 
 const isRemoteUrl = (value: string) => /^https?:\/\//i.test(value);
@@ -224,6 +228,25 @@ app.whenReady()
         );
         ipcMain.handle("app:delete-project", (_event, projectId: string) =>
             userDataService.deleteProject(projectId),
+        );
+        ipcMain.handle("app:get-scenarios-list", () =>
+            userDataService.getScenariosList(),
+        );
+        ipcMain.handle("app:get-scenario-by-id", (_event, scenarioId: string) =>
+            userDataService.getScenarioById(scenarioId),
+        );
+        ipcMain.handle(
+            "app:create-scenario",
+            (_event, payload: CreateScenarioPayload) =>
+                userDataService.createScenario(payload),
+        );
+        ipcMain.handle(
+            "app:update-scenario",
+            (_event, scenarioId: string, payload: UpdateScenarioPayload) =>
+                userDataService.updateScenario(scenarioId, payload),
+        );
+        ipcMain.handle("app:delete-scenario", (_event, scenarioId: string) =>
+            userDataService.deleteScenario(scenarioId),
         );
         ipcMain.handle("app:save-files", (_event, files: UploadedFileData[]) =>
             userDataService.saveFiles(files),

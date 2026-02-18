@@ -4,7 +4,7 @@ import {
     ChatUserBubbleCard,
     ThinkingBubbleCard,
     ToolBubbleCard,
-} from "../../molecules/cards";
+} from "../../molecules/cards/chat";
 import { MarkdownStaticContent } from "../../molecules/render";
 import type { ChatMessage } from "../../../../types/Chat";
 import { useMessages } from "../../../../hooks";

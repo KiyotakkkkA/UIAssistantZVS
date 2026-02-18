@@ -1,6 +1,6 @@
-import type { ToolPackageDescriptor } from "../../../../utils/ToolsBuilder";
-import { Accordeon } from "../../atoms";
-import { ShikiCodeBlock } from "../render/ShikiCodeBlock";
+import type { ToolPackageDescriptor } from "../../../../../utils/ToolsBuilder";
+import { Accordeon } from "../../../atoms";
+import { ShikiCodeBlock } from "../../render/ShikiCodeBlock";
 
 type ToolPackageCardProps = {
     pkg: ToolPackageDescriptor;

@@ -18,8 +18,10 @@ class UserProfileStore {
         userName: "Пользователь",
         userPrompt: "",
         userLanguage: "Русский",
-        activeDialogId: "",
+        activeDialogId: null,
         activeProjectId: null,
+        activeScenarioId: null,
+        lastActiveTab: "dialogs",
     };
 
     private isInitializing = false;

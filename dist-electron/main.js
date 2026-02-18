@@ -18,8 +18,10 @@ const defaultProfile = {
   userName: "Пользователь",
   userPrompt: "",
   userLanguage: "Русский",
-  activeDialogId: "",
-  activeProjectId: null
+  activeDialogId: null,
+  activeProjectId: null,
+  activeScenarioId: null,
+  lastActiveTab: "dialogs"
 };
 const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
 const createDialogId = () => createPrefixedId("dialog");
@@ -202,6 +204,43 @@ class InitService {
 const isChatDriver = (value) => {
   return value === "ollama" || value === "";
 };
+const isWorkspaceTab = (value) => {
+  return value === "dialogs" || value === "projects" || value === "scenario";
+};
+const normalizeNullableId = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmedValue = value.trim();
+  return trimmedValue.length > 0 ? trimmedValue : null;
+};
+const normalizeWorkspaceContext = (profile) => {
+  const inferredTab = profile.activeScenarioId ? "scenario" : profile.activeProjectId ? "projects" : "dialogs";
+  const lastActiveTab = profile.lastActiveTab || inferredTab;
+  if (lastActiveTab === "dialogs") {
+    return {
+      ...profile,
+      activeProjectId: null,
+      activeScenarioId: null,
+      lastActiveTab
+    };
+  }
+  if (lastActiveTab === "projects") {
+    return {
+      ...profile,
+      activeProjectId: normalizeNullableId(profile.activeProjectId),
+      activeScenarioId: null,
+      lastActiveTab
+    };
+  }
+  return {
+    ...profile,
+    activeDialogId: null,
+    activeProjectId: null,
+    activeScenarioId: normalizeNullableId(profile.activeScenarioId),
+    lastActiveTab
+  };
+};
 class UserProfileService {
   constructor(profilePath) {
     this.profilePath = profilePath;
@@ -228,22 +267,22 @@ class UserProfileService {
         ...typeof parsed.userName === "string" ? { userName: parsed.userName } : {},
         ...typeof parsed.userPrompt === "string" ? { userPrompt: parsed.userPrompt } : {},
         ...typeof parsed.userLanguage === "string" ? { userLanguage: parsed.userLanguage } : {},
-        ...typeof parsed.activeDialogId === "string" ? { activeDialogId: parsed.activeDialogId } : {},
-        ...typeof parsed.activeProjectId === "string" || parsed.activeProjectId === null ? {
-          activeProjectId: typeof parsed.activeProjectId === "string" && parsed.activeProjectId.trim().length > 0 ? parsed.activeProjectId : null
-        } : {}
+        activeDialogId: normalizeNullableId(parsed.activeDialogId),
+        activeProjectId: normalizeNullableId(parsed.activeProjectId),
+        activeScenarioId: normalizeNullableId(parsed.activeScenarioId),
+        lastActiveTab: isWorkspaceTab(parsed.lastActiveTab) ? parsed.lastActiveTab : defaultProfile.lastActiveTab
       };
-      return normalized;
+      return normalizeWorkspaceContext(normalized);
     } catch {
       return defaultProfile;
     }
   }
   updateUserProfile(nextProfile) {
     const currentProfile = this.getUserProfile();
-    const mergedProfile = {
+    const mergedProfile = normalizeWorkspaceContext({
       ...currentProfile,
       ...nextProfile
-    };
+    });
     fs.writeFileSync(
       this.profilePath,
       JSON.stringify(mergedProfile, null, 2)
@@ -663,6 +702,104 @@ class ProjectsService {
     };
   }
 }
+class ScenariosService {
+  constructor(databaseService) {
+    this.databaseService = databaseService;
+  }
+  getScenariosList() {
+    return this.readScenarios().map(
+      (scenario) => this.toScenarioListItem(scenario)
+    );
+  }
+  getScenarioById(scenarioId) {
+    const scenarios = this.readScenarios();
+    return scenarios.find((scenario) => scenario.id === scenarioId) ?? null;
+  }
+  createScenario(payload) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const scenario = {
+      id: this.normalizeScenarioId(void 0),
+      name: payload.name.trim() || "Новый сценарий",
+      description: payload.description.trim(),
+      content: this.normalizeContent(payload.content),
+      createdAt: now,
+      updatedAt: now
+    };
+    this.writeScenario(scenario);
+    return scenario;
+  }
+  updateScenario(scenarioId, payload) {
+    const current = this.getScenarioById(scenarioId);
+    if (!current) {
+      return null;
+    }
+    const next = {
+      ...current,
+      name: payload.name.trim() || current.name,
+      description: payload.description.trim(),
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    this.writeScenario(next);
+    return next;
+  }
+  deleteScenario(scenarioId) {
+    const scenario = this.getScenarioById(scenarioId);
+    if (!scenario) {
+      return null;
+    }
+    this.databaseService.deleteScenario(scenario.id);
+    return scenario;
+  }
+  readScenarios() {
+    const scenarios = [];
+    for (const rawItem of this.databaseService.getScenariosRaw()) {
+      const parsed = rawItem;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      if (typeof parsed.name !== "string" || typeof parsed.description !== "string") {
+        continue;
+      }
+      scenarios.push({
+        id: this.normalizeScenarioId(parsed.id),
+        name: parsed.name.trim() || "Новый сценарий",
+        description: parsed.description,
+        content: this.normalizeContent(parsed.content),
+        createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : now,
+        updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : now
+      });
+    }
+    scenarios.sort(
+      (left, right) => right.updatedAt.localeCompare(left.updatedAt)
+    );
+    return scenarios;
+  }
+  writeScenario(scenario) {
+    this.databaseService.upsertScenarioRaw(scenario.id, scenario);
+  }
+  normalizeScenarioId(id) {
+    if (typeof id === "string" && id.startsWith("scenario_")) {
+      return id;
+    }
+    return `scenario_${randomUUID().replace(/-/g, "")}`;
+  }
+  normalizeContent(content) {
+    if (content && typeof content === "object" && !Array.isArray(content)) {
+      return content;
+    }
+    return {};
+  }
+  toScenarioListItem(scenario) {
+    return {
+      id: scenario.id,
+      title: scenario.name,
+      preview: scenario.description.trim() || "Сценарий без описания",
+      time: new Date(scenario.updatedAt).toLocaleTimeString("ru-RU", {
+        hour: "2-digit",
+        minute: "2-digit"
+      }),
+      updatedAt: scenario.updatedAt
+    };
+  }
+}
 class FileStorageService {
   constructor(filesPath, databaseService) {
     this.filesPath = filesPath;
@@ -784,6 +921,30 @@ class DatabaseService {
   }
   deleteProject(projectId) {
     this.database.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+  }
+  upsertScenarioRaw(scenarioId, payload) {
+    const payloadRecord = payload && typeof payload === "object" ? payload : {};
+    const updatedAt = typeof payloadRecord.updatedAt === "string" && payloadRecord.updatedAt ? payloadRecord.updatedAt : (/* @__PURE__ */ new Date()).toISOString();
+    this.database.prepare(
+      `
+                INSERT INTO scenarios (id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                `
+    ).run(scenarioId, JSON.stringify(payload), updatedAt);
+  }
+  getScenariosRaw() {
+    const rows = this.database.prepare(
+      `SELECT payload_json
+                 FROM scenarios
+                 ORDER BY updated_at DESC`
+    ).all();
+    return rows.map((row) => this.tryParseJson(row.payload_json)).filter((row) => row !== null);
+  }
+  deleteScenario(scenarioId) {
+    this.database.prepare(`DELETE FROM scenarios WHERE id = ?`).run(scenarioId);
   }
   upsertFile(fileId, entry) {
     this.database.prepare(
@@ -912,6 +1073,12 @@ class DatabaseService {
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS scenarios (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS files (
                 id TEXT PRIMARY KEY,
                 path TEXT NOT NULL,
@@ -930,6 +1097,7 @@ class DatabaseService {
 
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_scenarios_updated_at ON scenarios(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
         `);
   }
@@ -946,6 +1114,7 @@ class UserDataService {
   themesService;
   dialogsService;
   projectsService;
+  scenariosService;
   fileStorageService;
   databaseService;
   defaultProjectsDirectory;
@@ -959,11 +1128,14 @@ class UserDataService {
       ({ activeDialogId, activeProjectId }) => {
         this.userProfileService.updateUserProfile({
           activeDialogId,
-          activeProjectId
+          activeProjectId,
+          activeScenarioId: null,
+          lastActiveTab: activeProjectId ? "projects" : "dialogs"
         });
       }
     );
     this.projectsService = new ProjectsService(this.databaseService);
+    this.scenariosService = new ScenariosService(this.databaseService);
     this.fileStorageService = new FileStorageService(
       paths.filesPath,
       this.databaseService
@@ -972,7 +1144,9 @@ class UserDataService {
   }
   getActiveDialog() {
     const profile = this.userProfileService.getUserProfile();
-    return this.dialogsService.getActiveDialog(profile.activeDialogId);
+    return this.dialogsService.getActiveDialog(
+      profile.activeDialogId ?? void 0
+    );
   }
   getDialogsList() {
     return this.dialogsService.getDialogsList();
@@ -981,7 +1155,7 @@ class UserDataService {
     const profile = this.userProfileService.getUserProfile();
     return this.dialogsService.getDialogById(
       dialogId,
-      profile.activeDialogId
+      profile.activeDialogId ?? void 0
     );
   }
   createDialog() {
@@ -992,7 +1166,7 @@ class UserDataService {
     return this.dialogsService.renameDialog(
       dialogId,
       nextTitle,
-      profile.activeDialogId
+      profile.activeDialogId ?? void 0
     );
   }
   deleteDialog(dialogId) {
@@ -1003,7 +1177,7 @@ class UserDataService {
     return this.dialogsService.deleteMessageFromDialog(
       dialogId,
       messageId,
-      profile.activeDialogId
+      profile.activeDialogId ?? void 0
     );
   }
   truncateDialogFromMessage(dialogId, messageId) {
@@ -1011,7 +1185,7 @@ class UserDataService {
     return this.dialogsService.truncateDialogFromMessage(
       dialogId,
       messageId,
-      profile.activeDialogId
+      profile.activeDialogId ?? void 0
     );
   }
   saveDialogSnapshot(dialog2) {
@@ -1024,7 +1198,9 @@ class UserDataService {
     const project = this.projectsService.getProjectById(projectId);
     if (project) {
       this.userProfileService.updateUserProfile({
-        activeProjectId: project.id
+        activeProjectId: project.id,
+        activeScenarioId: null,
+        lastActiveTab: "projects"
       });
     } else {
       this.userProfileService.updateUserProfile({
@@ -1044,12 +1220,17 @@ class UserDataService {
     if (nextTitle) {
       this.dialogsService.renameDialog(dialog2.id, nextTitle);
     }
-    return this.projectsService.createProject({
+    const project = this.projectsService.createProject({
       ...payload,
       directoryPath: selectedBaseDirectory,
       dialogId: dialog2.id,
       projectId
     });
+    this.userProfileService.updateUserProfile({
+      activeScenarioId: null,
+      lastActiveTab: "projects"
+    });
+    return project;
   }
   deleteProject(projectId) {
     const deletedProject = this.projectsService.deleteProject(projectId);
@@ -1059,13 +1240,75 @@ class UserDataService {
       const profile = this.userProfileService.getUserProfile();
       if (profile.activeProjectId === projectId) {
         this.userProfileService.updateUserProfile({
-          activeProjectId: null
+          activeProjectId: null,
+          activeScenarioId: null,
+          lastActiveTab: "dialogs"
         });
       }
     }
     return {
       projects: this.projectsService.getProjectsList(),
       deletedProjectId: projectId
+    };
+  }
+  getScenariosList() {
+    return this.scenariosService.getScenariosList();
+  }
+  getScenarioById(scenarioId) {
+    const scenario = this.scenariosService.getScenarioById(scenarioId);
+    if (scenario) {
+      this.userProfileService.updateUserProfile({
+        activeScenarioId: scenario.id,
+        lastActiveTab: "scenario",
+        activeDialogId: null,
+        activeProjectId: null
+      });
+    } else {
+      this.userProfileService.updateUserProfile({
+        activeScenarioId: null
+      });
+    }
+    return scenario;
+  }
+  createScenario(payload) {
+    const scenario = this.scenariosService.createScenario(payload);
+    this.userProfileService.updateUserProfile({
+      activeScenarioId: scenario.id,
+      lastActiveTab: "scenario",
+      activeDialogId: null,
+      activeProjectId: null
+    });
+    return scenario;
+  }
+  updateScenario(scenarioId, payload) {
+    const scenario = this.scenariosService.updateScenario(
+      scenarioId,
+      payload
+    );
+    if (scenario) {
+      this.userProfileService.updateUserProfile({
+        activeScenarioId: scenario.id,
+        lastActiveTab: "scenario",
+        activeDialogId: null,
+        activeProjectId: null
+      });
+    }
+    return scenario;
+  }
+  deleteScenario(scenarioId) {
+    const deletedScenario = this.scenariosService.deleteScenario(scenarioId);
+    if (deletedScenario) {
+      const profile = this.userProfileService.getUserProfile();
+      if (profile.activeScenarioId === deletedScenario.id) {
+        this.userProfileService.updateUserProfile({
+          activeScenarioId: null,
+          lastActiveTab: "dialogs"
+        });
+      }
+    }
+    return {
+      scenarios: this.scenariosService.getScenariosList(),
+      deletedScenarioId: scenarioId
     };
   }
   saveFiles(files) {
@@ -1194,19 +1437,15 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win;
 let userDataService;
 let commandExecService;
-const getMimeTypeByExtension = (filePath) => {
-  const extension = path.extname(filePath).toLowerCase();
-  const mimeByExtension = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-    ".bmp": "image/bmp",
-    ".svg": "image/svg+xml",
-    ".avif": "image/avif"
-  };
-  return mimeByExtension[extension] || "application/octet-stream";
+const mimeByExtension = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".avif": "image/avif"
 };
 const imageExtensions = [
   "png",
@@ -1226,6 +1465,10 @@ const extensionByMime = {
   "image/bmp": ".bmp",
   "image/svg+xml": ".svg",
   "image/avif": ".avif"
+};
+const getMimeTypeByExtension = (filePath) => {
+  const extension = path.extname(filePath).toLowerCase();
+  return mimeByExtension[extension] || "application/octet-stream";
 };
 const isRemoteUrl = (value) => /^https?:\/\//i.test(value);
 const isDataUrl = (value) => /^data:/i.test(value);
@@ -1359,6 +1602,26 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:delete-project",
     (_event, projectId) => userDataService.deleteProject(projectId)
+  );
+  ipcMain.handle(
+    "app:get-scenarios-list",
+    () => userDataService.getScenariosList()
+  );
+  ipcMain.handle(
+    "app:get-scenario-by-id",
+    (_event, scenarioId) => userDataService.getScenarioById(scenarioId)
+  );
+  ipcMain.handle(
+    "app:create-scenario",
+    (_event, payload) => userDataService.createScenario(payload)
+  );
+  ipcMain.handle(
+    "app:update-scenario",
+    (_event, scenarioId, payload) => userDataService.updateScenario(scenarioId, payload)
+  );
+  ipcMain.handle(
+    "app:delete-scenario",
+    (_event, scenarioId) => userDataService.deleteScenario(scenarioId)
   );
   ipcMain.handle(
     "app:save-files",

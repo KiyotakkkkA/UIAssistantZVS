@@ -1,9 +1,61 @@
 import fs from "node:fs";
 import { defaultProfile } from "../../static/data";
-import type { ChatDriver, UserProfile } from "../../../src/types/App";
+import type {
+    ChatDriver,
+    UserProfile,
+    WorkspaceTab,
+} from "../../../src/types/App";
 
 const isChatDriver = (value: unknown): value is ChatDriver => {
     return value === "ollama" || value === "";
+};
+
+const isWorkspaceTab = (value: unknown): value is WorkspaceTab => {
+    return value === "dialogs" || value === "projects" || value === "scenario";
+};
+
+const normalizeNullableId = (value: unknown): string | null => {
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const trimmedValue = value.trim();
+    return trimmedValue.length > 0 ? trimmedValue : null;
+};
+
+const normalizeWorkspaceContext = (profile: UserProfile): UserProfile => {
+    const inferredTab: WorkspaceTab = profile.activeScenarioId
+        ? "scenario"
+        : profile.activeProjectId
+          ? "projects"
+          : "dialogs";
+    const lastActiveTab = profile.lastActiveTab || inferredTab;
+
+    if (lastActiveTab === "dialogs") {
+        return {
+            ...profile,
+            activeProjectId: null,
+            activeScenarioId: null,
+            lastActiveTab,
+        };
+    }
+
+    if (lastActiveTab === "projects") {
+        return {
+            ...profile,
+            activeProjectId: normalizeNullableId(profile.activeProjectId),
+            activeScenarioId: null,
+            lastActiveTab,
+        };
+    }
+
+    return {
+        ...profile,
+        activeDialogId: null,
+        activeProjectId: null,
+        activeScenarioId: normalizeNullableId(profile.activeScenarioId),
+        lastActiveTab,
+    };
 };
 
 export class UserProfileService {
@@ -57,22 +109,15 @@ export class UserProfileService {
                 ...(typeof parsed.userLanguage === "string"
                     ? { userLanguage: parsed.userLanguage }
                     : {}),
-                ...(typeof parsed.activeDialogId === "string"
-                    ? { activeDialogId: parsed.activeDialogId }
-                    : {}),
-                ...(typeof parsed.activeProjectId === "string" ||
-                parsed.activeProjectId === null
-                    ? {
-                          activeProjectId:
-                              typeof parsed.activeProjectId === "string" &&
-                              parsed.activeProjectId.trim().length > 0
-                                  ? parsed.activeProjectId
-                                  : null,
-                      }
-                    : {}),
+                activeDialogId: normalizeNullableId(parsed.activeDialogId),
+                activeProjectId: normalizeNullableId(parsed.activeProjectId),
+                activeScenarioId: normalizeNullableId(parsed.activeScenarioId),
+                lastActiveTab: isWorkspaceTab(parsed.lastActiveTab)
+                    ? parsed.lastActiveTab
+                    : defaultProfile.lastActiveTab,
             };
 
-            return normalized;
+            return normalizeWorkspaceContext(normalized);
         } catch {
             return defaultProfile;
         }
@@ -80,10 +125,10 @@ export class UserProfileService {
 
     updateUserProfile(nextProfile: Partial<UserProfile>): UserProfile {
         const currentProfile = this.getUserProfile();
-        const mergedProfile: UserProfile = {
+        const mergedProfile = normalizeWorkspaceContext({
             ...currentProfile,
             ...nextProfile,
-        };
+        });
 
         fs.writeFileSync(
             this.profilePath,

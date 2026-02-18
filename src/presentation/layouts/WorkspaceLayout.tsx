@@ -1,13 +1,16 @@
 import { observer } from "mobx-react-lite";
 import { Outlet } from "react-router-dom";
 import { useDialogs, useProjects } from "../../hooks";
+import { useScenario } from "../../hooks/agents";
 import { Loader } from "../components/atoms";
 import { ChatSidebar } from "../components/organisms/chat";
 
 export const WorkspaceLayout = observer(function WorkspaceLayout() {
     const { isReady: isDialogsReady } = useDialogs();
     const { isReady: isProjectsReady } = useProjects();
-    const isWorkspaceReady = isDialogsReady && isProjectsReady;
+    const { isReady: isScenariosReady } = useScenario();
+    const isWorkspaceReady =
+        isDialogsReady && isProjectsReady && isScenariosReady;
 
     return (
         <main className="h-screen w-screen overflow-hidden bg-main-900 p-3 text-main-100">

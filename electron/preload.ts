@@ -8,6 +8,10 @@ import type {
 import type { ChatDialog } from "../src/types/Chat";
 import type { AppApi, AppCacheEntry } from "../src/types/ElectronApi";
 import type { CreateProjectPayload } from "../src/types/Project";
+import type {
+    CreateScenarioPayload,
+    UpdateScenarioPayload,
+} from "../src/types/Scenario";
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -106,6 +110,17 @@ const appApi: AppApi = {
             ipcRenderer.invoke("app:create-project", payload),
         deleteProject: (projectId: string) =>
             ipcRenderer.invoke("app:delete-project", projectId),
+    },
+    scenarios: {
+        getScenariosList: () => ipcRenderer.invoke("app:get-scenarios-list"),
+        getScenarioById: (scenarioId: string) =>
+            ipcRenderer.invoke("app:get-scenario-by-id", scenarioId),
+        createScenario: (payload: CreateScenarioPayload) =>
+            ipcRenderer.invoke("app:create-scenario", payload),
+        updateScenario: (scenarioId: string, payload: UpdateScenarioPayload) =>
+            ipcRenderer.invoke("app:update-scenario", scenarioId, payload),
+        deleteScenario: (scenarioId: string) =>
+            ipcRenderer.invoke("app:delete-scenario", scenarioId),
     },
     cache: {
         getCacheEntry: (key: string) =>

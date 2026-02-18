@@ -1,5 +1,7 @@
 export type ChatDriver = "" | "ollama";
 
+export type WorkspaceTab = "dialogs" | "projects" | "scenario";
+
 export type UserProfile = {
     themePreference: string;
     ollamaModel: string;
@@ -12,8 +14,10 @@ export type UserProfile = {
     userName: string;
     userPrompt: string;
     userLanguage: string;
-    activeDialogId: string;
+    activeDialogId: string | null;
     activeProjectId: string | null;
+    activeScenarioId: string | null;
+    lastActiveTab: WorkspaceTab;
 };
 
 export type ThemeData = {

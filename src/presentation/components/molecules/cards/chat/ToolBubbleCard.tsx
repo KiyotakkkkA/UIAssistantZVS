@@ -1,6 +1,6 @@
-import { Accordeon, Button } from "../../atoms";
-import { ShikiCodeBlock } from "../render/ShikiCodeBlock";
-import type { ToolTrace } from "../../../../types/Chat";
+import { Accordeon, Button } from "../../../atoms";
+import { ShikiCodeBlock } from "../../render/ShikiCodeBlock";
+import type { ToolTrace } from "../../../../../types/Chat";
 
 type ToolBubbleCardProps = {
     messageId: string;

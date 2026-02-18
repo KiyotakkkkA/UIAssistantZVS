@@ -12,6 +12,8 @@ export const defaultProfile: UserProfile = {
     userName: "Пользователь",
     userPrompt: "",
     userLanguage: "Русский",
-    activeDialogId: "",
+    activeDialogId: null,
     activeProjectId: null,
+    activeScenarioId: null,
+    lastActiveTab: "dialogs",
 };

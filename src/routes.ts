@@ -5,6 +5,8 @@ import { ChatPage } from "./presentation/pages/ChatPage";
 import { CreateProjectPage } from "./presentation/pages/projects/CreateProjectPage";
 import { WorkspaceLayout } from "./presentation/layouts/WorkspaceLayout";
 import { ProjectPage } from "./presentation/pages/projects/ProjectPage";
+import { CreateScenarioPage } from "./presentation/pages/scenario/CreateScenarioPage";
+import { ScenarioPage } from "./presentation/pages/scenario/ScenarioPage";
 import { userProfileStore } from "./stores/userProfileStore";
 
 const HomeRedirect = observer(function HomeRedirect() {
@@ -12,10 +14,17 @@ const HomeRedirect = observer(function HomeRedirect() {
         return null;
     }
 
-    const activeProjectId = userProfileStore.userProfile.activeProjectId;
+    const { activeProjectId, activeScenarioId, lastActiveTab } =
+        userProfileStore.userProfile;
+    const targetPath =
+        lastActiveTab === "scenario" && activeScenarioId
+            ? `/scenario/${activeScenarioId}`
+            : lastActiveTab === "projects" && activeProjectId
+              ? `/projects/${activeProjectId}`
+              : "/dialogs";
 
     return createElement(Navigate, {
-        to: activeProjectId ? `/projects/${activeProjectId}` : "/dialogs",
+        to: targetPath,
         replace: true,
     });
 });
@@ -47,6 +56,21 @@ export const router = createHashRouter([
             {
                 path: "/projects/:projectId",
                 element: createElement(ProjectPage),
+            },
+            {
+                path: "/scenario",
+                element: createElement(Navigate, {
+                    to: "/scenario/create",
+                    replace: true,
+                }),
+            },
+            {
+                path: "/scenario/create",
+                element: createElement(CreateScenarioPage),
+            },
+            {
+                path: "/scenario/:scenarioId",
+                element: createElement(ScenarioPage),
             },
         ],
     },

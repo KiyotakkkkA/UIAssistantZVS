@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useDialogs, useProjects, useToasts } from "../../../../hooks";
-import { Button, Dropdown, InputSmall, Modal } from "../../atoms";
-import { ConversationItem } from "../../molecules";
+import { useScenario } from "../../../../hooks/agents";
+import { Button, Dropdown, InputBig, InputSmall, Modal } from "../../atoms";
+import {
+    ConversationItem,
+    ProjectsItem,
+    ScenarioItem,
+} from "../../molecules/cards/workspace";
 import { Icon } from "@iconify/react";
 
 export const ChatSidebar = observer(function ChatSidebar() {
     const navigate = useNavigate();
+    const location = useLocation();
     const toasts = useToasts();
     const {
         dialogs,
@@ -20,6 +26,14 @@ export const ChatSidebar = observer(function ChatSidebar() {
     } = useDialogs();
     const { projects, activeProjectId, clearActiveProject, deleteProject } =
         useProjects();
+    const {
+        scenarios,
+        activeScenarioId,
+        switchScenario,
+        updateScenario,
+        deleteScenario,
+        clearActiveScenario,
+    } = useScenario();
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editMode, setEditMode] = useState<"create" | "rename">("create");
@@ -31,12 +45,37 @@ export const ChatSidebar = observer(function ChatSidebar() {
     const [isDeleteProjectModalOpen, setIsDeleteProjectModalOpen] =
         useState(false);
     const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null);
+    const [isDeleteScenarioModalOpen, setIsDeleteScenarioModalOpen] =
+        useState(false);
+    const [deleteScenarioId, setDeleteScenarioId] = useState<string | null>(
+        null,
+    );
+
+    const [isEditScenarioModalOpen, setIsEditScenarioModalOpen] =
+        useState(false);
+    const [editScenarioId, setEditScenarioId] = useState<string | null>(null);
+    const [scenarioName, setScenarioName] = useState("");
+    const [scenarioDescription, setScenarioDescription] = useState("");
 
     const editModalTitle = useMemo(
         () =>
             editMode === "create" ? "Создать диалог" : "Переименовать диалог",
         [editMode],
     );
+
+    const activeSection = useMemo<"dialogs" | "projects" | "scenario">(() => {
+        const pathname = location.pathname;
+
+        if (pathname.startsWith("/projects")) {
+            return "projects";
+        }
+
+        if (pathname.startsWith("/scenario")) {
+            return "scenario";
+        }
+
+        return "dialogs";
+    }, [location.pathname]);
 
     const openCreateModal = () => {
         navigate("/dialogs");
@@ -50,13 +89,31 @@ export const ChatSidebar = observer(function ChatSidebar() {
         navigate("/projects/create");
     };
 
+    const openScenarioPage = () => {
+        navigate("/scenario/create");
+    };
+
     const selectDialogAndOpenPage = (dialogId: string) => {
         navigate("/dialogs");
         void switchDialog(dialogId);
     };
 
-    const selectProjectAndOpenPage = async (projectId: string) => {
+    const selectProjectAndOpenPage = (projectId: string) => {
         navigate(`/projects/${projectId}`);
+    };
+
+    const selectScenarioAndOpenPage = async (scenarioId: string) => {
+        const scenario = await switchScenario(scenarioId);
+
+        if (!scenario) {
+            toasts.warning({
+                title: "Сценарий не найден",
+                description: "Не удалось открыть выбранный сценарий.",
+            });
+            return;
+        }
+
+        navigate(`/scenario/${scenarioId}`);
     };
 
     const createOptionsList = [
@@ -71,6 +128,12 @@ export const ChatSidebar = observer(function ChatSidebar() {
             label: "Новый проект",
             icon: <Icon icon="mdi:plus-box-multiple" width={20} />,
             onClick: openProjectsPage,
+        },
+        {
+            value: "scenario",
+            label: "Новый сценарий",
+            icon: <Icon icon="mdi:script" width={20} />,
+            onClick: openScenarioPage,
         },
     ];
 
@@ -151,6 +214,76 @@ export const ChatSidebar = observer(function ChatSidebar() {
         setIsDeleteProjectModalOpen(false);
     };
 
+    const openEditScenarioModal = async (scenarioId: string) => {
+        const scenario = await switchScenario(scenarioId);
+
+        if (!scenario) {
+            toasts.warning({
+                title: "Сценарий не найден",
+                description: "Не удалось загрузить данные сценария.",
+            });
+            return;
+        }
+
+        setEditScenarioId(scenario.id);
+        setScenarioName(scenario.name);
+        setScenarioDescription(scenario.description);
+        setIsEditScenarioModalOpen(true);
+    };
+
+    const closeEditScenarioModal = () => {
+        setEditScenarioId(null);
+        setScenarioName("");
+        setScenarioDescription("");
+        setIsEditScenarioModalOpen(false);
+    };
+
+    const submitEditScenarioModal = async () => {
+        if (!editScenarioId) {
+            return;
+        }
+
+        const nextName = scenarioName.trim();
+
+        if (!nextName) {
+            toasts.warning({
+                title: "Введите название",
+                description: "Название сценария не может быть пустым.",
+            });
+            return;
+        }
+
+        const updated = await updateScenario(editScenarioId, {
+            name: nextName,
+            description: scenarioDescription.trim(),
+        });
+
+        if (!updated) {
+            toasts.warning({
+                title: "Не удалось обновить",
+                description: "Сценарий не найден или уже удалён.",
+            });
+            return;
+        }
+
+        toasts.success({
+            title: "Сценарий обновлён",
+            description: "Название и описание сценария сохранены.",
+        });
+
+        closeEditScenarioModal();
+    };
+
+    const openDeleteScenarioModal = (scenarioId: string) => {
+        setDeleteScenarioId(scenarioId);
+        setIsDeleteScenarioModalOpen(true);
+    };
+
+    const closeDeleteScenarioModal = () => {
+        setDeleteScenarioId(null);
+        setIsDeleteScenarioModalOpen(false);
+    };
+
     const confirmDelete = async () => {
         if (!deleteDialogId) {
             return;
@@ -193,9 +326,38 @@ export const ChatSidebar = observer(function ChatSidebar() {
         closeDeleteProjectModal();
     };
 
+    const confirmDeleteScenario = async () => {
+        if (!deleteScenarioId) {
+            return;
+        }
+
+        const deleted = await deleteScenario(deleteScenarioId);
+
+        if (!deleted) {
+            toasts.warning({
+                title: "Не удалось удалить",
+                description: "Сценарий не найден или уже удалён.",
+            });
+            closeDeleteScenarioModal();
+            return;
+        }
+
+        if (activeScenarioId === deleteScenarioId) {
+            clearActiveScenario();
+            navigate("/dialogs");
+        }
+
+        toasts.info({
+            title: "Сценарий удалён",
+            description: "Сценарий удалён из рабочей области.",
+        });
+
+        closeDeleteScenarioModal();
+    };
+
     return (
         <aside className="flex h-full w-[320px] flex-col bg-main-900/85 p-4 border-r border-main-300/20 backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2 border-b border-main-600 pb-4 ">
+            <div className="flex items-center justify-between gap-2 pb-4 ">
                 <p className="text-xs uppercase tracking-[0.18em] text-main-400">
                     Рабочая область
                 </p>
@@ -224,11 +386,28 @@ export const ChatSidebar = observer(function ChatSidebar() {
                 />
             </div>
 
-            <div className="mt-4 flex-1 space-y-2 overflow-y-auto pr-1">
+            <div className="mb-3 flex items-center gap-3 px-1">
+                <div className="h-px flex-1 bg-main-600/70" />
+                <Icon
+                    icon="mdi:chat"
+                    width={16}
+                    height={16}
+                    className="text-main-400"
+                />
+                <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
+                    Диалоги
+                </p>
+                <div className="h-px flex-1 bg-main-600/70" />
+            </div>
+
+            <div className="flex-1 space-y-2 overflow-y-auto pr-1">
                 {dialogs.map((conversation) => (
                     <ConversationItem
                         key={conversation.id}
-                        active={conversation.id === activeDialogId}
+                        active={
+                            activeSection === "dialogs" &&
+                            conversation.id === activeDialogId
+                        }
                         onSelect={selectDialogAndOpenPage}
                         onRename={openRenameModal}
                         onDelete={openDeleteModal}
@@ -239,6 +418,12 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
                 <div className="my-3 flex items-center gap-3 px-1">
                     <div className="h-px flex-1 bg-main-600/70" />
+                    <Icon
+                        icon="mdi:folder"
+                        width={16}
+                        height={16}
+                        className="text-main-400"
+                    />
                     <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
                         Проекты
                     </p>
@@ -246,74 +431,65 @@ export const ChatSidebar = observer(function ChatSidebar() {
                 </div>
 
                 {projects.length > 0 ? (
-                    projects.map((project) => {
-                        const isActive = project.id === activeProjectId;
-                        const isActiveDialog =
-                            project.dialogId === activeDialogId;
-
-                        return (
-                            <div
-                                role="button"
-                                tabIndex={0}
-                                key={project.id}
-                                onClick={() => {
-                                    void selectProjectAndOpenPage(project.id);
-                                }}
-                                onKeyDown={(event) => {
-                                    if (
-                                        event.key === "Enter" ||
-                                        event.key === " "
-                                    ) {
-                                        event.preventDefault();
-                                        void selectProjectAndOpenPage(
-                                            project.id,
-                                        );
-                                    }
-                                }}
-                                className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
-                                    isActive && isActiveDialog
-                                        ? "bg-main-500/20"
-                                        : "bg-transparent"
-                                }`}
-                            >
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="flex min-w-0 flex-1 items-center gap-2">
-                                        <p className="truncate text-sm font-medium text-main-100">
-                                            {project.title}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs text-main-400">
-                                            {project.time}
-                                        </span>
-                                        <Button
-                                            variant=""
-                                            className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100"
-                                            onClick={(event) => {
-                                                event.stopPropagation();
-                                                openDeleteProjectModal(
-                                                    project.id,
-                                                );
-                                            }}
-                                            aria-label="Удалить проект"
-                                        >
-                                            <Icon
-                                                icon="mdi:trash-can-outline"
-                                                width="16"
-                                                height="16"
-                                            />
-                                        </Button>
-                                    </div>
-                                </div>
-                                <p className="mt-1 truncate text-xs text-main-400">
-                                    {project.preview}
-                                </p>
-                            </div>
-                        );
-                    })
+                    projects.map((project) => (
+                        <ProjectsItem
+                            key={project.id}
+                            id={project.id}
+                            title={project.title}
+                            preview={project.preview}
+                            time={project.time}
+                            active={
+                                activeSection === "projects" &&
+                                project.id === activeProjectId
+                            }
+                            onSelect={selectProjectAndOpenPage}
+                            onDelete={openDeleteProjectModal}
+                        />
+                    ))
                 ) : (
                     <div className="rounded-xl bg-main-900/50 p-3 text-xs text-main-400">
                         Проекты ещё не созданы.
+                    </div>
+                )}
+
+                <div className="my-3 flex items-center gap-3 px-1">
+                    <div className="h-px flex-1 bg-main-600/70" />
+                    <Icon
+                        icon="mdi:script"
+                        width={16}
+                        height={16}
+                        className="text-main-400"
+                    />
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
+                        Сценарии
+                    </p>
+                    <div className="h-px flex-1 bg-main-600/70" />
+                </div>
+
+                {scenarios.length > 0 ? (
+                    scenarios.map((scenario) => (
+                        <ScenarioItem
+                            key={scenario.id}
+                            id={scenario.id}
+                            title={scenario.title}
+                            preview={scenario.preview}
+                            time={scenario.time}
+                            active={
+                                activeSection === "scenario" &&
+                                scenario.id === activeScenarioId
+                            }
+                            onSelect={(scenarioId) => {
+                                void selectScenarioAndOpenPage(scenarioId);
+                            }}
+                            onEdit={(scenarioId) => {
+                                void openEditScenarioModal(scenarioId);
+                            }}
+                            onDelete={openDeleteScenarioModal}
+                        />
+                    ))
+                ) : (
+                    <div className="rounded-xl bg-main-900/50 p-3 text-xs text-main-400">
+                        Сценарии ещё не созданы.
                     </div>
                 )}
             </div>
@@ -422,6 +598,94 @@ export const ChatSidebar = observer(function ChatSidebar() {
             >
                 <p className="text-sm text-main-300">
                     Подтвердите удаление проекта вместе с диалогом и файлами.
+                </p>
+            </Modal>
+
+            <Modal
+                open={isEditScenarioModalOpen}
+                onClose={closeEditScenarioModal}
+                title="Редактирование сценария"
+                className="max-w-md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={closeEditScenarioModal}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => {
+                                void submitEditScenarioModal();
+                            }}
+                        >
+                            Сохранить
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-3">
+                    <div className="space-y-2">
+                        <p className="text-sm text-main-300">
+                            Название сценария
+                        </p>
+                        <InputSmall
+                            value={scenarioName}
+                            onChange={(event) =>
+                                setScenarioName(event.target.value)
+                            }
+                            placeholder="Введите название"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-sm text-main-300">
+                            Описание сценария
+                        </p>
+                        <InputBig
+                            value={scenarioDescription}
+                            onChange={setScenarioDescription}
+                            className="h-28! rounded-xl! border border-main-700/70 bg-main-800/70 px-3 py-2 text-main-100 placeholder:text-main-500"
+                            placeholder="Введите описание"
+                        />
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                open={isDeleteScenarioModalOpen}
+                onClose={closeDeleteScenarioModal}
+                title="Удаление сценария"
+                className="max-w-md"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={closeDeleteScenarioModal}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => {
+                                void confirmDeleteScenario();
+                            }}
+                        >
+                            Удалить
+                        </Button>
+                    </>
+                }
+            >
+                <p className="text-sm text-main-300">
+                    Подтвердите удаление выбранного сценария.
                 </p>
             </Modal>
         </aside>
