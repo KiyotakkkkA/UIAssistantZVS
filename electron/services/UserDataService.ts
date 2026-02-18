@@ -11,6 +11,7 @@ import type {
 } from "../../src/types/Chat";
 import { randomUUID } from "node:crypto";
 import type { UploadedFileData } from "../../src/types/ElectronApi";
+import type { AppCacheEntry } from "../../src/types/ElectronApi";
 import type { SavedFileRecord } from "../../src/types/ElectronApi";
 import type {
     CreateProjectPayload,
@@ -18,13 +19,13 @@ import type {
     Project,
     ProjectListItem,
 } from "../../src/types/Project";
-import path from "node:path";
-import { createUserDataPaths } from "./userData/UserDataPaths";
+import type { ElectronPaths } from "../paths";
 import { UserProfileService } from "./userData/UserProfileService";
 import { ThemesService } from "./userData/ThemesService";
 import { DialogsService } from "./userData/DialogsService";
 import { ProjectsService } from "./userData/ProjectsService";
 import { FileStorageService } from "./FileStorageService";
+import { DatabaseService } from "./DatabaseService";
 
 export class UserDataService {
     private readonly userProfileService: UserProfileService;
@@ -32,20 +33,18 @@ export class UserDataService {
     private readonly dialogsService: DialogsService;
     private readonly projectsService: ProjectsService;
     private readonly fileStorageService: FileStorageService;
+    private readonly databaseService: DatabaseService;
     private readonly defaultProjectsDirectory: string;
 
-    constructor(basePath: string) {
-        const paths = createUserDataPaths(basePath);
-        this.defaultProjectsDirectory = path.join(
-            basePath,
-            "resources",
-            "projects",
-        );
+    constructor(paths: ElectronPaths) {
+        this.defaultProjectsDirectory = paths.defaultProjectsDirectory;
+
+        this.databaseService = new DatabaseService(paths.databasePath);
 
         this.userProfileService = new UserProfileService(paths.profilePath);
         this.themesService = new ThemesService(paths.themesPath);
         this.dialogsService = new DialogsService(
-            paths.dialogsPath,
+            this.databaseService,
             ({ activeDialogId, activeProjectId }) => {
                 this.userProfileService.updateUserProfile({
                     activeDialogId,
@@ -53,10 +52,10 @@ export class UserDataService {
                 });
             },
         );
-        this.projectsService = new ProjectsService(paths.projectsPath);
+        this.projectsService = new ProjectsService(this.databaseService);
         this.fileStorageService = new FileStorageService(
             paths.filesPath,
-            paths.storageManifestPath,
+            this.databaseService,
         );
 
         this.syncProjectDialogs();
@@ -228,5 +227,13 @@ export class UserDataService {
                 project.id,
             );
         }
+    }
+
+    getCacheEntry(key: string): AppCacheEntry | null {
+        return this.databaseService.getCacheEntry(key) as AppCacheEntry | null;
+    }
+
+    setCacheEntry(key: string, entry: AppCacheEntry): void {
+        this.databaseService.setCacheEntry(key, entry);
     }
 }

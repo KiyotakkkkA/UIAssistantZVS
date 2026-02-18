@@ -72,6 +72,10 @@ const appApi = {
     getProjectById: (projectId) => electron.ipcRenderer.invoke("app:get-project-by-id", projectId),
     createProject: (payload) => electron.ipcRenderer.invoke("app:create-project", payload),
     deleteProject: (projectId) => electron.ipcRenderer.invoke("app:delete-project", projectId)
+  },
+  cache: {
+    getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),
+    setCacheEntry: (key, entry) => electron.ipcRenderer.invoke("app:set-cache-entry", key, entry)
   }
 };
 electron.contextBridge.exposeInMainWorld("appApi", appApi);

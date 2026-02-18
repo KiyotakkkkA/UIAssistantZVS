@@ -1,7 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createBaseDialog } from "../../static/data";
+import { DatabaseService } from "../DatabaseService";
 import type {
     ChatDialog,
     ChatDialogListItem,
@@ -16,7 +15,7 @@ type ActiveDialogContextUpdater = (payload: {
 
 export class DialogsService {
     constructor(
-        private readonly dialogsPath: string,
+        private readonly databaseService: DatabaseService,
         private readonly onActiveDialogContextUpdate: ActiveDialogContextUpdater,
     ) {}
 
@@ -120,11 +119,7 @@ export class DialogsService {
     }
 
     deleteDialog(dialogId: string): DeleteDialogResult {
-        const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
-
-        if (fs.existsSync(dialogPath)) {
-            fs.unlinkSync(dialogPath);
-        }
+        this.databaseService.deleteDialog(dialogId);
 
         let dialogs = this.readDialogs();
 
@@ -234,55 +229,36 @@ export class DialogsService {
     }
 
     private readDialogs(): ChatDialog[] {
-        if (!fs.existsSync(this.dialogsPath)) {
-            return [];
-        }
-
-        const files = fs
-            .readdirSync(this.dialogsPath)
-            .filter((fileName) => fileName.endsWith(".json"));
-
         const dialogs: ChatDialog[] = [];
 
-        for (const fileName of files) {
-            const filePath = path.join(this.dialogsPath, fileName);
+        for (const rawItem of this.databaseService.getDialogsRaw()) {
+            const parsed = rawItem as Partial<ChatDialog>;
 
-            try {
-                const rawDialog = fs.readFileSync(filePath, "utf-8");
-                const parsed = JSON.parse(rawDialog) as Partial<ChatDialog>;
-
-                if (!Array.isArray(parsed.messages)) {
-                    continue;
-                }
-
-                const normalizedMessages = parsed.messages
-                    .map((message) =>
-                        this.normalizeMessage(message as ChatMessage),
-                    )
-                    .filter(Boolean);
-
-                dialogs.push({
-                    id: this.normalizeDialogId(parsed.id),
-                    title:
-                        typeof parsed.title === "string" && parsed.title.trim()
-                            ? parsed.title
-                            : "Новый диалог",
-                    messages: normalizedMessages,
-                    forProjectId: this.normalizeForProjectId(
-                        parsed.forProjectId,
-                    ),
-                    createdAt:
-                        typeof parsed.createdAt === "string" && parsed.createdAt
-                            ? parsed.createdAt
-                            : new Date().toISOString(),
-                    updatedAt:
-                        typeof parsed.updatedAt === "string" && parsed.updatedAt
-                            ? parsed.updatedAt
-                            : new Date().toISOString(),
-                });
-            } catch {
+            if (!Array.isArray(parsed.messages)) {
                 continue;
             }
+
+            const normalizedMessages = parsed.messages
+                .map((message) => this.normalizeMessage(message as ChatMessage))
+                .filter(Boolean);
+
+            dialogs.push({
+                id: this.normalizeDialogId(parsed.id),
+                title:
+                    typeof parsed.title === "string" && parsed.title.trim()
+                        ? parsed.title
+                        : "Новый диалог",
+                messages: normalizedMessages,
+                forProjectId: this.normalizeForProjectId(parsed.forProjectId),
+                createdAt:
+                    typeof parsed.createdAt === "string" && parsed.createdAt
+                        ? parsed.createdAt
+                        : new Date().toISOString(),
+                updatedAt:
+                    typeof parsed.updatedAt === "string" && parsed.updatedAt
+                        ? parsed.updatedAt
+                        : new Date().toISOString(),
+            });
         }
 
         dialogs.sort((left, right) =>
@@ -293,12 +269,7 @@ export class DialogsService {
     }
 
     private writeDialog(dialog: ChatDialog): void {
-        if (!fs.existsSync(this.dialogsPath)) {
-            fs.mkdirSync(this.dialogsPath, { recursive: true });
-        }
-
-        const dialogPath = path.join(this.dialogsPath, `${dialog.id}.json`);
-        fs.writeFileSync(dialogPath, JSON.stringify(dialog, null, 2));
+        this.databaseService.upsertDialogRaw(dialog.id, dialog);
     }
 
     private normalizeDialogId(id: unknown): string {

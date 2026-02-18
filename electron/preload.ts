@@ -6,7 +6,7 @@ import type {
     UserProfile,
 } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
-import type { AppApi } from "../src/types/ElectronApi";
+import type { AppApi, AppCacheEntry } from "../src/types/ElectronApi";
 import type { CreateProjectPayload } from "../src/types/Project";
 
 // --------- Expose some API to the Renderer process ---------
@@ -106,6 +106,12 @@ const appApi: AppApi = {
             ipcRenderer.invoke("app:create-project", payload),
         deleteProject: (projectId: string) =>
             ipcRenderer.invoke("app:delete-project", projectId),
+    },
+    cache: {
+        getCacheEntry: (key: string) =>
+            ipcRenderer.invoke("app:get-cache-entry", key),
+        setCacheEntry: (key: string, entry: AppCacheEntry) =>
+            ipcRenderer.invoke("app:set-cache-entry", key, entry),
     },
 };
 

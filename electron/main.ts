@@ -7,9 +7,11 @@ import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
 import { CommandExecService } from "./services/CommandExecService";
+import { createElectronPaths } from "./paths";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 import type {
+    AppCacheEntry,
     SaveImageFromSourcePayload,
     UploadedFileData,
 } from "../src/types/ElectronApi";
@@ -148,310 +150,351 @@ app.on("activate", () => {
     }
 });
 
-app.whenReady().then(() => {
-    const initDirectoriesService = new InitService(app.getPath("userData"));
+app.whenReady()
+    .then(() => {
+        const appPaths = createElectronPaths(app.getPath("userData"));
+        const initDirectoriesService = new InitService(appPaths);
 
-    initDirectoriesService.initialize();
-    userDataService = new UserDataService(app.getPath("userData"));
-    commandExecService = new CommandExecService();
+        initDirectoriesService.initialize();
+        userDataService = new UserDataService(appPaths);
+        commandExecService = new CommandExecService();
 
-    ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
-    ipcMain.handle("app:get-themes-list", () =>
-        userDataService.getThemesList(),
-    );
-    ipcMain.handle("app:get-theme-data", (_event, themeId: string) =>
-        userDataService.getThemeData(themeId),
-    );
-    ipcMain.handle(
-        "app:update-user-profile",
-        (_event, nextProfile: Partial<UserProfile>) =>
-            userDataService.updateUserProfile(nextProfile),
-    );
-    ipcMain.handle("app:get-active-dialog", () =>
-        userDataService.getActiveDialog(),
-    );
-    ipcMain.handle("app:get-dialogs-list", () =>
-        userDataService.getDialogsList(),
-    );
-    ipcMain.handle("app:get-dialog-by-id", (_event, dialogId: string) =>
-        userDataService.getDialogById(dialogId),
-    );
-    ipcMain.handle("app:create-dialog", () => userDataService.createDialog());
-    ipcMain.handle(
-        "app:rename-dialog",
-        (_event, dialogId: string, title: string) =>
-            userDataService.renameDialog(dialogId, title),
-    );
-    ipcMain.handle("app:delete-dialog", (_event, dialogId: string) =>
-        userDataService.deleteDialog(dialogId),
-    );
-    ipcMain.handle(
-        "app:delete-message-from-dialog",
-        (_event, dialogId: string, messageId: string) =>
-            userDataService.deleteMessageFromDialog(dialogId, messageId),
-    );
-    ipcMain.handle(
-        "app:truncate-dialog-from-message",
-        (_event, dialogId: string, messageId: string) =>
-            userDataService.truncateDialogFromMessage(dialogId, messageId),
-    );
-    ipcMain.handle("app:save-dialog-snapshot", (_event, dialog: ChatDialog) =>
-        userDataService.saveDialogSnapshot(dialog),
-    );
-    ipcMain.handle("app:get-projects-list", () =>
-        userDataService.getProjectsList(),
-    );
-    ipcMain.handle("app:get-default-projects-directory", () =>
-        userDataService.getDefaultProjectsDirectory(),
-    );
-    ipcMain.handle("app:get-project-by-id", (_event, projectId: string) =>
-        userDataService.getProjectById(projectId),
-    );
-    ipcMain.handle(
-        "app:create-project",
-        (_event, payload: CreateProjectPayload) =>
-            userDataService.createProject(payload),
-    );
-    ipcMain.handle("app:delete-project", (_event, projectId: string) =>
-        userDataService.deleteProject(projectId),
-    );
-    ipcMain.handle("app:save-files", (_event, files: UploadedFileData[]) =>
-        userDataService.saveFiles(files),
-    );
-    ipcMain.handle("app:get-files-by-ids", (_event, fileIds: string[]) =>
-        userDataService.getFilesByIds(fileIds),
-    );
-    ipcMain.handle("app:open-saved-file", async (_event, fileId: string) => {
-        const file = userDataService.getFileById(fileId);
+        ipcMain.handle("app:get-boot-data", () =>
+            userDataService.getBootData(),
+        );
+        ipcMain.handle("app:get-themes-list", () =>
+            userDataService.getThemesList(),
+        );
+        ipcMain.handle("app:get-theme-data", (_event, themeId: string) =>
+            userDataService.getThemeData(themeId),
+        );
+        ipcMain.handle(
+            "app:update-user-profile",
+            (_event, nextProfile: Partial<UserProfile>) =>
+                userDataService.updateUserProfile(nextProfile),
+        );
+        ipcMain.handle("app:get-active-dialog", () =>
+            userDataService.getActiveDialog(),
+        );
+        ipcMain.handle("app:get-dialogs-list", () =>
+            userDataService.getDialogsList(),
+        );
+        ipcMain.handle("app:get-dialog-by-id", (_event, dialogId: string) =>
+            userDataService.getDialogById(dialogId),
+        );
+        ipcMain.handle("app:create-dialog", () =>
+            userDataService.createDialog(),
+        );
+        ipcMain.handle(
+            "app:rename-dialog",
+            (_event, dialogId: string, title: string) =>
+                userDataService.renameDialog(dialogId, title),
+        );
+        ipcMain.handle("app:delete-dialog", (_event, dialogId: string) =>
+            userDataService.deleteDialog(dialogId),
+        );
+        ipcMain.handle(
+            "app:delete-message-from-dialog",
+            (_event, dialogId: string, messageId: string) =>
+                userDataService.deleteMessageFromDialog(dialogId, messageId),
+        );
+        ipcMain.handle(
+            "app:truncate-dialog-from-message",
+            (_event, dialogId: string, messageId: string) =>
+                userDataService.truncateDialogFromMessage(dialogId, messageId),
+        );
+        ipcMain.handle(
+            "app:save-dialog-snapshot",
+            (_event, dialog: ChatDialog) =>
+                userDataService.saveDialogSnapshot(dialog),
+        );
+        ipcMain.handle("app:get-projects-list", () =>
+            userDataService.getProjectsList(),
+        );
+        ipcMain.handle("app:get-default-projects-directory", () =>
+            userDataService.getDefaultProjectsDirectory(),
+        );
+        ipcMain.handle("app:get-project-by-id", (_event, projectId: string) =>
+            userDataService.getProjectById(projectId),
+        );
+        ipcMain.handle(
+            "app:create-project",
+            (_event, payload: CreateProjectPayload) =>
+                userDataService.createProject(payload),
+        );
+        ipcMain.handle("app:delete-project", (_event, projectId: string) =>
+            userDataService.deleteProject(projectId),
+        );
+        ipcMain.handle("app:save-files", (_event, files: UploadedFileData[]) =>
+            userDataService.saveFiles(files),
+        );
+        ipcMain.handle("app:get-files-by-ids", (_event, fileIds: string[]) =>
+            userDataService.getFilesByIds(fileIds),
+        );
+        ipcMain.handle("app:get-cache-entry", (_event, key: string) =>
+            userDataService.getCacheEntry(key),
+        );
+        ipcMain.handle(
+            "app:set-cache-entry",
+            (_event, key: string, entry: AppCacheEntry) => {
+                userDataService.setCacheEntry(key, entry);
+            },
+        );
+        ipcMain.handle(
+            "app:open-saved-file",
+            async (_event, fileId: string) => {
+                const file = userDataService.getFileById(fileId);
 
-        if (!file) {
-            return false;
-        }
-
-        const openResult = await shell.openPath(file.path);
-        return openResult === "";
-    });
-    ipcMain.handle("app:open-path", async (_event, targetPath: string) => {
-        if (!targetPath || typeof targetPath !== "string") {
-            return false;
-        }
-
-        const openResult = await shell.openPath(targetPath);
-        return openResult === "";
-    });
-    ipcMain.handle("app:open-external-url", async (_event, url: string) => {
-        if (!url || typeof url !== "string") {
-            return false;
-        }
-
-        try {
-            await shell.openExternal(url);
-            return true;
-        } catch {
-            return false;
-        }
-    });
-    ipcMain.handle(
-        "app:save-image-from-source",
-        async (event, payload: SaveImageFromSourcePayload) => {
-            const source =
-                typeof payload?.src === "string" ? payload.src.trim() : "";
-
-            if (!source) {
-                return null;
-            }
-
-            const preferredFileName =
-                typeof payload.preferredFileName === "string"
-                    ? payload.preferredFileName.trim()
-                    : "";
-
-            let sourceKind: "remote" | "local" | "data-url" = "local";
-            let buffer: Buffer;
-            let mimeType = "application/octet-stream";
-            let fileName = preferredFileName || "image";
-
-            if (isDataUrl(source)) {
-                sourceKind = "data-url";
-                const parsed = parseDataUrl(source);
-                buffer = parsed.buffer;
-                mimeType = parsed.mimeType;
-                fileName = ensureImageExt(fileName, mimeType);
-            } else if (isRemoteUrl(source)) {
-                sourceKind = "remote";
-                const response = await fetch(source);
-
-                if (!response.ok) {
-                    throw new Error(
-                        `Failed to fetch image (${response.status})`,
-                    );
+                if (!file) {
+                    return false;
                 }
 
-                const arrayBuffer = await response.arrayBuffer();
-                buffer = Buffer.from(arrayBuffer);
-                mimeType = response.headers.get("content-type") || mimeType;
+                const openResult = await shell.openPath(file.path);
+                return openResult === "";
+            },
+        );
+        ipcMain.handle("app:open-path", async (_event, targetPath: string) => {
+            if (!targetPath || typeof targetPath !== "string") {
+                return false;
+            }
 
-                const remoteName = path.basename(
-                    new URL(source).pathname || "image",
+            const openResult = await shell.openPath(targetPath);
+            return openResult === "";
+        });
+        ipcMain.handle("app:open-external-url", async (_event, url: string) => {
+            if (!url || typeof url !== "string") {
+                return false;
+            }
+
+            try {
+                await shell.openExternal(url);
+                return true;
+            } catch {
+                return false;
+            }
+        });
+        ipcMain.handle(
+            "app:save-image-from-source",
+            async (event, payload: SaveImageFromSourcePayload) => {
+                const source =
+                    typeof payload?.src === "string" ? payload.src.trim() : "";
+
+                if (!source) {
+                    return null;
+                }
+
+                const preferredFileName =
+                    typeof payload.preferredFileName === "string"
+                        ? payload.preferredFileName.trim()
+                        : "";
+
+                let sourceKind: "remote" | "local" | "data-url" = "local";
+                let buffer: Buffer;
+                let mimeType = "application/octet-stream";
+                let fileName = preferredFileName || "image";
+
+                if (isDataUrl(source)) {
+                    sourceKind = "data-url";
+                    const parsed = parseDataUrl(source);
+                    buffer = parsed.buffer;
+                    mimeType = parsed.mimeType;
+                    fileName = ensureImageExt(fileName, mimeType);
+                } else if (isRemoteUrl(source)) {
+                    sourceKind = "remote";
+                    const response = await fetch(source);
+
+                    if (!response.ok) {
+                        throw new Error(
+                            `Failed to fetch image (${response.status})`,
+                        );
+                    }
+
+                    const arrayBuffer = await response.arrayBuffer();
+                    buffer = Buffer.from(arrayBuffer);
+                    mimeType = response.headers.get("content-type") || mimeType;
+
+                    const remoteName = path.basename(
+                        new URL(source).pathname || "image",
+                    );
+                    fileName = preferredFileName || remoteName || "image";
+                    fileName = ensureImageExt(fileName, mimeType);
+                } else {
+                    sourceKind = "local";
+                    const localPath = isFileUrl(source)
+                        ? fileURLToPath(source)
+                        : source;
+
+                    buffer = await fs.readFile(localPath);
+                    mimeType = getMimeTypeByExtension(localPath);
+                    fileName = preferredFileName || path.basename(localPath);
+                    fileName = ensureImageExt(fileName, mimeType);
+                }
+
+                const currentWindow = BrowserWindow.fromWebContents(
+                    event.sender,
                 );
-                fileName = preferredFileName || remoteName || "image";
-                fileName = ensureImageExt(fileName, mimeType);
-            } else {
-                sourceKind = "local";
-                const localPath = isFileUrl(source)
-                    ? fileURLToPath(source)
-                    : source;
+                const defaultPath = app.getPath("downloads");
+                const targetPathByDialog = currentWindow
+                    ? await dialog.showSaveDialog(currentWindow, {
+                          title: "Сохранить изображение",
+                          defaultPath: path.join(defaultPath, fileName),
+                          filters: [
+                              {
+                                  name: "Images",
+                                  extensions: imageExtensions,
+                              },
+                          ],
+                      })
+                    : await dialog.showSaveDialog({
+                          title: "Сохранить изображение",
+                          defaultPath: path.join(defaultPath, fileName),
+                          filters: [
+                              {
+                                  name: "Images",
+                                  extensions: imageExtensions,
+                              },
+                          ],
+                      });
 
-                buffer = await fs.readFile(localPath);
-                mimeType = getMimeTypeByExtension(localPath);
-                fileName = preferredFileName || path.basename(localPath);
-                fileName = ensureImageExt(fileName, mimeType);
-            }
+                if (
+                    targetPathByDialog.canceled ||
+                    !targetPathByDialog.filePath
+                ) {
+                    return null;
+                }
 
-            const currentWindow = BrowserWindow.fromWebContents(event.sender);
-            const defaultPath = app.getPath("downloads");
-            const targetPathByDialog = currentWindow
-                ? await dialog.showSaveDialog(currentWindow, {
-                      title: "Сохранить изображение",
-                      defaultPath: path.join(defaultPath, fileName),
-                      filters: [
-                          {
-                              name: "Images",
-                              extensions: imageExtensions,
-                          },
-                      ],
-                  })
-                : await dialog.showSaveDialog({
-                      title: "Сохранить изображение",
-                      defaultPath: path.join(defaultPath, fileName),
-                      filters: [
-                          {
-                              name: "Images",
-                              extensions: imageExtensions,
-                          },
-                      ],
-                  });
+                await fs.writeFile(targetPathByDialog.filePath, buffer);
 
-            if (targetPathByDialog.canceled || !targetPathByDialog.filePath) {
-                return null;
-            }
+                return {
+                    savedPath: targetPathByDialog.filePath,
+                    fileName: path.basename(targetPathByDialog.filePath),
+                    mimeType,
+                    size: buffer.byteLength,
+                    sourceKind,
+                };
+            },
+        );
+        ipcMain.handle(
+            "app:exec-shell-command",
+            (_event, command: string, cwd?: string) =>
+                commandExecService.execute(command, cwd),
+        );
+        ipcMain.handle(
+            "app:pick-files",
+            async (
+                event,
+                options?: { accept?: string[]; multiple?: boolean },
+            ) => {
+                const currentWindow = BrowserWindow.fromWebContents(
+                    event.sender,
+                );
 
-            await fs.writeFile(targetPathByDialog.filePath, buffer);
+                const accept = options?.accept ?? [];
+                const filters =
+                    accept.length > 0
+                        ? [
+                              {
+                                  name: "Allowed files",
+                                  extensions: accept
+                                      .flatMap((item) =>
+                                          item
+                                              .split(",")
+                                              .map((part) =>
+                                                  part.trim().toLowerCase(),
+                                              ),
+                                      )
+                                      .flatMap((item) =>
+                                          item === "image/*"
+                                              ? imageExtensions
+                                              : [item],
+                                      )
+                                      .map((item) =>
+                                          item.startsWith(".")
+                                              ? item.slice(1)
+                                              : item
+                                                    .replace(/^[*]/, "")
+                                                    .replace(/^[.]/, ""),
+                                      )
+                                      .filter((item) => item && item !== "*"),
+                              },
+                          ]
+                        : [];
 
-            return {
-                savedPath: targetPathByDialog.filePath,
-                fileName: path.basename(targetPathByDialog.filePath),
-                mimeType,
-                size: buffer.byteLength,
-                sourceKind,
-            };
-        },
-    );
-    ipcMain.handle(
-        "app:exec-shell-command",
-        (_event, command: string, cwd?: string) =>
-            commandExecService.execute(command, cwd),
-    );
-    ipcMain.handle(
-        "app:pick-files",
-        async (event, options?: { accept?: string[]; multiple?: boolean }) => {
-            const currentWindow = BrowserWindow.fromWebContents(event.sender);
+                const dialogProperties: Array<"openFile" | "multiSelections"> =
+                    ["openFile"];
 
-            const accept = options?.accept ?? [];
-            const filters =
-                accept.length > 0
-                    ? [
-                          {
-                              name: "Allowed files",
-                              extensions: accept
-                                  .flatMap((item) =>
-                                      item
-                                          .split(",")
-                                          .map((part) =>
-                                              part.trim().toLowerCase(),
-                                          ),
-                                  )
-                                  .flatMap((item) =>
-                                      item === "image/*"
-                                          ? imageExtensions
-                                          : [item],
-                                  )
-                                  .map((item) =>
-                                      item.startsWith(".")
-                                          ? item.slice(1)
-                                          : item
-                                                .replace(/^[*]/, "")
-                                                .replace(/^[.]/, ""),
-                                  )
-                                  .filter((item) => item && item !== "*"),
-                          },
-                      ]
-                    : [];
+                if (options?.multiple) {
+                    dialogProperties.push("multiSelections");
+                }
 
-            const dialogProperties: Array<"openFile" | "multiSelections"> = [
-                "openFile",
-            ];
+                const openDialogOptions = {
+                    properties: dialogProperties,
+                    filters,
+                };
 
-            if (options?.multiple) {
-                dialogProperties.push("multiSelections");
-            }
+                const selection = currentWindow
+                    ? await dialog.showOpenDialog(
+                          currentWindow,
+                          openDialogOptions,
+                      )
+                    : await dialog.showOpenDialog(openDialogOptions);
 
-            const openDialogOptions = {
-                properties: dialogProperties,
-                filters,
-            };
+                if (selection.canceled || selection.filePaths.length === 0) {
+                    return [] satisfies UploadedFileData[];
+                }
 
-            const selection = currentWindow
-                ? await dialog.showOpenDialog(currentWindow, openDialogOptions)
-                : await dialog.showOpenDialog(openDialogOptions);
+                const files = await Promise.all(
+                    selection.filePaths.map(
+                        async (filePath): Promise<UploadedFileData> => {
+                            const buffer = await readFile(filePath);
+                            const mimeType = getMimeTypeByExtension(filePath);
 
-            if (selection.canceled || selection.filePaths.length === 0) {
-                return [] satisfies UploadedFileData[];
-            }
+                            return {
+                                name: path.basename(filePath),
+                                mimeType,
+                                size: buffer.byteLength,
+                                dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
+                            };
+                        },
+                    ),
+                );
 
-            const files = await Promise.all(
-                selection.filePaths.map(
-                    async (filePath): Promise<UploadedFileData> => {
-                        const buffer = await readFile(filePath);
-                        const mimeType = getMimeTypeByExtension(filePath);
+                return files;
+            },
+        );
 
-                        return {
-                            name: path.basename(filePath),
-                            mimeType,
-                            size: buffer.byteLength,
-                            dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
-                        };
-                    },
-                ),
-            );
+        ipcMain.handle(
+            "app:pick-path",
+            async (event, options?: { forFolders?: boolean }) => {
+                const currentWindow = BrowserWindow.fromWebContents(
+                    event.sender,
+                );
+                const dialogProperties: Array<"openFile" | "openDirectory"> = [
+                    options?.forFolders ? "openDirectory" : "openFile",
+                ];
 
-            return files;
-        },
-    );
+                const openDialogOptions = {
+                    properties: dialogProperties,
+                };
 
-    ipcMain.handle(
-        "app:pick-path",
-        async (event, options?: { forFolders?: boolean }) => {
-            const currentWindow = BrowserWindow.fromWebContents(event.sender);
-            const dialogProperties: Array<"openFile" | "openDirectory"> = [
-                options?.forFolders ? "openDirectory" : "openFile",
-            ];
+                const selection = currentWindow
+                    ? await dialog.showOpenDialog(
+                          currentWindow,
+                          openDialogOptions,
+                      )
+                    : await dialog.showOpenDialog(openDialogOptions);
 
-            const openDialogOptions = {
-                properties: dialogProperties,
-            };
+                if (selection.canceled || selection.filePaths.length === 0) {
+                    return null;
+                }
 
-            const selection = currentWindow
-                ? await dialog.showOpenDialog(currentWindow, openDialogOptions)
-                : await dialog.showOpenDialog(openDialogOptions);
+                return selection.filePaths[0] ?? null;
+            },
+        );
 
-            if (selection.canceled || selection.filePaths.length === 0) {
-                return null;
-            }
-
-            return selection.filePaths[0] ?? null;
-        },
-    );
-
-    createWindow();
-});
+        createWindow();
+    })
+    .catch((error) => {
+        console.error("Failed to initialize Electron app", error);
+        app.quit();
+    });

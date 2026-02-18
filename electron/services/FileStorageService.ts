@@ -1,22 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { DatabaseService } from "./DatabaseService";
 import type {
-    FileManifestEntry,
     SavedFileRecord,
     UploadedFileData,
 } from "../../src/types/ElectronApi";
 
-type FileManifest = Record<string, FileManifestEntry>;
-
 export class FileStorageService {
     constructor(
         private readonly filesPath: string,
-        private readonly manifestPath: string,
+        private readonly databaseService: DatabaseService,
     ) {}
 
     saveFiles(files: UploadedFileData[]): SavedFileRecord[] {
-        const manifest = this.readManifest();
+        this.ensureStorage();
         const saved: SavedFileRecord[] = [];
 
         for (const file of files) {
@@ -28,7 +26,7 @@ export class FileStorageService {
 
             fs.writeFileSync(absolutePath, buffer);
 
-            manifest[fileId] = {
+            const entry = {
                 path: absolutePath,
                 originalName: file.name,
                 size: Number.isFinite(file.size)
@@ -37,47 +35,23 @@ export class FileStorageService {
                 savedAt: new Date().toISOString(),
             };
 
+            this.databaseService.upsertFile(fileId, entry);
+
             saved.push({
                 id: fileId,
-                ...manifest[fileId],
+                ...entry,
             });
         }
 
-        this.writeManifest(manifest);
         return saved;
     }
 
     getFilesByIds(fileIds: string[]): SavedFileRecord[] {
-        const manifest = this.readManifest();
-
-        return fileIds
-            .map((fileId) => {
-                const entry = manifest[fileId];
-
-                if (!entry) {
-                    return null;
-                }
-
-                return {
-                    id: fileId,
-                    ...entry,
-                } satisfies SavedFileRecord;
-            })
-            .filter(Boolean) as SavedFileRecord[];
+        return this.databaseService.getFilesByIds(fileIds);
     }
 
     getFileById(fileId: string): SavedFileRecord | null {
-        const manifest = this.readManifest();
-        const entry = manifest[fileId];
-
-        if (!entry) {
-            return null;
-        }
-
-        return {
-            id: fileId,
-            ...entry,
-        };
+        return this.databaseService.getFileById(fileId);
     }
 
     deleteFilesByIds(fileIds: string[]): void {
@@ -85,23 +59,15 @@ export class FileStorageService {
             return;
         }
 
-        const manifest = this.readManifest();
+        const files = this.databaseService.getFilesByIds(fileIds);
 
-        for (const fileId of fileIds) {
-            const entry = manifest[fileId];
-
-            if (!entry) {
-                continue;
-            }
-
+        for (const entry of files) {
             if (fs.existsSync(entry.path)) {
                 fs.unlinkSync(entry.path);
             }
-
-            delete manifest[fileId];
         }
 
-        this.writeManifest(manifest);
+        this.databaseService.deleteFilesByIds(fileIds);
     }
 
     private parseDataUrl(dataUrl: string): Buffer {
@@ -124,35 +90,5 @@ export class FileStorageService {
         if (!fs.existsSync(this.filesPath)) {
             fs.mkdirSync(this.filesPath, { recursive: true });
         }
-
-        if (!fs.existsSync(this.manifestPath)) {
-            fs.writeFileSync(this.manifestPath, JSON.stringify({}, null, 2));
-        }
-    }
-
-    private readManifest(): FileManifest {
-        this.ensureStorage();
-
-        try {
-            const rawManifest = fs.readFileSync(this.manifestPath, "utf-8");
-            const parsed = JSON.parse(rawManifest) as FileManifest;
-
-            if (
-                !parsed ||
-                typeof parsed !== "object" ||
-                Array.isArray(parsed)
-            ) {
-                return {};
-            }
-
-            return parsed;
-        } catch {
-            return {};
-        }
-    }
-
-    private writeManifest(manifest: FileManifest): void {
-        this.ensureStorage();
-        fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2));
     }
 }

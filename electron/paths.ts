@@ -1,25 +1,25 @@
 import path from "node:path";
 
-export type UserDataPaths = {
+export type ElectronPaths = {
+    basePath: string;
     resourcesPath: string;
     themesPath: string;
-    dialogsPath: string;
-    projectsPath: string;
     filesPath: string;
-    storageManifestPath: string;
     profilePath: string;
+    databasePath: string;
+    defaultProjectsDirectory: string;
 };
 
-export const createUserDataPaths = (basePath: string): UserDataPaths => {
+export const createElectronPaths = (basePath: string): ElectronPaths => {
     const resourcesPath = path.join(basePath, "resources");
 
     return {
+        basePath,
         resourcesPath,
         themesPath: path.join(resourcesPath, "themes"),
-        dialogsPath: path.join(resourcesPath, "chats", "dialogs"),
-        projectsPath: path.join(resourcesPath, "chats", "projects"),
         filesPath: path.join(resourcesPath, "files"),
-        storageManifestPath: path.join(resourcesPath, "storage.json"),
         profilePath: path.join(resourcesPath, "profile.json"),
+        databasePath: path.join(resourcesPath, "db.zvsdatabase"),
+        defaultProjectsDirectory: path.join(resourcesPath, "projects"),
     };
 };

@@ -1,14 +1,15 @@
 import fs from "node:fs";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
     CreateProjectPayload,
     Project,
     ProjectListItem,
 } from "../../../src/types/Project";
+import { DatabaseService } from "../DatabaseService";
+import path from "node:path";
 
 export class ProjectsService {
-    constructor(private readonly projectsPath: string) {}
+    constructor(private readonly databaseService: DatabaseService) {}
 
     getProjectsList(): ProjectListItem[] {
         return this.readProjects().map((project) =>
@@ -54,11 +55,7 @@ export class ProjectsService {
             return null;
         }
 
-        const projectPath = path.join(this.projectsPath, `${project.id}.json`);
-
-        if (fs.existsSync(projectPath)) {
-            fs.unlinkSync(projectPath);
-        }
+        this.databaseService.deleteProject(project.id);
 
         return project;
     }
@@ -126,66 +123,50 @@ export class ProjectsService {
     }
 
     private readProjects(): Project[] {
-        if (!fs.existsSync(this.projectsPath)) {
-            return [];
-        }
-
-        const files = fs
-            .readdirSync(this.projectsPath)
-            .filter((fileName) => fileName.endsWith(".json"));
-
         const projects: Project[] = [];
 
-        for (const fileName of files) {
-            const filePath = path.join(this.projectsPath, fileName);
+        for (const rawItem of this.databaseService.getProjectsRaw()) {
+            const parsed = rawItem as Partial<Project>;
+            const now = new Date().toISOString();
 
-            try {
-                const raw = fs.readFileSync(filePath, "utf-8");
-                const parsed = JSON.parse(raw) as Partial<Project>;
-                const now = new Date().toISOString();
-
-                if (
-                    typeof parsed.name !== "string" ||
-                    typeof parsed.description !== "string" ||
-                    typeof parsed.dialogId !== "string"
-                ) {
-                    continue;
-                }
-
-                projects.push({
-                    id: this.normalizeProjectId(parsed.id),
-                    name: parsed.name.trim() || "Новый проект",
-                    description: parsed.description,
-                    directoryPath: this.normalizeDirectoryPath(
-                        parsed.directoryPath ??
-                            (parsed as Partial<Record<string, unknown>>)
-                                .projectDirectoryPath ??
-                            (parsed as Partial<Record<string, unknown>>)
-                                .projectPath,
-                    ),
-                    dialogId: parsed.dialogId,
-                    fileUUIDs: this.normalizeFileIds(
-                        parsed.fileUUIDs ??
-                            (parsed as Partial<Record<string, unknown>>)
-                                .fileUuids ??
-                            (parsed as Partial<Record<string, unknown>>)
-                                .fileIds,
-                    ),
-                    requiredTools: this.normalizeRequiredTools(
-                        parsed.requiredTools,
-                    ),
-                    createdAt:
-                        typeof parsed.createdAt === "string" && parsed.createdAt
-                            ? parsed.createdAt
-                            : now,
-                    updatedAt:
-                        typeof parsed.updatedAt === "string" && parsed.updatedAt
-                            ? parsed.updatedAt
-                            : now,
-                });
-            } catch {
+            if (
+                typeof parsed.name !== "string" ||
+                typeof parsed.description !== "string" ||
+                typeof parsed.dialogId !== "string"
+            ) {
                 continue;
             }
+
+            projects.push({
+                id: this.normalizeProjectId(parsed.id),
+                name: parsed.name.trim() || "Новый проект",
+                description: parsed.description,
+                directoryPath: this.normalizeDirectoryPath(
+                    parsed.directoryPath ??
+                        (parsed as Partial<Record<string, unknown>>)
+                            .projectDirectoryPath ??
+                        (parsed as Partial<Record<string, unknown>>)
+                            .projectPath,
+                ),
+                dialogId: parsed.dialogId,
+                fileUUIDs: this.normalizeFileIds(
+                    parsed.fileUUIDs ??
+                        (parsed as Partial<Record<string, unknown>>)
+                            .fileUuids ??
+                        (parsed as Partial<Record<string, unknown>>).fileIds,
+                ),
+                requiredTools: this.normalizeRequiredTools(
+                    parsed.requiredTools,
+                ),
+                createdAt:
+                    typeof parsed.createdAt === "string" && parsed.createdAt
+                        ? parsed.createdAt
+                        : now,
+                updatedAt:
+                    typeof parsed.updatedAt === "string" && parsed.updatedAt
+                        ? parsed.updatedAt
+                        : now,
+            });
         }
 
         projects.sort((left, right) =>
@@ -196,12 +177,7 @@ export class ProjectsService {
     }
 
     private writeProject(project: Project): void {
-        if (!fs.existsSync(this.projectsPath)) {
-            fs.mkdirSync(this.projectsPath, { recursive: true });
-        }
-
-        const projectPath = path.join(this.projectsPath, `${project.id}.json`);
-        fs.writeFileSync(projectPath, JSON.stringify(project, null, 2));
+        this.databaseService.upsertProjectRaw(project.id, project);
     }
 
     private toProjectListItem(project: Project): ProjectListItem {

@@ -4,6 +4,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
+import Database from "better-sqlite3";
 import { spawn } from "node:child_process";
 const defaultProfile = {
   themePreference: "dark-main",
@@ -148,40 +149,34 @@ const staticThemesList = staticThemes.map((theme) => ({
   name: theme.name
 }));
 class InitService {
-  basePath;
   resourcesPath;
   themesPath;
-  chatsPath;
-  dialogsPath;
-  projectsPath;
   filesPath;
-  storageManifestPath;
   profilePath;
-  constructor(basePath) {
-    this.basePath = basePath;
-    this.resourcesPath = path.join(this.basePath, "resources");
-    this.themesPath = path.join(this.resourcesPath, "themes");
-    this.chatsPath = path.join(this.resourcesPath, "chats");
-    this.dialogsPath = path.join(this.chatsPath, "dialogs");
-    this.projectsPath = path.join(this.chatsPath, "projects");
-    this.filesPath = path.join(this.resourcesPath, "files");
-    this.storageManifestPath = path.join(
-      this.resourcesPath,
-      "storage.json"
-    );
-    this.profilePath = path.join(this.resourcesPath, "profile.json");
+  databasePath;
+  constructor(paths) {
+    this.resourcesPath = paths.resourcesPath;
+    this.themesPath = paths.themesPath;
+    this.filesPath = paths.filesPath;
+    this.profilePath = paths.profilePath;
+    this.databasePath = paths.databasePath;
   }
   initialize() {
     this.ensureDirectory(this.resourcesPath);
     this.ensureDirectory(this.themesPath);
+    this.ensureDirectory(this.filesPath);
+    this.ensureDatabase(this.databasePath);
     this.ensureProfile();
     this.ensureThemes();
-    this.ensureChatsDirectory();
-    this.ensureFilesStorage();
   }
   ensureDirectory(targetPath) {
     if (!fs.existsSync(targetPath)) {
       fs.mkdirSync(targetPath, { recursive: true });
+    }
+  }
+  ensureDatabase(databasePath) {
+    if (!fs.existsSync(databasePath)) {
+      fs.writeFileSync(databasePath, "");
     }
   }
   ensureProfile() {
@@ -189,30 +184,6 @@ class InitService {
       fs.writeFileSync(
         this.profilePath,
         JSON.stringify(defaultProfile, null, 2)
-      );
-    }
-  }
-  ensureChatsDirectory() {
-    this.ensureDirectory(this.chatsPath);
-    this.ensureDirectory(this.dialogsPath);
-    this.ensureDirectory(this.projectsPath);
-    const dialogFiles = fs.readdirSync(this.dialogsPath).filter((fileName) => fileName.endsWith(".json"));
-    if (dialogFiles.length > 0) {
-      return;
-    }
-    const baseDialog = createBaseDialog();
-    const baseDialogPath = path.join(
-      this.dialogsPath,
-      `${baseDialog.id}.json`
-    );
-    fs.writeFileSync(baseDialogPath, JSON.stringify(baseDialog, null, 2));
-  }
-  ensureFilesStorage() {
-    this.ensureDirectory(this.filesPath);
-    if (!fs.existsSync(this.storageManifestPath)) {
-      fs.writeFileSync(
-        this.storageManifestPath,
-        JSON.stringify({}, null, 2)
       );
     }
   }
@@ -228,18 +199,6 @@ class InitService {
     }
   }
 }
-const createUserDataPaths = (basePath) => {
-  const resourcesPath = path.join(basePath, "resources");
-  return {
-    resourcesPath,
-    themesPath: path.join(resourcesPath, "themes"),
-    dialogsPath: path.join(resourcesPath, "chats", "dialogs"),
-    projectsPath: path.join(resourcesPath, "chats", "projects"),
-    filesPath: path.join(resourcesPath, "files"),
-    storageManifestPath: path.join(resourcesPath, "storage.json"),
-    profilePath: path.join(resourcesPath, "profile.json")
-  };
-};
 const isChatDriver = (value) => {
   return value === "ollama" || value === "";
 };
@@ -348,8 +307,8 @@ class ThemesService {
   }
 }
 class DialogsService {
-  constructor(dialogsPath, onActiveDialogContextUpdate) {
-    this.dialogsPath = dialogsPath;
+  constructor(databaseService, onActiveDialogContextUpdate) {
+    this.databaseService = databaseService;
     this.onActiveDialogContextUpdate = onActiveDialogContextUpdate;
   }
   getActiveDialog(activeDialogId) {
@@ -429,10 +388,7 @@ class DialogsService {
     return updatedDialog;
   }
   deleteDialog(dialogId) {
-    const dialogPath = path.join(this.dialogsPath, `${dialogId}.json`);
-    if (fs.existsSync(dialogPath)) {
-      fs.unlinkSync(dialogPath);
-    }
+    this.databaseService.deleteDialog(dialogId);
     let dialogs = this.readDialogs();
     if (dialogs.length === 0) {
       const fallbackDialog2 = createBaseDialog();
@@ -504,35 +460,21 @@ class DialogsService {
     return normalizedDialog;
   }
   readDialogs() {
-    if (!fs.existsSync(this.dialogsPath)) {
-      return [];
-    }
-    const files = fs.readdirSync(this.dialogsPath).filter((fileName) => fileName.endsWith(".json"));
     const dialogs = [];
-    for (const fileName of files) {
-      const filePath = path.join(this.dialogsPath, fileName);
-      try {
-        const rawDialog = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(rawDialog);
-        if (!Array.isArray(parsed.messages)) {
-          continue;
-        }
-        const normalizedMessages = parsed.messages.map(
-          (message) => this.normalizeMessage(message)
-        ).filter(Boolean);
-        dialogs.push({
-          id: this.normalizeDialogId(parsed.id),
-          title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Новый диалог",
-          messages: normalizedMessages,
-          forProjectId: this.normalizeForProjectId(
-            parsed.forProjectId
-          ),
-          createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
-          updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : (/* @__PURE__ */ new Date()).toISOString()
-        });
-      } catch {
+    for (const rawItem of this.databaseService.getDialogsRaw()) {
+      const parsed = rawItem;
+      if (!Array.isArray(parsed.messages)) {
         continue;
       }
+      const normalizedMessages = parsed.messages.map((message) => this.normalizeMessage(message)).filter(Boolean);
+      dialogs.push({
+        id: this.normalizeDialogId(parsed.id),
+        title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Новый диалог",
+        messages: normalizedMessages,
+        forProjectId: this.normalizeForProjectId(parsed.forProjectId),
+        createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : (/* @__PURE__ */ new Date()).toISOString(),
+        updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : (/* @__PURE__ */ new Date()).toISOString()
+      });
     }
     dialogs.sort(
       (left, right) => right.updatedAt.localeCompare(left.updatedAt)
@@ -540,11 +482,7 @@ class DialogsService {
     return dialogs;
   }
   writeDialog(dialog2) {
-    if (!fs.existsSync(this.dialogsPath)) {
-      fs.mkdirSync(this.dialogsPath, { recursive: true });
-    }
-    const dialogPath = path.join(this.dialogsPath, `${dialog2.id}.json`);
-    fs.writeFileSync(dialogPath, JSON.stringify(dialog2, null, 2));
+    this.databaseService.upsertDialogRaw(dialog2.id, dialog2);
   }
   normalizeDialogId(id) {
     if (typeof id === "string" && id.startsWith("dialog_")) {
@@ -592,8 +530,8 @@ class DialogsService {
   }
 }
 class ProjectsService {
-  constructor(projectsPath) {
-    this.projectsPath = projectsPath;
+  constructor(databaseService) {
+    this.databaseService = databaseService;
   }
   getProjectsList() {
     return this.readProjects().map(
@@ -628,10 +566,7 @@ class ProjectsService {
     if (!project) {
       return null;
     }
-    const projectPath = path.join(this.projectsPath, `${project.id}.json`);
-    if (fs.existsSync(projectPath)) {
-      fs.unlinkSync(projectPath);
-    }
+    this.databaseService.deleteProject(project.id);
     return project;
   }
   normalizeProjectId(id) {
@@ -681,40 +616,30 @@ class ProjectsService {
     return projectDirectoryPath;
   }
   readProjects() {
-    if (!fs.existsSync(this.projectsPath)) {
-      return [];
-    }
-    const files = fs.readdirSync(this.projectsPath).filter((fileName) => fileName.endsWith(".json"));
     const projects = [];
-    for (const fileName of files) {
-      const filePath = path.join(this.projectsPath, fileName);
-      try {
-        const raw = fs.readFileSync(filePath, "utf-8");
-        const parsed = JSON.parse(raw);
-        const now = (/* @__PURE__ */ new Date()).toISOString();
-        if (typeof parsed.name !== "string" || typeof parsed.description !== "string" || typeof parsed.dialogId !== "string") {
-          continue;
-        }
-        projects.push({
-          id: this.normalizeProjectId(parsed.id),
-          name: parsed.name.trim() || "Новый проект",
-          description: parsed.description,
-          directoryPath: this.normalizeDirectoryPath(
-            parsed.directoryPath ?? parsed.projectDirectoryPath ?? parsed.projectPath
-          ),
-          dialogId: parsed.dialogId,
-          fileUUIDs: this.normalizeFileIds(
-            parsed.fileUUIDs ?? parsed.fileUuids ?? parsed.fileIds
-          ),
-          requiredTools: this.normalizeRequiredTools(
-            parsed.requiredTools
-          ),
-          createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : now,
-          updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : now
-        });
-      } catch {
+    for (const rawItem of this.databaseService.getProjectsRaw()) {
+      const parsed = rawItem;
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      if (typeof parsed.name !== "string" || typeof parsed.description !== "string" || typeof parsed.dialogId !== "string") {
         continue;
       }
+      projects.push({
+        id: this.normalizeProjectId(parsed.id),
+        name: parsed.name.trim() || "Новый проект",
+        description: parsed.description,
+        directoryPath: this.normalizeDirectoryPath(
+          parsed.directoryPath ?? parsed.projectDirectoryPath ?? parsed.projectPath
+        ),
+        dialogId: parsed.dialogId,
+        fileUUIDs: this.normalizeFileIds(
+          parsed.fileUUIDs ?? parsed.fileUuids ?? parsed.fileIds
+        ),
+        requiredTools: this.normalizeRequiredTools(
+          parsed.requiredTools
+        ),
+        createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : now,
+        updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : now
+      });
     }
     projects.sort(
       (left, right) => right.updatedAt.localeCompare(left.updatedAt)
@@ -722,11 +647,7 @@ class ProjectsService {
     return projects;
   }
   writeProject(project) {
-    if (!fs.existsSync(this.projectsPath)) {
-      fs.mkdirSync(this.projectsPath, { recursive: true });
-    }
-    const projectPath = path.join(this.projectsPath, `${project.id}.json`);
-    fs.writeFileSync(projectPath, JSON.stringify(project, null, 2));
+    this.databaseService.upsertProjectRaw(project.id, project);
   }
   toProjectListItem(project) {
     return {
@@ -743,12 +664,12 @@ class ProjectsService {
   }
 }
 class FileStorageService {
-  constructor(filesPath, manifestPath) {
+  constructor(filesPath, databaseService) {
     this.filesPath = filesPath;
-    this.manifestPath = manifestPath;
+    this.databaseService = databaseService;
   }
   saveFiles(files) {
-    const manifest = this.readManifest();
+    this.ensureStorage();
     const saved = [];
     for (const file of files) {
       const fileId = randomUUID().replace(/-/g, "");
@@ -757,60 +678,37 @@ class FileStorageService {
       const absolutePath = path.join(this.filesPath, encryptedName);
       const buffer = this.parseDataUrl(file.dataUrl);
       fs.writeFileSync(absolutePath, buffer);
-      manifest[fileId] = {
+      const entry = {
         path: absolutePath,
         originalName: file.name,
         size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
         savedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
+      this.databaseService.upsertFile(fileId, entry);
       saved.push({
         id: fileId,
-        ...manifest[fileId]
+        ...entry
       });
     }
-    this.writeManifest(manifest);
     return saved;
   }
   getFilesByIds(fileIds) {
-    const manifest = this.readManifest();
-    return fileIds.map((fileId) => {
-      const entry = manifest[fileId];
-      if (!entry) {
-        return null;
-      }
-      return {
-        id: fileId,
-        ...entry
-      };
-    }).filter(Boolean);
+    return this.databaseService.getFilesByIds(fileIds);
   }
   getFileById(fileId) {
-    const manifest = this.readManifest();
-    const entry = manifest[fileId];
-    if (!entry) {
-      return null;
-    }
-    return {
-      id: fileId,
-      ...entry
-    };
+    return this.databaseService.getFileById(fileId);
   }
   deleteFilesByIds(fileIds) {
     if (!fileIds.length) {
       return;
     }
-    const manifest = this.readManifest();
-    for (const fileId of fileIds) {
-      const entry = manifest[fileId];
-      if (!entry) {
-        continue;
-      }
+    const files = this.databaseService.getFilesByIds(fileIds);
+    for (const entry of files) {
       if (fs.existsSync(entry.path)) {
         fs.unlinkSync(entry.path);
       }
-      delete manifest[fileId];
     }
-    this.writeManifest(manifest);
+    this.databaseService.deleteFilesByIds(fileIds);
   }
   parseDataUrl(dataUrl) {
     if (typeof dataUrl !== "string") {
@@ -828,26 +726,219 @@ class FileStorageService {
     if (!fs.existsSync(this.filesPath)) {
       fs.mkdirSync(this.filesPath, { recursive: true });
     }
-    if (!fs.existsSync(this.manifestPath)) {
-      fs.writeFileSync(this.manifestPath, JSON.stringify({}, null, 2));
-    }
   }
-  readManifest() {
-    this.ensureStorage();
-    try {
-      const rawManifest = fs.readFileSync(this.manifestPath, "utf-8");
-      const parsed = JSON.parse(rawManifest);
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        return {};
+}
+class DatabaseService {
+  constructor(databasePath) {
+    this.databasePath = databasePath;
+    this.database = new Database(this.databasePath);
+    this.database.pragma("journal_mode = WAL");
+    this.database.pragma("foreign_keys = ON");
+    this.initializeSchema();
+  }
+  database;
+  upsertDialogRaw(dialogId, payload) {
+    const payloadRecord = payload && typeof payload === "object" ? payload : {};
+    const updatedAt = typeof payloadRecord.updatedAt === "string" && payloadRecord.updatedAt ? payloadRecord.updatedAt : (/* @__PURE__ */ new Date()).toISOString();
+    this.database.prepare(
+      `
+                INSERT INTO dialogs (id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                `
+    ).run(dialogId, JSON.stringify(payload), updatedAt);
+  }
+  getDialogsRaw() {
+    const rows = this.database.prepare(
+      `SELECT payload_json
+                 FROM dialogs
+                 ORDER BY updated_at DESC`
+    ).all();
+    return rows.map((row) => this.tryParseJson(row.payload_json)).filter((row) => row !== null);
+  }
+  deleteDialog(dialogId) {
+    this.database.prepare(`DELETE FROM dialogs WHERE id = ?`).run(dialogId);
+  }
+  upsertProjectRaw(projectId, payload) {
+    const payloadRecord = payload && typeof payload === "object" ? payload : {};
+    const updatedAt = typeof payloadRecord.updatedAt === "string" && payloadRecord.updatedAt ? payloadRecord.updatedAt : (/* @__PURE__ */ new Date()).toISOString();
+    this.database.prepare(
+      `
+                INSERT INTO projects (id, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                `
+    ).run(projectId, JSON.stringify(payload), updatedAt);
+  }
+  getProjectsRaw() {
+    const rows = this.database.prepare(
+      `SELECT payload_json
+                 FROM projects
+                 ORDER BY updated_at DESC`
+    ).all();
+    return rows.map((row) => this.tryParseJson(row.payload_json)).filter((row) => row !== null);
+  }
+  deleteProject(projectId) {
+    this.database.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+  }
+  upsertFile(fileId, entry) {
+    this.database.prepare(
+      `
+                INSERT INTO files (id, path, original_name, size, saved_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    path = excluded.path,
+                    original_name = excluded.original_name,
+                    size = excluded.size,
+                    saved_at = excluded.saved_at
+                `
+    ).run(
+      fileId,
+      entry.path,
+      entry.originalName,
+      entry.size,
+      entry.savedAt
+    );
+  }
+  getFilesByIds(fileIds) {
+    if (!fileIds.length) {
+      return [];
+    }
+    const placeholders = fileIds.map(() => "?").join(", ");
+    const rows = this.database.prepare(
+      `SELECT id, path, original_name, size, saved_at
+                 FROM files
+                 WHERE id IN (${placeholders})`
+    ).all(...fileIds);
+    const byId = new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          id: row.id,
+          path: row.path,
+          originalName: row.original_name,
+          size: row.size,
+          savedAt: row.saved_at
+        }
+      ])
+    );
+    return fileIds.map((fileId) => byId.get(fileId)).filter((file) => Boolean(file));
+  }
+  getFileById(fileId) {
+    const row = this.database.prepare(
+      `SELECT id, path, original_name, size, saved_at
+                 FROM files
+                 WHERE id = ?`
+    ).get(fileId);
+    if (!row) {
+      return null;
+    }
+    return {
+      id: row.id,
+      path: row.path,
+      originalName: row.original_name,
+      size: row.size,
+      savedAt: row.saved_at
+    };
+  }
+  deleteFilesByIds(fileIds) {
+    if (!fileIds.length) {
+      return;
+    }
+    const statement = this.database.prepare(
+      `DELETE FROM files WHERE id = ?`
+    );
+    const transaction = this.database.transaction((ids) => {
+      for (const fileId of ids) {
+        statement.run(fileId);
       }
-      return parsed;
-    } catch {
-      return {};
-    }
+    });
+    transaction(fileIds);
   }
-  writeManifest(manifest) {
-    this.ensureStorage();
-    fs.writeFileSync(this.manifestPath, JSON.stringify(manifest, null, 2));
+  getCacheEntry(key) {
+    const row = this.database.prepare(
+      `SELECT collected_at, ttl_seconds, expires_at, data_json
+                 FROM cache
+                 WHERE key = ?`
+    ).get(key);
+    if (!row) {
+      return null;
+    }
+    const parsedData = this.tryParseJson(row.data_json);
+    if (parsedData === null) {
+      return null;
+    }
+    return {
+      collectedAt: row.collected_at,
+      ttlSeconds: row.ttl_seconds,
+      expiresAt: row.expires_at,
+      data: parsedData
+    };
+  }
+  setCacheEntry(key, entry) {
+    this.database.prepare(
+      `
+                INSERT INTO cache (key, collected_at, ttl_seconds, expires_at, data_json)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    collected_at = excluded.collected_at,
+                    ttl_seconds = excluded.ttl_seconds,
+                    expires_at = excluded.expires_at,
+                    data_json = excluded.data_json
+                `
+    ).run(
+      key,
+      entry.collectedAt,
+      entry.ttlSeconds,
+      entry.expiresAt,
+      JSON.stringify(entry.data)
+    );
+  }
+  initializeSchema() {
+    this.database.exec(`
+            CREATE TABLE IF NOT EXISTS dialogs (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS files (
+                id TEXT PRIMARY KEY,
+                path TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                saved_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS cache (
+                key TEXT PRIMARY KEY,
+                collected_at INTEGER NOT NULL,
+                ttl_seconds INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                data_json TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
+        `);
+  }
+  tryParseJson(raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 }
 class UserDataService {
@@ -856,18 +947,15 @@ class UserDataService {
   dialogsService;
   projectsService;
   fileStorageService;
+  databaseService;
   defaultProjectsDirectory;
-  constructor(basePath) {
-    const paths = createUserDataPaths(basePath);
-    this.defaultProjectsDirectory = path.join(
-      basePath,
-      "resources",
-      "projects"
-    );
+  constructor(paths) {
+    this.defaultProjectsDirectory = paths.defaultProjectsDirectory;
+    this.databaseService = new DatabaseService(paths.databasePath);
     this.userProfileService = new UserProfileService(paths.profilePath);
     this.themesService = new ThemesService(paths.themesPath);
     this.dialogsService = new DialogsService(
-      paths.dialogsPath,
+      this.databaseService,
       ({ activeDialogId, activeProjectId }) => {
         this.userProfileService.updateUserProfile({
           activeDialogId,
@@ -875,10 +963,10 @@ class UserDataService {
         });
       }
     );
-    this.projectsService = new ProjectsService(paths.projectsPath);
+    this.projectsService = new ProjectsService(this.databaseService);
     this.fileStorageService = new FileStorageService(
       paths.filesPath,
-      paths.storageManifestPath
+      this.databaseService
     );
     this.syncProjectDialogs();
   }
@@ -1017,6 +1105,12 @@ class UserDataService {
       );
     }
   }
+  getCacheEntry(key) {
+    return this.databaseService.getCacheEntry(key);
+  }
+  setCacheEntry(key, entry) {
+    this.databaseService.setCacheEntry(key, entry);
+  }
 }
 const decodeOutput = (buffer) => {
   const utf8 = buffer.toString("utf8");
@@ -1079,6 +1173,18 @@ class CommandExecService {
     });
   }
 }
+const createElectronPaths = (basePath) => {
+  const resourcesPath = path.join(basePath, "resources");
+  return {
+    basePath,
+    resourcesPath,
+    themesPath: path.join(resourcesPath, "themes"),
+    filesPath: path.join(resourcesPath, "files"),
+    profilePath: path.join(resourcesPath, "profile.json"),
+    databasePath: path.join(resourcesPath, "db.zvsdatabase"),
+    defaultProjectsDirectory: path.join(resourcesPath, "projects")
+  };
+};
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -1177,11 +1283,15 @@ app.on("activate", () => {
   }
 });
 app.whenReady().then(() => {
-  const initDirectoriesService = new InitService(app.getPath("userData"));
+  const appPaths = createElectronPaths(app.getPath("userData"));
+  const initDirectoriesService = new InitService(appPaths);
   initDirectoriesService.initialize();
-  userDataService = new UserDataService(app.getPath("userData"));
+  userDataService = new UserDataService(appPaths);
   commandExecService = new CommandExecService();
-  ipcMain.handle("app:get-boot-data", () => userDataService.getBootData());
+  ipcMain.handle(
+    "app:get-boot-data",
+    () => userDataService.getBootData()
+  );
   ipcMain.handle(
     "app:get-themes-list",
     () => userDataService.getThemesList()
@@ -1206,7 +1316,10 @@ app.whenReady().then(() => {
     "app:get-dialog-by-id",
     (_event, dialogId) => userDataService.getDialogById(dialogId)
   );
-  ipcMain.handle("app:create-dialog", () => userDataService.createDialog());
+  ipcMain.handle(
+    "app:create-dialog",
+    () => userDataService.createDialog()
+  );
   ipcMain.handle(
     "app:rename-dialog",
     (_event, dialogId, title) => userDataService.renameDialog(dialogId, title)
@@ -1255,14 +1368,27 @@ app.whenReady().then(() => {
     "app:get-files-by-ids",
     (_event, fileIds) => userDataService.getFilesByIds(fileIds)
   );
-  ipcMain.handle("app:open-saved-file", async (_event, fileId) => {
-    const file = userDataService.getFileById(fileId);
-    if (!file) {
-      return false;
+  ipcMain.handle(
+    "app:get-cache-entry",
+    (_event, key) => userDataService.getCacheEntry(key)
+  );
+  ipcMain.handle(
+    "app:set-cache-entry",
+    (_event, key, entry) => {
+      userDataService.setCacheEntry(key, entry);
     }
-    const openResult = await shell.openPath(file.path);
-    return openResult === "";
-  });
+  );
+  ipcMain.handle(
+    "app:open-saved-file",
+    async (_event, fileId) => {
+      const file = userDataService.getFileById(fileId);
+      if (!file) {
+        return false;
+      }
+      const openResult = await shell.openPath(file.path);
+      return openResult === "";
+    }
+  );
   ipcMain.handle("app:open-path", async (_event, targetPath) => {
     if (!targetPath || typeof targetPath !== "string") {
       return false;
@@ -1323,7 +1449,9 @@ app.whenReady().then(() => {
         fileName = preferredFileName || path.basename(localPath);
         fileName = ensureImageExt(fileName, mimeType);
       }
-      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const currentWindow = BrowserWindow.fromWebContents(
+        event.sender
+      );
       const defaultPath = app.getPath("downloads");
       const targetPathByDialog = currentWindow ? await dialog.showSaveDialog(currentWindow, {
         title: "Сохранить изображение",
@@ -1364,7 +1492,9 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:pick-files",
     async (event, options) => {
-      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const currentWindow = BrowserWindow.fromWebContents(
+        event.sender
+      );
       const accept = options?.accept ?? [];
       const filters = accept.length > 0 ? [
         {
@@ -1380,9 +1510,7 @@ app.whenReady().then(() => {
           ).filter((item) => item && item !== "*")
         }
       ] : [];
-      const dialogProperties = [
-        "openFile"
-      ];
+      const dialogProperties = ["openFile"];
       if (options?.multiple) {
         dialogProperties.push("multiSelections");
       }
@@ -1390,7 +1518,10 @@ app.whenReady().then(() => {
         properties: dialogProperties,
         filters
       };
-      const selection = currentWindow ? await dialog.showOpenDialog(currentWindow, openDialogOptions) : await dialog.showOpenDialog(openDialogOptions);
+      const selection = currentWindow ? await dialog.showOpenDialog(
+        currentWindow,
+        openDialogOptions
+      ) : await dialog.showOpenDialog(openDialogOptions);
       if (selection.canceled || selection.filePaths.length === 0) {
         return [];
       }
@@ -1414,14 +1545,19 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:pick-path",
     async (event, options) => {
-      const currentWindow = BrowserWindow.fromWebContents(event.sender);
+      const currentWindow = BrowserWindow.fromWebContents(
+        event.sender
+      );
       const dialogProperties = [
         options?.forFolders ? "openDirectory" : "openFile"
       ];
       const openDialogOptions = {
         properties: dialogProperties
       };
-      const selection = currentWindow ? await dialog.showOpenDialog(currentWindow, openDialogOptions) : await dialog.showOpenDialog(openDialogOptions);
+      const selection = currentWindow ? await dialog.showOpenDialog(
+        currentWindow,
+        openDialogOptions
+      ) : await dialog.showOpenDialog(openDialogOptions);
       if (selection.canceled || selection.filePaths.length === 0) {
         return null;
       }
@@ -1429,6 +1565,9 @@ app.whenReady().then(() => {
     }
   );
   createWindow();
+}).catch((error) => {
+  console.error("Failed to initialize Electron app", error);
+  app.quit();
 });
 export {
   MAIN_DIST,

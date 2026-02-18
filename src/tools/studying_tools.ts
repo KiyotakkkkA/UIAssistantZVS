@@ -9,12 +9,11 @@ export const studyingToolsPackage = () => {
         .addPackage({
             id: "studying-tools",
             title: "Studying Tools",
-            description: "Инструменты для работы с учебным расписанием.",
+            description: "Инструменты для работы с учебными сервисами.",
         })
         .addTool({
             name: "schedule_mirea_tool",
-            description:
-                "Загружает и группирует расписание МИРЭА по дням из страницы с iCal-данными.",
+            description: "Загружает и группирует расписание МИРЭА по дням",
             parameters: ToolsBuilder.objectSchema({
                 properties: {
                     date_value: ToolsBuilder.stringParam(

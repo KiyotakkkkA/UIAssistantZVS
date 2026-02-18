@@ -29,8 +29,7 @@ export const webToolsPackage = () => {
         .addPackage({
             id: "web",
             title: "Web Tools",
-            description:
-                "Поиск в интернете и получение содержимого страниц через Ollama API.",
+            description: "Поиск в интернете и получение содержимого страниц",
         })
         .addTool({
             name: "web_search",

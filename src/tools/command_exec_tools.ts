@@ -7,8 +7,7 @@ export const commandExecToolsPackage = () => {
         .addPackage({
             id: "command-exec",
             title: "Command Exec Tools",
-            description:
-                "Выполнение shell-команд в пользовательском контексте (без прав администратора).",
+            description: "Выполнение shell-команд.",
         })
         .addTool({
             name: "command_exec",

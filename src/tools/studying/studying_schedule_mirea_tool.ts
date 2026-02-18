@@ -1,3 +1,5 @@
+import type { AppCacheEntry } from "../../types/ElectronApi";
+
 type ScheduleLesson = {
     time: string;
     subject: string;
@@ -22,10 +24,7 @@ type ParsedProperty = {
 
 type ParsedEvent = Record<string, ParsedProperty[]>;
 
-type CachedEntry = {
-    collectedAt: number;
-    ttlSeconds: number;
-    expiresAt: number;
+type CachedEntry = AppCacheEntry & {
     data: ScheduleResponse;
 };
 
@@ -48,7 +47,7 @@ export const fetchMireaScheduleByDate = async (
     targetDate?: string,
 ): Promise<ScheduleResponse> => {
     const key = buildCacheKey(url, targetDate);
-    const cached = getCachedEntry(key);
+    const cached = await getCachedEntry(key);
 
     if (cached && isCacheValid(cached, DEFAULT_TTL_SECONDS)) {
         return cached.data;
@@ -56,7 +55,6 @@ export const fetchMireaScheduleByDate = async (
 
     try {
         const html = await fetchHtml(url);
-        console.log(html);
         const icalContent = extractIcalFromHtml(html);
         const grouped = parseSchedule(
             icalContent,
@@ -83,39 +81,41 @@ const buildCacheKey = (url: string, targetDate?: string): string => {
     return `${CACHE_PREFIX}${url}::${targetDate || "all"}`;
 };
 
-const getCachedEntry = (key: string): CachedEntry | undefined => {
-    if (typeof window === "undefined" || !window.localStorage) {
+const getCachedEntry = async (
+    key: string,
+): Promise<CachedEntry | undefined> => {
+    if (typeof window === "undefined" || !window.appApi?.cache) {
         return undefined;
     }
 
-    const raw = window.localStorage.getItem(key);
-    if (!raw) {
+    const parsed = await window.appApi.cache.getCacheEntry(key);
+    if (!parsed) {
         return undefined;
     }
 
     try {
-        const parsed = JSON.parse(raw) as CachedEntry;
         if (
             typeof parsed !== "object" ||
             parsed === null ||
             typeof parsed.ttlSeconds !== "number" ||
-            typeof parsed.expiresAt !== "number"
+            typeof parsed.expiresAt !== "number" ||
+            typeof parsed.collectedAt !== "number"
         ) {
             return undefined;
         }
 
-        return parsed;
+        return parsed as CachedEntry;
     } catch {
         return undefined;
     }
 };
 
 const setCachedEntry = (key: string, entry: CachedEntry): void => {
-    if (typeof window === "undefined" || !window.localStorage) {
+    if (typeof window === "undefined" || !window.appApi?.cache) {
         return;
     }
 
-    window.localStorage.setItem(key, JSON.stringify(entry));
+    void window.appApi.cache.setCacheEntry(key, entry);
 };
 
 const isCacheValid = (cached: CachedEntry, ttlSeconds: number): boolean => {

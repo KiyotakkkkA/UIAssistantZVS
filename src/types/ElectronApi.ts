@@ -51,6 +51,13 @@ export type SaveImageFromSourceResult = {
     sourceKind: "remote" | "local" | "data-url";
 };
 
+export type AppCacheEntry = {
+    collectedAt: number;
+    ttlSeconds: number;
+    expiresAt: number;
+    data: unknown;
+};
+
 export type AppApiBootNamespace = {
     getBootData: () => Promise<BootData>;
 };
@@ -118,6 +125,11 @@ export type AppApiProjectsNamespace = {
     deleteProject: (projectId: string) => Promise<DeleteProjectResult>;
 };
 
+export type AppApiCacheNamespace = {
+    getCacheEntry: (key: string) => Promise<AppCacheEntry | null>;
+    setCacheEntry: (key: string, entry: AppCacheEntry) => Promise<void>;
+};
+
 export type AppApi = {
     boot: AppApiBootNamespace;
     themes: AppApiThemesNamespace;
@@ -127,4 +139,5 @@ export type AppApi = {
     upload: AppApiUploadNamespace;
     files: AppApiFilesNamespace;
     projects: AppApiProjectsNamespace;
+    cache: AppApiCacheNamespace;
 };
