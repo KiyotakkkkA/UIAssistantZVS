@@ -65,6 +65,19 @@ export type AppCacheEntry = {
     data: unknown;
 };
 
+export type ProxyHttpRequestPayload = {
+    url: string;
+    method: string;
+    formatter?: string;
+};
+
+export type ProxyHttpRequestResult = {
+    ok: boolean;
+    status: number;
+    statusText: string;
+    bodyText: string;
+};
+
 export type AppApiBootNamespace = {
     getBootData: () => Promise<BootData>;
 };
@@ -148,6 +161,12 @@ export type AppApiCacheNamespace = {
     setCacheEntry: (key: string, entry: AppCacheEntry) => Promise<void>;
 };
 
+export type AppApiNetworkNamespace = {
+    proxyHttpRequest: (
+        payload: ProxyHttpRequestPayload,
+    ) => Promise<ProxyHttpRequestResult>;
+};
+
 export type AppApi = {
     boot: AppApiBootNamespace;
     themes: AppApiThemesNamespace;
@@ -159,4 +178,5 @@ export type AppApi = {
     projects: AppApiProjectsNamespace;
     scenarios: AppApiScenariosNamespace;
     cache: AppApiCacheNamespace;
+    network: AppApiNetworkNamespace;
 };

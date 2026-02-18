@@ -17,6 +17,7 @@ type TreeViewElementProps = {
     label: string;
     description?: string;
     className?: string;
+    onClick?: () => void;
 };
 
 const TreeViewBase = ({ children, className = "" }: TreeViewProps) => {
@@ -74,10 +75,13 @@ const TreeViewElement = ({
     label,
     description,
     className = "",
+    onClick,
 }: TreeViewElementProps) => {
     return (
-        <div
-            className={`rounded-lg px-2 py-1.5 hover:bg-main-800/50 cursor-pointer ${className}`}
+        <button
+            type="button"
+            className={`rounded-lg w-full px-2 py-1.5 hover:bg-main-800/50 cursor-pointer ${className}`}
+            onClick={onClick}
         >
             <div className="flex items-start gap-2">
                 <Icon
@@ -87,17 +91,17 @@ const TreeViewElement = ({
                     className="mt-0.5 shrink-0 text-main-400"
                 />
                 <div className="min-w-0">
-                    <p className="truncate text-xs font-medium text-main-200">
+                    <p className="truncate text-xs font-medium text-main-200 text-left">
                         {label}
                     </p>
                     {description ? (
-                        <p className="line-clamp-2 text-[11px] text-main-400">
+                        <p className="line-clamp-2 text-[11px] text-main-400 text-left">
                             {description}
                         </p>
                     ) : null}
                 </div>
             </div>
-        </div>
+        </button>
     );
 };
 

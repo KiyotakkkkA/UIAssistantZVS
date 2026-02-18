@@ -1643,6 +1643,43 @@ app.whenReady().then(() => {
     }
   );
   ipcMain.handle(
+    "app:proxy-http-request",
+    async (_event, payload) => {
+      const url = typeof payload?.url === "string" ? payload.url.trim() : "";
+      const method = typeof payload?.method === "string" ? payload.method.trim().toUpperCase() : "GET";
+      if (!url) {
+        return {
+          ok: false,
+          status: 0,
+          statusText: "URL is required",
+          bodyText: ""
+        };
+      }
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: {
+            Accept: "application/json, text/plain, */*"
+          }
+        });
+        const bodyText = await response.text();
+        return {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          bodyText
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          status: 0,
+          statusText: error instanceof Error ? error.message : "Network request failed",
+          bodyText: ""
+        };
+      }
+    }
+  );
+  ipcMain.handle(
     "app:open-saved-file",
     async (_event, fileId) => {
       const file = userDataService.getFileById(fileId);

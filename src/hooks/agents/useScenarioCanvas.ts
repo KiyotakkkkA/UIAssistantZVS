@@ -1,11 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useScenario } from "./useScenario";
 import type {
+    ScenarioBlockKind,
+    ScenarioBlockExecutionType,
     ScenarioConnection,
+    ScenarioManualDatetimeGetMeta,
+    ScenarioManualHttpRequestMeta,
     ScenarioScene,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
+    ScenarioToolMeta,
 } from "../../types/Scenario";
+
+type Point = {
+    x: number;
+    y: number;
+};
+
+export type ScenarioCanvasInsertPayload = {
+    kind: "manual-http" | "manual-datetime" | "tool";
+    toolName?: string;
+    toolSchema?: string;
+};
 
 const DEFAULT_VIEWPORT: ScenarioSceneViewport = {
     scale: 1,
@@ -16,6 +32,163 @@ const DEFAULT_VIEWPORT: ScenarioSceneViewport = {
     canvasHeight: 2000,
 };
 
+const hasInputPort = (kind: ScenarioBlockKind) => kind !== "start";
+const hasOutputPort = (kind: ScenarioBlockKind) => kind !== "end";
+
+const createStartEndBlocks = (): ScenarioSimpleBlockNode[] => [
+    {
+        id: crypto.randomUUID(),
+        kind: "start",
+        executionType: "system",
+        title: "Стартовый",
+        x: 420,
+        y: 220,
+        width: 240,
+        height: 96,
+    },
+    {
+        id: crypto.randomUUID(),
+        kind: "end",
+        executionType: "system",
+        title: "Конечный",
+        x: 900,
+        y: 220,
+        width: 240,
+        height: 96,
+    },
+];
+
+const createInsertedBlock = (
+    payload: ScenarioCanvasInsertPayload,
+    center: Point,
+): ScenarioSimpleBlockNode => {
+    if (payload.kind === "manual-http") {
+        return {
+            id: crypto.randomUUID(),
+            kind: "manual-http",
+            executionType: "manual",
+            title: "HTTP запрос",
+            x: center.x,
+            y: center.y,
+            width: 280,
+            height: 96,
+            meta: {
+                manualHttp: {
+                    url: "",
+                    method: "GET",
+                    formatter: "",
+                },
+            },
+        };
+    }
+
+    if (payload.kind === "manual-datetime") {
+        return {
+            id: crypto.randomUUID(),
+            kind: "manual-datetime",
+            executionType: "manual",
+            title: "Дата и время",
+            x: center.x,
+            y: center.y,
+            width: 280,
+            height: 96,
+            meta: {
+                manualDatetime: {
+                    mode: "datetime",
+                    timezoneMode: "current",
+                    timezone: "UTC+0",
+                },
+            },
+        };
+    }
+
+    return {
+        id: crypto.randomUUID(),
+        kind: "tool",
+        executionType: "tools",
+        title: payload.toolName || "Tool",
+        x: center.x,
+        y: center.y,
+        width: 300,
+        height: 96,
+        meta: {
+            tool: {
+                toolName: payload.toolName || "tool",
+                toolSchema: payload.toolSchema || "{}",
+                input: "",
+            },
+        },
+    };
+};
+
+const toPlainObject = (value: unknown): Record<string, unknown> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return {};
+    }
+
+    return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
+};
+
+const normalizeExecutionType = (
+    kind: ScenarioSimpleBlockNode["kind"],
+    rawExecutionType: unknown,
+): ScenarioBlockExecutionType => {
+    if (
+        rawExecutionType === "manual" ||
+        rawExecutionType === "tools" ||
+        rawExecutionType === "system"
+    ) {
+        return rawExecutionType;
+    }
+
+    if (kind === "manual-http" || kind === "manual-datetime") {
+        return "manual";
+    }
+
+    if (kind === "tool") {
+        return "tools";
+    }
+
+    return "system";
+};
+
+const normalizeManualHttpMeta = (
+    raw: Record<string, unknown>,
+): ScenarioManualHttpRequestMeta => ({
+    url: typeof raw.url === "string" ? raw.url : "",
+    method: typeof raw.method === "string" ? raw.method : "GET",
+    formatter: typeof raw.formatter === "string" ? raw.formatter : "",
+    ...(typeof raw.lastResponseCode === "number"
+        ? { lastResponseCode: raw.lastResponseCode }
+        : {}),
+    ...(typeof raw.lastResponseText === "string"
+        ? { lastResponseText: raw.lastResponseText }
+        : {}),
+});
+
+const normalizeManualDatetimeMeta = (
+    raw: Record<string, unknown>,
+): ScenarioManualDatetimeGetMeta => ({
+    mode:
+        raw.mode === "date" || raw.mode === "time" || raw.mode === "datetime"
+            ? raw.mode
+            : "datetime",
+    timezoneMode:
+        raw.timezoneMode === "manual" || raw.timezoneMode === "current"
+            ? raw.timezoneMode
+            : "current",
+    timezone:
+        typeof raw.timezone === "string" && raw.timezone.trim().length > 0
+            ? raw.timezone
+            : "UTC+0",
+});
+
+const normalizeToolMeta = (raw: Record<string, unknown>): ScenarioToolMeta => ({
+    toolName: typeof raw.toolName === "string" ? raw.toolName : "tool",
+    toolSchema: typeof raw.toolSchema === "string" ? raw.toolSchema : "{}",
+    input: typeof raw.input === "string" ? raw.input : "",
+});
+
 const normalizeBlock = (
     raw: Partial<ScenarioSimpleBlockNode>,
 ): ScenarioSimpleBlockNode => ({
@@ -23,7 +196,17 @@ const normalizeBlock = (
         typeof raw.id === "string" && raw.id.trim().length > 0
             ? raw.id
             : crypto.randomUUID(),
-    kind: raw.kind === "end" ? "end" : "start",
+    kind:
+        raw.kind === "end" ||
+        raw.kind === "manual-http" ||
+        raw.kind === "manual-datetime" ||
+        raw.kind === "tool"
+            ? raw.kind
+            : "start",
+    executionType: normalizeExecutionType(
+        raw.kind ?? "start",
+        raw.executionType,
+    ),
     title:
         typeof raw.title === "string" && raw.title.trim().length > 0
             ? raw.title
@@ -34,6 +217,40 @@ const normalizeBlock = (
     y: Number.isFinite(raw.y) ? Number(raw.y) : 0,
     width: Number.isFinite(raw.width) ? Number(raw.width) : 240,
     height: Number.isFinite(raw.height) ? Number(raw.height) : 96,
+    ...(raw.meta && typeof raw.meta === "object"
+        ? {
+              meta: {
+                  ...(toPlainObject(raw.meta).manualHttp &&
+                  typeof toPlainObject(raw.meta).manualHttp === "object"
+                      ? {
+                            manualHttp: normalizeManualHttpMeta(
+                                toPlainObject(
+                                    toPlainObject(raw.meta).manualHttp,
+                                ),
+                            ),
+                        }
+                      : {}),
+                  ...(toPlainObject(raw.meta).manualDatetime &&
+                  typeof toPlainObject(raw.meta).manualDatetime === "object"
+                      ? {
+                            manualDatetime: normalizeManualDatetimeMeta(
+                                toPlainObject(
+                                    toPlainObject(raw.meta).manualDatetime,
+                                ),
+                            ),
+                        }
+                      : {}),
+                  ...(toPlainObject(raw.meta).tool &&
+                  typeof toPlainObject(raw.meta).tool === "object"
+                      ? {
+                            tool: normalizeToolMeta(
+                                toPlainObject(toPlainObject(raw.meta).tool),
+                            ),
+                        }
+                      : {}),
+              },
+          }
+        : {}),
 });
 
 const normalizeConnection = (
@@ -126,6 +343,11 @@ export const useScenarioCanvas = () => {
         useState<ScenarioSceneViewport>(DEFAULT_VIEWPORT);
     const [isSaving, setIsSaving] = useState(false);
 
+    const blocksById = useMemo(
+        () => new Map(blocks.map((block) => [block.id, block])),
+        [blocks],
+    );
+
     useEffect(() => {
         const scene = toScene(activeScenario?.content);
 
@@ -174,6 +396,32 @@ export const useScenarioCanvas = () => {
         [],
     );
 
+    const completeConnection = useCallback(
+        (fromBlockId: string, toBlockId: string) => {
+            if (!fromBlockId || !toBlockId || fromBlockId === toBlockId) {
+                return false;
+            }
+
+            const sourceBlock = blocksById.get(fromBlockId);
+            const targetBlock = blocksById.get(toBlockId);
+
+            if (!sourceBlock || !targetBlock) {
+                return false;
+            }
+
+            if (
+                !hasOutputPort(sourceBlock.kind) ||
+                !hasInputPort(targetBlock.kind)
+            ) {
+                return false;
+            }
+
+            createConnection(fromBlockId, toBlockId);
+            return true;
+        },
+        [blocksById, createConnection],
+    );
+
     const deleteConnection = useCallback((connectionId: string) => {
         if (!connectionId) {
             return;
@@ -183,6 +431,99 @@ export const useScenarioCanvas = () => {
             prev.filter((connection) => connection.id !== connectionId),
         );
     }, []);
+
+    const createInitialScene = useCallback(() => {
+        setBlocks(createStartEndBlocks());
+        setConnections([]);
+    }, []);
+
+    const insertBlock = useCallback(
+        (payload: ScenarioCanvasInsertPayload, center: Point) => {
+            const inserted = createInsertedBlock(payload, center);
+            setBlocks((prev) => [...prev, inserted]);
+            return inserted.id;
+        },
+        [],
+    );
+
+    const removeBlock = useCallback(
+        (blockId: string) => {
+            const block = blocksById.get(blockId);
+
+            if (!block || block.kind === "start" || block.kind === "end") {
+                return false;
+            }
+
+            setBlocks((prev) => prev.filter((item) => item.id !== blockId));
+            setConnections((prev) =>
+                prev.filter(
+                    (connection) =>
+                        connection.fromBlockId !== blockId &&
+                        connection.toBlockId !== blockId,
+                ),
+            );
+
+            return true;
+        },
+        [blocksById],
+    );
+
+    const updateManualHttpMeta = useCallback(
+        (blockId: string, meta: ScenarioManualHttpRequestMeta) => {
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "manual-http"
+                        ? {
+                              ...block,
+                              meta: {
+                                  ...block.meta,
+                                  manualHttp: meta,
+                              },
+                          }
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
+
+    const updateManualDatetimeMeta = useCallback(
+        (blockId: string, meta: ScenarioManualDatetimeGetMeta) => {
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "manual-datetime"
+                        ? {
+                              ...block,
+                              meta: {
+                                  ...block.meta,
+                                  manualDatetime: meta,
+                              },
+                          }
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
+
+    const updateToolMeta = useCallback(
+        (blockId: string, meta: ScenarioToolMeta) => {
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "tool"
+                        ? {
+                              ...block,
+                              meta: {
+                                  ...block.meta,
+                                  tool: meta,
+                              },
+                          }
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
 
     const saveScene = useCallback(
         async (nextViewport?: Partial<ScenarioSceneViewport>) => {
@@ -232,6 +573,7 @@ export const useScenarioCanvas = () => {
 
     return {
         blocks,
+        blocksById,
         setBlocks,
         connections,
         setConnections,
@@ -239,8 +581,15 @@ export const useScenarioCanvas = () => {
         setViewport,
         hasScene,
         isSaving,
+        createInitialScene,
+        insertBlock,
+        removeBlock,
         createConnection,
+        completeConnection,
         deleteConnection,
+        updateManualHttpMeta,
+        updateManualDatetimeMeta,
+        updateToolMeta,
         saveScene,
     };
 };

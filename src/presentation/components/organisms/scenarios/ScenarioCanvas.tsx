@@ -1,14 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Button, Dropdown } from "../../atoms";
+import {
+    Button,
+    Dropdown,
+    InputBig,
+    InputSmall,
+    Modal,
+    Select,
+} from "../../atoms";
 import { useToasts } from "../../../../hooks";
 import { useScenarioCanvas } from "../../../../hooks/agents";
+import type { ScenarioCanvasInsertPayload } from "../../../../hooks/agents";
 import type {
     ScenarioConnection,
+    ScenarioManualDatetimeGetMeta,
+    ScenarioManualHttpRequestMeta,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
+    ScenarioToolMeta,
 } from "../../../../types/Scenario";
-import { ScenarioSimpleBlock } from "./ScenarioSimpleBlock";
+import { ShikiCodeBlock } from "../../molecules/render/ShikiCodeBlock";
+import { ScenarioCanvasToolbar } from "./support/ScenarioCanvasToolbar";
+import { ScenarioConnectionsLayer } from "./support/ScenarioConnectionsLayer";
+import { ScenarioSimpleBlock } from "./blocks/ScenarioSimpleBlock";
+import { ScenarioManualHttpRequest } from "./blocks/ScenarioManualHttpRequest";
+import { ScenarioManualDatetimeGet } from "./blocks/ScenarioManualDatetimeGet";
+import { ScenarioToolBlock } from "./blocks/ScenarioToolBlock";
 
 type Point = {
     x: number;
@@ -26,6 +43,22 @@ type ConnectionMenuState = {
     x: number;
     y: number;
     token: number;
+};
+
+type BlockMenuState = {
+    blockId: string;
+    x: number;
+    y: number;
+    token: number;
+};
+
+export type ScenarioCanvasInsertRequest = {
+    token: number;
+} & ScenarioCanvasInsertPayload;
+
+type ScenarioCanvasProps = {
+    insertRequest?: ScenarioCanvasInsertRequest | null;
+    onInsertHandled?: () => void;
 };
 
 const CANVAS_WIDTH = 3200;
@@ -68,28 +101,18 @@ const toScenePoint = (
     };
 };
 
-const createInitialBlocks = (): ScenarioSimpleBlockNode[] => [
-    {
-        id: crypto.randomUUID(),
-        kind: "start",
-        title: "Стартовый",
-        x: 420,
-        y: 220,
-        width: 240,
-        height: 96,
-    },
-    {
-        id: crypto.randomUUID(),
-        kind: "end",
-        title: "Конечный",
-        x: 900,
-        y: 220,
-        width: 240,
-        height: 96,
-    },
-];
+const prettyResponse = (raw: string) => {
+    try {
+        return JSON.stringify(JSON.parse(raw), null, 2);
+    } catch {
+        return raw;
+    }
+};
 
-export function ScenarioCanvas() {
+export function ScenarioCanvas({
+    insertRequest,
+    onInsertHandled,
+}: ScenarioCanvasProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const rafRef = useRef<number | null>(null);
     const panStartRef = useRef<Point | null>(null);
@@ -97,18 +120,26 @@ export function ScenarioCanvas() {
     const dragStateRef = useRef<DragState | null>(null);
     const pendingBlockPositionsRef = useRef<Record<string, Point> | null>(null);
     const dropdownTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const blockMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
     const toasts = useToasts();
     const {
         blocks,
+        blocksById,
         setBlocks,
         connections,
         viewport,
         setViewport,
         hasScene,
         isSaving,
-        createConnection,
+        createInitialScene,
+        insertBlock,
+        removeBlock,
+        completeConnection,
         deleteConnection,
+        updateManualHttpMeta,
+        updateManualDatetimeMeta,
+        updateToolMeta,
         saveScene,
     } = useScenarioCanvas();
 
@@ -121,6 +152,7 @@ export function ScenarioCanvas() {
     );
     const [connectionMenu, setConnectionMenu] =
         useState<ConnectionMenuState | null>(null);
+    const [blockMenu, setBlockMenu] = useState<BlockMenuState | null>(null);
 
     const [showGrid, setShowGrid] = useState(viewport.showGrid ?? true);
     const [scale, setScale] = useState(viewport.scale ?? DEFAULT_SCALE);
@@ -128,6 +160,21 @@ export function ScenarioCanvas() {
         x: viewport.offsetX ?? DEFAULT_OFFSET.x,
         y: viewport.offsetY ?? DEFAULT_OFFSET.y,
     });
+
+    const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null);
+    const [deleteBlockId, setDeleteBlockId] = useState<string | null>(null);
+
+    const [httpUrl, setHttpUrl] = useState("");
+    const [httpMethod, setHttpMethod] = useState("GET");
+    const [httpFormatter, setHttpFormatter] = useState("");
+    const [httpResponse, setHttpResponse] = useState("");
+    const [isHttpChecking, setIsHttpChecking] = useState(false);
+
+    const [datetimeMode, setDatetimeMode] = useState("datetime");
+    const [datetimeTimezoneMode, setDatetimeTimezoneMode] = useState("current");
+    const [datetimeTimezone, setDatetimeTimezone] = useState("UTC+0");
+
+    const [toolInput, setToolInput] = useState("");
 
     useEffect(() => {
         setShowGrid(viewport.showGrid ?? true);
@@ -138,10 +185,82 @@ export function ScenarioCanvas() {
         });
     }, [viewport.offsetX, viewport.offsetY, viewport.scale, viewport.showGrid]);
 
-    const blocksById = useMemo(
-        () => new Map(blocks.map((block) => [block.id, block])),
-        [blocks],
-    );
+    const activeSettingsBlock = settingsBlockId
+        ? (blocksById.get(settingsBlockId) ?? null)
+        : null;
+
+    const isHttpModalOpen = activeSettingsBlock?.kind === "manual-http";
+    const isDatetimeModalOpen = activeSettingsBlock?.kind === "manual-datetime";
+    const isToolModalOpen = activeSettingsBlock?.kind === "tool";
+
+    useEffect(() => {
+        if (!activeSettingsBlock) {
+            return;
+        }
+
+        if (activeSettingsBlock.kind === "manual-http") {
+            const meta = (activeSettingsBlock.meta?.manualHttp as
+                | ScenarioManualHttpRequestMeta
+                | undefined) ?? {
+                url: "",
+                method: "GET",
+                formatter: "",
+            };
+            setHttpUrl(meta.url);
+            setHttpMethod(meta.method || "GET");
+            setHttpFormatter(meta.formatter || "");
+            setHttpResponse(meta.lastResponseText || "");
+            return;
+        }
+
+        if (activeSettingsBlock.kind === "manual-datetime") {
+            const meta = (activeSettingsBlock.meta?.manualDatetime as
+                | ScenarioManualDatetimeGetMeta
+                | undefined) ?? {
+                mode: "datetime",
+                timezoneMode: "current",
+                timezone: "UTC+0",
+            };
+            setDatetimeMode(meta.mode);
+            setDatetimeTimezoneMode(meta.timezoneMode);
+            setDatetimeTimezone(meta.timezone);
+            return;
+        }
+
+        if (activeSettingsBlock.kind === "tool") {
+            const meta = (activeSettingsBlock.meta?.tool as
+                | ScenarioToolMeta
+                | undefined) ?? {
+                toolName: activeSettingsBlock.title,
+                toolSchema: "{}",
+                input: "",
+            };
+            setToolInput(meta.input || "");
+        }
+    }, [activeSettingsBlock]);
+
+    useEffect(() => {
+        if (!insertRequest || !viewportRef.current) {
+            return;
+        }
+
+        const rect = viewportRef.current.getBoundingClientRect();
+        const centerX = (rect.width / 2 - offset.x) / scale - 140;
+        const centerY = (rect.height / 2 - offset.y) / scale - 48;
+
+        insertBlock(insertRequest, {
+            x: centerX,
+            y: centerY,
+        });
+        onInsertHandled?.();
+    }, [
+        insertBlock,
+        insertRequest,
+        offset.x,
+        offset.y,
+        onInsertHandled,
+        scale,
+    ]);
 
     const zoomPercent = Math.round(scale * 100);
 
@@ -171,7 +290,7 @@ export function ScenarioCanvas() {
                 ...partial,
             }));
         },
-        [setViewport, scale, offset.x, offset.y, showGrid],
+        [offset.x, offset.y, scale, setViewport, showGrid],
     );
 
     const scheduleBlocksCommit = () => {
@@ -212,9 +331,37 @@ export function ScenarioCanvas() {
         }
 
         setConnectionMenu(null);
+        setBlockMenu(null);
         setIsPanning(true);
         panStartRef.current = { x: event.clientX, y: event.clientY };
         panOriginRef.current = offset;
+    };
+
+    const openBlockContextMenu = (
+        event: React.MouseEvent<HTMLDivElement>,
+        blockId: string,
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const block = blocksById.get(blockId);
+        const rect = viewportRef.current?.getBoundingClientRect();
+
+        if (!block || !rect) {
+            return;
+        }
+
+        if (block.kind === "start" || block.kind === "end") {
+            return;
+        }
+
+        setConnectionMenu(null);
+        setBlockMenu({
+            blockId,
+            x: event.clientX - rect.left,
+            y: event.clientY - rect.top,
+            token: Date.now(),
+        });
     };
 
     const beginDragBlock = (
@@ -333,9 +480,8 @@ export function ScenarioCanvas() {
         });
     };
 
-    const createInitialScene = () => {
-        const initialBlocks = createInitialBlocks();
-        setBlocks(initialBlocks);
+    const handleCreateInitialScene = () => {
+        createInitialScene();
         setConnectionMenu(null);
         setPendingConnectionFrom(null);
     };
@@ -348,12 +494,11 @@ export function ScenarioCanvas() {
     const handleStartConnection = (blockId: string) => {
         const block = blocksById.get(blockId);
 
-        if (!block || block.kind !== "start") {
+        if (!block || block.kind === "end") {
             return;
         }
 
         setConnectionMenu(null);
-
         setPendingConnectionFrom((prev) => (prev === blockId ? null : blockId));
     };
 
@@ -362,18 +507,7 @@ export function ScenarioCanvas() {
             return;
         }
 
-        const sourceBlock = blocksById.get(pendingConnectionFrom);
-        const targetBlock = blocksById.get(blockId);
-
-        if (!sourceBlock || !targetBlock) {
-            return;
-        }
-
-        if (sourceBlock.kind !== "start" || targetBlock.kind !== "end") {
-            return;
-        }
-
-        createConnection(pendingConnectionFrom, blockId);
+        completeConnection(pendingConnectionFrom, blockId);
         setPendingConnectionFrom(null);
     };
 
@@ -397,6 +531,35 @@ export function ScenarioCanvas() {
         });
     };
 
+    const requestDeleteBlock = (blockId: string) => {
+        const block = blocksById.get(blockId);
+
+        if (!block || block.kind === "start" || block.kind === "end") {
+            return;
+        }
+
+        setBlockMenu(null);
+        setDeleteBlockId(blockId);
+    };
+
+    const confirmDeleteBlock = () => {
+        if (!deleteBlockId) {
+            return;
+        }
+
+        removeBlock(deleteBlockId);
+
+        if (settingsBlockId === deleteBlockId) {
+            setSettingsBlockId(null);
+        }
+
+        if (pendingConnectionFrom === deleteBlockId) {
+            setPendingConnectionFrom(null);
+        }
+
+        setDeleteBlockId(null);
+    };
+
     const handleSaveScene = useCallback(async () => {
         try {
             const saved = await saveScene({
@@ -410,8 +573,9 @@ export function ScenarioCanvas() {
 
             if (saved) {
                 toasts.success({
-                    title: "Сцена сохранена!",
-                    description: "Изменения применены успешно.",
+                    title: "Сцена сохранена",
+                    description:
+                        "Позиции блоков, соединения и мета блоков сохранены.",
                 });
                 return;
             }
@@ -475,6 +639,20 @@ export function ScenarioCanvas() {
     }, [connectionMenu?.token]);
 
     useEffect(() => {
+        if (!blockMenu?.token) {
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            blockMenuTriggerRef.current?.click();
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [blockMenu?.token]);
+
+    useEffect(() => {
         return () => {
             if (rafRef.current !== null) {
                 cancelAnimationFrame(rafRef.current);
@@ -496,247 +674,625 @@ export function ScenarioCanvas() {
         return buildConnectionPath(getOutPoint(sourceBlock), pointerScenePoint);
     }, [blocksById, pendingConnectionFrom, pointerScenePoint]);
 
+    const saveHttpSettings = () => {
+        if (
+            !activeSettingsBlock ||
+            activeSettingsBlock.kind !== "manual-http"
+        ) {
+            return;
+        }
+
+        updateManualHttpMeta(activeSettingsBlock.id, {
+            url: httpUrl,
+            method: httpMethod,
+            formatter: httpFormatter,
+            lastResponseText: httpResponse,
+        });
+        setSettingsBlockId(null);
+    };
+
+    const saveDatetimeSettings = () => {
+        if (
+            !activeSettingsBlock ||
+            activeSettingsBlock.kind !== "manual-datetime"
+        ) {
+            return;
+        }
+
+        updateManualDatetimeMeta(activeSettingsBlock.id, {
+            mode: datetimeMode as "date" | "time" | "datetime",
+            timezoneMode: datetimeTimezoneMode as "current" | "manual",
+            timezone: datetimeTimezone,
+        });
+        setSettingsBlockId(null);
+    };
+
+    const saveToolSettings = () => {
+        if (!activeSettingsBlock || activeSettingsBlock.kind !== "tool") {
+            return;
+        }
+
+        updateToolMeta(activeSettingsBlock.id, {
+            toolName:
+                activeSettingsBlock.meta?.tool?.toolName ||
+                activeSettingsBlock.title,
+            toolSchema: activeSettingsBlock.meta?.tool?.toolSchema || "{}",
+            input: toolInput,
+        });
+        setSettingsBlockId(null);
+    };
+
+    const checkHttpRequest = async () => {
+        const url = httpUrl.trim();
+
+        if (!url) {
+            toasts.warning({
+                title: "Укажите URL",
+                description: "Поле URL не может быть пустым.",
+            });
+            return;
+        }
+
+        const api = window.appApi;
+
+        if (!api?.network?.proxyHttpRequest) {
+            toasts.danger({
+                title: "Прокси недоступен",
+                description: "Не найден backend-обработчик HTTP прокси.",
+            });
+            return;
+        }
+
+        setIsHttpChecking(true);
+
+        try {
+            const result = await api.network.proxyHttpRequest({
+                url,
+                method: httpMethod,
+                formatter: httpFormatter,
+            });
+
+            const text = result.bodyText || result.statusText;
+            const formatted = prettyResponse(text);
+
+            setHttpResponse(formatted);
+            toasts.info({
+                title: `HTTP ${result.status}`,
+                description: result.ok
+                    ? "Запрос выполнен успешно."
+                    : "Запрос завершился с ошибкой.",
+            });
+        } catch (error) {
+            toasts.danger({
+                title: "Ошибка запроса",
+                description:
+                    error instanceof Error
+                        ? error.message
+                        : "Не удалось выполнить запрос.",
+            });
+        } finally {
+            setIsHttpChecking(false);
+        }
+    };
+
     return (
-        <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-main-700/70 bg-main-900/50">
-            <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-xl border border-main-700/70 bg-main-900/85 p-1.5 backdrop-blur-md">
-                {!hasScene ? (
-                    <Button
-                        variant=""
-                        className="h-8 rounded-lg border border-main-700/70 bg-main-900/40 px-3 text-xs text-main-100 hover:bg-main-700/70"
-                        onClick={createInitialScene}
-                    >
-                        Сгенерировать
-                    </Button>
-                ) : null}
-
-                <Button
-                    variant=""
-                    className={`h-8 w-8 rounded-lg border border-main-700/70 text-main-200 hover:bg-main-700/70 ${showGrid ? "bg-main-700/50" : "bg-main-900/40"}`}
-                    onClick={() => setShowGrid((prev) => !prev)}
-                    title={showGrid ? "Выключить сетку" : "Включить сетку"}
-                    aria-label={showGrid ? "Выключить сетку" : "Включить сетку"}
-                >
-                    <Icon icon="mdi:grid" width={16} height={16} />
-                </Button>
-
-                <Button
-                    variant=""
-                    className="h-8 w-8 rounded-lg border border-main-700/70 bg-main-900/40 text-main-400"
-                    disabled
-                    title="Магнит (пока недоступен)"
-                    aria-label="Магнит (пока недоступен)"
-                >
-                    <Icon icon="mdi:magnet" width={16} height={16} />
-                </Button>
-
-                <Button
-                    variant=""
-                    className="h-8 w-8 rounded-lg border border-main-700/70 bg-main-900/40 text-main-200 hover:bg-main-700/70"
-                    onClick={resetView}
-                    title="Сбросить масштаб"
-                    aria-label="Сбросить масштаб"
-                >
-                    <Icon
-                        icon="mdi:fit-to-screen-outline"
-                        width={16}
-                        height={16}
-                    />
-                </Button>
-
-                <div className="min-w-12 rounded-lg border border-main-700/70 bg-main-900/40 px-2 py-1 text-center text-xs font-medium text-main-200">
-                    {zoomPercent}%
-                </div>
-
-                <Button
-                    variant="primary"
-                    className="h-8 px-3 text-xs"
-                    onClick={() => {
+        <>
+            <div className="relative flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-main-700/70 bg-main-900/50">
+                <ScenarioCanvasToolbar
+                    hasScene={hasScene}
+                    showGrid={showGrid}
+                    zoomPercent={zoomPercent}
+                    isSaving={isSaving}
+                    onGenerate={handleCreateInitialScene}
+                    onToggleGrid={() => setShowGrid((prev) => !prev)}
+                    onResetView={resetView}
+                    onSave={() => {
                         void handleSaveScene();
                     }}
-                    disabled={isSaving}
-                >
-                    Сохранить
-                </Button>
-            </div>
+                />
 
-            <div
-                ref={viewportRef}
-                className={`relative h-full w-full overflow-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
-                onMouseDown={(event) => {
-                    setConnectionMenu(null);
-                    beginPan(event);
-                }}
-                onMouseMove={onMouseMove}
-                onMouseUp={endPointerInteractions}
-                onMouseLeave={endPointerInteractions}
-                onWheel={onWheel}
-                style={gridStyle}
-            >
                 <div
-                    className="absolute left-0 top-0"
-                    style={{
-                        width: CANVAS_WIDTH,
-                        height: CANVAS_HEIGHT,
-                        transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-                        transformOrigin: "top left",
+                    ref={viewportRef}
+                    className={`relative h-full w-full overflow-hidden ${isPanning ? "cursor-grabbing" : "cursor-grab"}`}
+                    onMouseDown={(event) => {
+                        setConnectionMenu(null);
+                        beginPan(event);
                     }}
+                    onMouseMove={onMouseMove}
+                    onMouseUp={endPointerInteractions}
+                    onMouseLeave={endPointerInteractions}
+                    onWheel={onWheel}
+                    style={gridStyle}
                 >
-                    <svg
-                        className="absolute left-0 top-0 h-full w-full overflow-visible"
-                        width={CANVAS_WIDTH}
-                        height={CANVAS_HEIGHT}
-                    >
-                        <defs>
-                            <marker
-                                id="scenario-arrow"
-                                markerWidth="10"
-                                markerHeight="8"
-                                refX="9"
-                                refY="4"
-                                orient="auto"
-                            >
-                                <path
-                                    d="M0,0 L10,4 L0,8 Z"
-                                    fill="rgba(160, 171, 206, 0.95)"
-                                />
-                            </marker>
-                        </defs>
-
-                        {connections.map((connection) => {
-                            const sourceBlock = blocksById.get(
-                                connection.fromBlockId,
-                            );
-                            const targetBlock = blocksById.get(
-                                connection.toBlockId,
-                            );
-
-                            if (!sourceBlock || !targetBlock) {
-                                return null;
-                            }
-
-                            const pathD = buildConnectionPath(
-                                getOutPoint(sourceBlock),
-                                getInPoint(targetBlock),
-                            );
-
-                            return (
-                                <g key={connection.id}>
-                                    <path
-                                        d={pathD}
-                                        fill="none"
-                                        stroke="rgba(160, 171, 206, 0.95)"
-                                        strokeWidth={2}
-                                        markerEnd="url(#scenario-arrow)"
-                                    />
-                                    <path
-                                        d={pathD}
-                                        fill="none"
-                                        stroke="transparent"
-                                        strokeWidth={14}
-                                        onMouseDown={(event) =>
-                                            handleConnectionClick(
-                                                event,
-                                                connection,
-                                            )
-                                        }
-                                    />
-                                </g>
-                            );
-                        })}
-
-                        {temporaryConnectionPath ? (
-                            <path
-                                d={temporaryConnectionPath}
-                                fill="none"
-                                stroke="rgba(160, 171, 206, 0.75)"
-                                strokeDasharray="6 4"
-                                strokeWidth={2}
-                            />
-                        ) : null}
-                    </svg>
-
-                    {blocks.map((block) => (
-                        <ScenarioSimpleBlock
-                            key={block.id}
-                            block={block}
-                            isConnectSource={pendingConnectionFrom === block.id}
-                            onPointerDown={beginDragBlock}
-                            onStartConnection={handleStartConnection}
-                            onCompleteConnection={handleCompleteConnection}
-                        />
-                    ))}
-                </div>
-
-                {connectionMenu ? (
                     <div
-                        className="absolute z-30"
+                        className="absolute left-0 top-0"
                         style={{
-                            left: connectionMenu.x,
-                            top: connectionMenu.y,
+                            width: CANVAS_WIDTH,
+                            height: CANVAS_HEIGHT,
+                            transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+                            transformOrigin: "top left",
                         }}
                     >
-                        <Dropdown
-                            key={connectionMenu.token}
-                            options={[
-                                {
-                                    value: "delete",
-                                    label: "Удалить соединение",
-                                    icon: (
+                        <ScenarioConnectionsLayer
+                            canvasWidth={CANVAS_WIDTH}
+                            canvasHeight={CANVAS_HEIGHT}
+                            connections={connections}
+                            blocksById={blocksById}
+                            temporaryConnectionPath={temporaryConnectionPath}
+                            buildConnectionPath={buildConnectionPath}
+                            getOutPoint={getOutPoint}
+                            getInPoint={getInPoint}
+                            onConnectionMouseDown={handleConnectionClick}
+                        />
+
+                        {blocks.map((block) => {
+                            if (block.kind === "manual-http") {
+                                return (
+                                    <ScenarioManualHttpRequest
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom === block.id
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                        onContextMenu={openBlockContextMenu}
+                                    />
+                                );
+                            }
+
+                            if (block.kind === "manual-datetime") {
+                                return (
+                                    <ScenarioManualDatetimeGet
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom === block.id
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                        onContextMenu={openBlockContextMenu}
+                                    />
+                                );
+                            }
+
+                            if (block.kind === "tool") {
+                                return (
+                                    <ScenarioToolBlock
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom === block.id
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                        onContextMenu={openBlockContextMenu}
+                                    />
+                                );
+                            }
+
+                            return (
+                                <ScenarioSimpleBlock
+                                    key={block.id}
+                                    block={block}
+                                    isConnectSource={
+                                        pendingConnectionFrom === block.id
+                                    }
+                                    onPointerDown={beginDragBlock}
+                                    onStartConnection={handleStartConnection}
+                                    onCompleteConnection={
+                                        handleCompleteConnection
+                                    }
+                                />
+                            );
+                        })}
+                    </div>
+
+                    {connectionMenu ? (
+                        <div
+                            className="absolute z-30"
+                            style={{
+                                left: connectionMenu.x,
+                                top: connectionMenu.y,
+                            }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <Dropdown
+                                key={connectionMenu.token}
+                                options={[
+                                    {
+                                        value: "delete",
+                                        label: "Удалить соединение",
+                                        icon: (
+                                            <Icon
+                                                icon="mdi:trash-can-outline"
+                                                width={16}
+                                                height={16}
+                                            />
+                                        ),
+                                        onClick: () => {
+                                            deleteConnection(
+                                                connectionMenu.connectionId,
+                                            );
+                                            setConnectionMenu(null);
+                                        },
+                                    },
+                                ]}
+                                menuPlacement="bottom"
+                                closeOnSelect
+                                matchTriggerWidth={false}
+                                renderTrigger={({
+                                    toggleOpen,
+                                    triggerRef,
+                                    ariaProps,
+                                }) => (
+                                    <Button
+                                        variant=""
+                                        className="h-7 w-7 rounded-lg border border-main-700/70 bg-main-900/95 text-main-200 hover:bg-main-700/80"
+                                        ref={(element) => {
+                                            if (
+                                                typeof triggerRef === "function"
+                                            ) {
+                                                triggerRef(element);
+                                            } else if (
+                                                triggerRef &&
+                                                "current" in triggerRef
+                                            ) {
+                                                (
+                                                    triggerRef as {
+                                                        current: HTMLButtonElement | null;
+                                                    }
+                                                ).current = element;
+                                            }
+
+                                            dropdownTriggerRef.current =
+                                                element;
+                                        }}
+                                        onClick={toggleOpen}
+                                        {...ariaProps}
+                                    >
                                         <Icon
-                                            icon="mdi:trash-can-outline"
+                                            icon="mdi:dots-vertical"
                                             width={16}
                                             height={16}
                                         />
-                                    ),
-                                    onClick: () => {
-                                        deleteConnection(
-                                            connectionMenu.connectionId,
-                                        );
-                                        setConnectionMenu(null);
-                                    },
-                                },
-                            ]}
-                            menuPlacement="bottom"
-                            closeOnSelect
-                            matchTriggerWidth={false}
-                            renderTrigger={({
-                                toggleOpen,
-                                triggerRef,
-                                ariaProps,
-                            }) => (
-                                <Button
-                                    variant=""
-                                    className="h-7 w-7 rounded-lg border border-main-700/70 bg-main-900/95 text-main-200 hover:bg-main-700/80"
-                                    ref={(element) => {
-                                        if (typeof triggerRef === "function") {
-                                            triggerRef(element);
-                                        } else if (
-                                            triggerRef &&
-                                            "current" in triggerRef
-                                        ) {
-                                            (
-                                                triggerRef as {
-                                                    current: HTMLButtonElement | null;
-                                                }
-                                            ).current = element;
-                                        }
+                                    </Button>
+                                )}
+                            />
+                        </div>
+                    ) : null}
 
-                                        dropdownTriggerRef.current = element;
-                                    }}
-                                    onClick={toggleOpen}
-                                    {...ariaProps}
-                                >
-                                    <Icon
-                                        icon="mdi:dots-vertical"
-                                        width={16}
-                                        height={16}
-                                    />
-                                </Button>
-                            )}
+                    {blockMenu ? (
+                        <div
+                            className="absolute z-30"
+                            style={{
+                                left: blockMenu.x,
+                                top: blockMenu.y,
+                            }}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onClick={(event) => event.stopPropagation()}
+                        >
+                            <Dropdown
+                                key={blockMenu.token}
+                                options={[
+                                    {
+                                        value: "settings",
+                                        label: "Настройки",
+                                        icon: (
+                                            <Icon
+                                                icon="mdi:cog-outline"
+                                                width={16}
+                                                height={16}
+                                            />
+                                        ),
+                                        onClick: () => {
+                                            setSettingsBlockId(
+                                                blockMenu.blockId,
+                                            );
+                                            setBlockMenu(null);
+                                        },
+                                    },
+                                    {
+                                        value: "delete",
+                                        label: "Удалить блок",
+                                        icon: (
+                                            <Icon
+                                                icon="mdi:trash-can-outline"
+                                                width={16}
+                                                height={16}
+                                            />
+                                        ),
+                                        onClick: () => {
+                                            requestDeleteBlock(
+                                                blockMenu.blockId,
+                                            );
+                                        },
+                                    },
+                                ]}
+                                menuPlacement="bottom"
+                                closeOnSelect
+                                matchTriggerWidth={false}
+                                renderTrigger={({
+                                    toggleOpen,
+                                    triggerRef,
+                                    ariaProps,
+                                }) => (
+                                    <Button
+                                        variant=""
+                                        className="h-7 w-7 rounded-lg border border-main-700/70 bg-main-900/95 text-main-200 hover:bg-main-700/80"
+                                        ref={(element) => {
+                                            if (
+                                                typeof triggerRef === "function"
+                                            ) {
+                                                triggerRef(element);
+                                            } else if (
+                                                triggerRef &&
+                                                "current" in triggerRef
+                                            ) {
+                                                (
+                                                    triggerRef as {
+                                                        current: HTMLButtonElement | null;
+                                                    }
+                                                ).current = element;
+                                            }
+
+                                            blockMenuTriggerRef.current =
+                                                element;
+                                        }}
+                                        onClick={toggleOpen}
+                                        {...ariaProps}
+                                    >
+                                        <Icon
+                                            icon="mdi:dots-vertical"
+                                            width={16}
+                                            height={16}
+                                        />
+                                    </Button>
+                                )}
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            </div>
+
+            <Modal
+                open={Boolean(deleteBlockId)}
+                onClose={() => setDeleteBlockId(null)}
+                title="Удалить блок"
+                className="max-w-md"
+                footer={
+                    <div className="flex gap-2">
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => setDeleteBlockId(null)}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={confirmDeleteBlock}
+                        >
+                            Удалить
+                        </Button>
+                    </div>
+                }
+            >
+                <p className="text-sm text-main-300">
+                    Блок будет удалён вместе со всеми входящими и исходящими
+                    соединениями.
+                </p>
+            </Modal>
+
+            <Modal
+                open={Boolean(isHttpModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="ScenarioManualHttpRequest"
+                className="max-w-2xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={saveHttpSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">URL</p>
+                        <InputSmall
+                            value={httpUrl}
+                            onChange={(event) => setHttpUrl(event.target.value)}
+                            placeholder="https://example.com/api"
                         />
                     </div>
-                ) : null}
-            </div>
-        </div>
+
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">Метод</p>
+                        <Select
+                            value={httpMethod}
+                            onChange={setHttpMethod}
+                            options={[
+                                { value: "GET", label: "GET" },
+                                { value: "POST", label: "POST" },
+                                { value: "PUT", label: "PUT" },
+                                { value: "DELETE", label: "DELETE" },
+                                { value: "PATCH", label: "PATCH" },
+                            ]}
+                            className="h-9 border border-main-700/70 bg-main-800"
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">Форматтер (JS)</p>
+                        <InputSmall
+                            value={httpFormatter}
+                            onChange={(event) =>
+                                setHttpFormatter(event.target.value)
+                            }
+                            placeholder="response.items?.[0]?.title"
+                        />
+                    </div>
+
+                    <div>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => {
+                                void checkHttpRequest();
+                            }}
+                            disabled={isHttpChecking}
+                        >
+                            {isHttpChecking ? "Проверка..." : "Проверить"}
+                        </Button>
+                    </div>
+
+                    {httpResponse ? (
+                        <div className="space-y-1">
+                            <p className="text-sm text-main-300">Ответ</p>
+                            <ShikiCodeBlock
+                                code={httpResponse}
+                                language="json"
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            </Modal>
+
+            <Modal
+                open={Boolean(isDatetimeModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="ScenarioManualDatetimeGet"
+                className="max-w-xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={saveDatetimeSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">Тип получения</p>
+                        <Select
+                            value={datetimeMode}
+                            onChange={setDatetimeMode}
+                            options={[
+                                { value: "date", label: "Дата" },
+                                { value: "time", label: "Время" },
+                                { value: "datetime", label: "Дата и время" },
+                            ]}
+                            className="h-9 border border-main-700/70 bg-main-800"
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">Часовой пояс</p>
+                        <Select
+                            value={datetimeTimezoneMode}
+                            onChange={setDatetimeTimezoneMode}
+                            options={[
+                                { value: "current", label: "Текущий" },
+                                {
+                                    value: "manual",
+                                    label: "Ручная установка",
+                                },
+                            ]}
+                            className="h-9 border border-main-700/70 bg-main-800"
+                        />
+                    </div>
+
+                    {datetimeTimezoneMode === "manual" ? (
+                        <div className="space-y-1">
+                            <p className="text-sm text-main-300">
+                                Пояс (UTC+N / UTC-N)
+                            </p>
+                            <InputSmall
+                                value={datetimeTimezone}
+                                onChange={(event) =>
+                                    setDatetimeTimezone(event.target.value)
+                                }
+                                placeholder="UTC+3"
+                            />
+                        </div>
+                    ) : null}
+                </div>
+            </Modal>
+
+            <Modal
+                open={Boolean(isToolModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="Tool block settings"
+                className="max-w-3xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={saveToolSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">
+                            Схема параметров
+                        </p>
+                        <ShikiCodeBlock
+                            code={
+                                activeSettingsBlock?.meta?.tool?.toolSchema ||
+                                "{}"
+                            }
+                            language="json"
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <p className="text-sm text-main-300">Ввод</p>
+                        <InputBig
+                            value={toolInput}
+                            onChange={setToolInput}
+                            className="h-28! rounded-xl! border border-main-700/70 bg-main-800/70 px-3 py-2 text-main-100 placeholder:text-main-500"
+                            placeholder="Введите данные для инструмента"
+                        />
+                    </div>
+                </div>
+            </Modal>
+        </>
     );
 }

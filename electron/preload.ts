@@ -128,6 +128,10 @@ const appApi: AppApi = {
         setCacheEntry: (key: string, entry: AppCacheEntry) =>
             ipcRenderer.invoke("app:set-cache-entry", key, entry),
     },
+    network: {
+        proxyHttpRequest: (payload) =>
+            ipcRenderer.invoke("app:proxy-http-request", payload),
+    },
 };
 
 contextBridge.exposeInMainWorld("appApi", appApi);

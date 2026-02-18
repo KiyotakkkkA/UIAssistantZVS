@@ -12,6 +12,7 @@ import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 import type {
     AppCacheEntry,
+    ProxyHttpRequestPayload,
     SaveImageFromSourcePayload,
     UploadedFileData,
 } from "../src/types/ElectronApi";
@@ -261,6 +262,53 @@ app.whenReady()
             "app:set-cache-entry",
             (_event, key: string, entry: AppCacheEntry) => {
                 userDataService.setCacheEntry(key, entry);
+            },
+        );
+        ipcMain.handle(
+            "app:proxy-http-request",
+            async (_event, payload: ProxyHttpRequestPayload) => {
+                const url =
+                    typeof payload?.url === "string" ? payload.url.trim() : "";
+                const method =
+                    typeof payload?.method === "string"
+                        ? payload.method.trim().toUpperCase()
+                        : "GET";
+
+                if (!url) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        statusText: "URL is required",
+                        bodyText: "",
+                    };
+                }
+
+                try {
+                    const response = await fetch(url, {
+                        method,
+                        headers: {
+                            Accept: "application/json, text/plain, */*",
+                        },
+                    });
+                    const bodyText = await response.text();
+
+                    return {
+                        ok: response.ok,
+                        status: response.status,
+                        statusText: response.statusText,
+                        bodyText,
+                    };
+                } catch (error) {
+                    return {
+                        ok: false,
+                        status: 0,
+                        statusText:
+                            error instanceof Error
+                                ? error.message
+                                : "Network request failed",
+                        bodyText: "",
+                    };
+                }
             },
         );
         ipcMain.handle(

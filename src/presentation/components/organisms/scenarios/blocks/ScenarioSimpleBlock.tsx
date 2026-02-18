@@ -1,6 +1,6 @@
 import { Icon } from "@iconify/react";
 import type { PointerEvent } from "react";
-import type { ScenarioSimpleBlockNode } from "../../../../types/Scenario";
+import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
 
 type ScenarioSimpleBlockProps = {
     block: ScenarioSimpleBlockNode;

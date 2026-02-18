@@ -7,16 +7,51 @@ export type Scenario = {
     updatedAt: string;
 };
 
-export type ScenarioSimpleBlockKind = "start" | "end";
+export type ScenarioBlockKind =
+    | "start"
+    | "end"
+    | "manual-http"
+    | "manual-datetime"
+    | "tool";
+
+export type ScenarioBlockExecutionType = "system" | "manual" | "tools";
+
+export type ScenarioManualHttpRequestMeta = {
+    url: string;
+    method: string;
+    formatter: string;
+    lastResponseCode?: number;
+    lastResponseText?: string;
+};
+
+export type ScenarioManualDatetimeGetMeta = {
+    mode: "date" | "time" | "datetime";
+    timezoneMode: "current" | "manual";
+    timezone: string;
+};
+
+export type ScenarioToolMeta = {
+    toolName: string;
+    toolSchema: string;
+    input: string;
+};
+
+export type ScenarioBlockMeta = {
+    manualHttp?: ScenarioManualHttpRequestMeta;
+    manualDatetime?: ScenarioManualDatetimeGetMeta;
+    tool?: ScenarioToolMeta;
+};
 
 export type ScenarioSimpleBlockNode = {
     id: string;
-    kind: ScenarioSimpleBlockKind;
+    kind: ScenarioBlockKind;
+    executionType: ScenarioBlockExecutionType;
     title: string;
     x: number;
     y: number;
     width: number;
     height: number;
+    meta?: ScenarioBlockMeta;
 };
 
 export type ScenarioConnection = {

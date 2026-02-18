@@ -83,6 +83,9 @@ const appApi = {
   cache: {
     getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),
     setCacheEntry: (key, entry) => electron.ipcRenderer.invoke("app:set-cache-entry", key, entry)
+  },
+  network: {
+    proxyHttpRequest: (payload) => electron.ipcRenderer.invoke("app:proxy-http-request", payload)
   }
 };
 electron.contextBridge.exposeInMainWorld("appApi", appApi);

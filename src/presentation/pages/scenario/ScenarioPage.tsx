@@ -4,7 +4,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useToasts } from "../../../hooks";
 import { useScenario } from "../../../hooks/agents";
 import { Loader, TreeView } from "../../components/atoms";
-import { ScenarioCanvas } from "../../components/organisms/scenarios";
+import {
+    ScenarioCanvas,
+    type ScenarioCanvasInsertRequest,
+} from "../../components/organisms/scenarios";
 import { toolsStore } from "../../../stores/toolsStore";
 
 export const ScenarioPage = observer(function ScenarioPage() {
@@ -13,6 +16,17 @@ export const ScenarioPage = observer(function ScenarioPage() {
     const toasts = useToasts();
     const { activeScenario, switchScenario } = useScenario();
     const [isLoading, setIsLoading] = useState(true);
+    const [insertRequest, setInsertRequest] =
+        useState<ScenarioCanvasInsertRequest | null>(null);
+
+    const requestInsert = (
+        payload: Omit<ScenarioCanvasInsertRequest, "token">,
+    ) => {
+        setInsertRequest({
+            ...payload,
+            token: Date.now(),
+        });
+    };
 
     useEffect(() => {
         if (!scenarioId) {
@@ -69,6 +83,26 @@ export const ScenarioPage = observer(function ScenarioPage() {
             <div className="relative flex min-h-0 flex-1 gap-4">
                 <aside className="w-80">
                     <TreeView className="h-full overflow-y-auto">
+                        <TreeView.Catalog
+                            title="Встроенные механизмы"
+                            defaultOpen
+                        >
+                            <TreeView.Element
+                                label="http_request"
+                                description="Ручной HTTP-запрос с настройкой"
+                                onClick={() => {
+                                    requestInsert({ kind: "manual-http" });
+                                }}
+                            />
+                            <TreeView.Element
+                                label="datetime_get"
+                                description="Получение даты/времени"
+                                onClick={() => {
+                                    requestInsert({ kind: "manual-datetime" });
+                                }}
+                            />
+                        </TreeView.Catalog>
+
                         {toolsStore.packages.map((pkg) => (
                             <TreeView.Catalog
                                 key={pkg.id}
@@ -82,13 +116,29 @@ export const ScenarioPage = observer(function ScenarioPage() {
                                         description={
                                             tool.schema.function.description
                                         }
+                                        onClick={() => {
+                                            requestInsert({
+                                                kind: "tool",
+                                                toolName:
+                                                    tool.schema.function.name,
+                                                toolSchema: JSON.stringify(
+                                                    tool.schema.function
+                                                        .parameters,
+                                                    null,
+                                                    2,
+                                                ),
+                                            });
+                                        }}
                                     />
                                 ))}
                             </TreeView.Catalog>
                         ))}
                     </TreeView>
                 </aside>
-                <ScenarioCanvas />
+                <ScenarioCanvas
+                    insertRequest={insertRequest}
+                    onInsertHandled={() => setInsertRequest(null)}
+                />
             </div>
         </section>
     );
