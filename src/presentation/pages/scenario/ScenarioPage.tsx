@@ -3,7 +3,9 @@ import { observer } from "mobx-react-lite";
 import { useNavigate, useParams } from "react-router-dom";
 import { useToasts } from "../../../hooks";
 import { useScenario } from "../../../hooks/agents";
-import { Loader } from "../../components/atoms";
+import { Loader, TreeView } from "../../components/atoms";
+import { ScenarioCanvas } from "../../components/organisms/scenarios";
+import { toolsStore } from "../../../stores/toolsStore";
 
 export const ScenarioPage = observer(function ScenarioPage() {
     const { scenarioId = "" } = useParams();
@@ -63,10 +65,30 @@ export const ScenarioPage = observer(function ScenarioPage() {
                     {activeScenario?.description?.trim() ||
                         "Описание сценария пока не задано."}
                 </p>
-                <div className="mt-6 rounded-xl border border-dashed border-main-700/70 bg-main-900/40 p-4 text-sm text-main-400">
-                    Мок-страница сценария. Дерево контента и редактор добавим на
-                    следующем этапе.
-                </div>
+            </div>
+            <div className="relative flex min-h-0 flex-1 gap-4">
+                <aside className="w-80">
+                    <TreeView className="h-full overflow-y-auto">
+                        {toolsStore.packages.map((pkg) => (
+                            <TreeView.Catalog
+                                key={pkg.id}
+                                title={pkg.title}
+                                defaultOpen
+                            >
+                                {pkg.tools.map((tool) => (
+                                    <TreeView.Element
+                                        key={tool.schema.function.name}
+                                        label={tool.schema.function.name}
+                                        description={
+                                            tool.schema.function.description
+                                        }
+                                    />
+                                ))}
+                            </TreeView.Catalog>
+                        ))}
+                    </TreeView>
+                </aside>
+                <ScenarioCanvas />
             </div>
         </section>
     );

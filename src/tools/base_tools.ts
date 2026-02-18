@@ -28,7 +28,7 @@ export const baseToolsPackage = () => {
     builder
         .addPackage({
             id: "base-tools",
-            title: "Base Tools",
+            title: "Базовые инструменты",
             description:
                 "Набор базовых инструментов для взаимодействия модели с внешней средой",
         })

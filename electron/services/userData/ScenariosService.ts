@@ -50,6 +50,7 @@ export class ScenariosService {
             ...current,
             name: payload.name.trim() || current.name,
             description: payload.description.trim(),
+            content: this.normalizeContent(payload.content ?? current.content),
             updatedAt: new Date().toISOString(),
         };
 

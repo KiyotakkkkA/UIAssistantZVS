@@ -737,6 +737,7 @@ class ScenariosService {
       ...current,
       name: payload.name.trim() || current.name,
       description: payload.description.trim(),
+      content: this.normalizeContent(payload.content ?? current.content),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeScenario(next);
