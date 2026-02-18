@@ -13,6 +13,12 @@ export default defineConfig({
                 secure: true,
                 rewrite: (path) => path.replace(/^\/ollama/, "/api"),
             },
+            "/mirea": {
+                target: "https://schedule-of.mirea.ru",
+                changeOrigin: true,
+                secure: true,
+                rewrite: (path) => path.replace(/^\/mirea/, ""),
+            },
         },
     },
     plugins: [

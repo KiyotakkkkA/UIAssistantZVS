@@ -1,5 +1,9 @@
 import { makeAutoObservable } from "mobx";
-import { commandExecToolsPackage, webToolsPackage } from "../tools";
+import {
+    commandExecToolsPackage,
+    studyingToolsPackage,
+    webToolsPackage,
+} from "../tools";
 import type { OllamaToolDefinition } from "../types/Chat";
 import type { ToolPackageDescriptor } from "../utils/ToolsBuilder";
 
@@ -9,7 +13,11 @@ class ToolsStore {
     requiredPromptToolNames = new Set<string>();
 
     constructor() {
-        this.packages = [...webToolsPackage(), ...commandExecToolsPackage()];
+        this.packages = [
+            ...webToolsPackage(),
+            ...studyingToolsPackage(),
+            ...commandExecToolsPackage(),
+        ];
         this.enabledToolNames = new Set(
             this.packages.flatMap((pkg) =>
                 pkg.tools.map((tool) => tool.schema.function.name),
