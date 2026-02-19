@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { Button } from "../../../atoms";
+import { WorkspaceListItem } from "./WorkspaceListItem";
 
 type ConversationItemProps = {
     id: string;
@@ -13,6 +14,9 @@ type ConversationItemProps = {
     canDelete: boolean;
 };
 
+const iconBtnClass =
+    "border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100";
+
 export function ConversationItem({
     id,
     title,
@@ -25,31 +29,18 @@ export function ConversationItem({
     canDelete,
 }: ConversationItemProps) {
     return (
-        <div
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelect(id)}
-            onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelect(id);
-                }
-            }}
-            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
-                active ? "bg-main-500/20" : "bg-transparent ring-transparen"
-            }`}
-        >
-            <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-main-100">
-                        {title}
-                    </p>
-                </div>
+        <WorkspaceListItem
+            id={id}
+            title={title}
+            preview={preview}
+            active={active}
+            onSelect={onSelect}
+            actions={
                 <div className="flex items-center gap-2">
                     <span className="text-xs text-main-400">{time}</span>
                     <Button
                         variant=""
-                        className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100"
+                        className={iconBtnClass}
                         onClick={(event) => {
                             event.stopPropagation();
                             onRename(id);
@@ -64,7 +55,7 @@ export function ConversationItem({
                     </Button>
                     <Button
                         variant=""
-                        className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        className={`${iconBtnClass} disabled:cursor-not-allowed disabled:opacity-40`}
                         onClick={(event) => {
                             event.stopPropagation();
                             onDelete(id);
@@ -79,8 +70,7 @@ export function ConversationItem({
                         />
                     </Button>
                 </div>
-            </div>
-            <p className="mt-1 truncate text-xs text-main-400">{preview}</p>
-        </div>
+            }
+        />
     );
 }

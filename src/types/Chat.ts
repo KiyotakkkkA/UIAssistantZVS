@@ -8,7 +8,7 @@ export type ToolTrace = {
     toolName: string;
     args: Record<string, unknown>;
     result: unknown;
-    status?: "pending" | "accepted" | "cancelled";
+    status?: "pending" | "accepted" | "cancelled" | "answered";
     command?: string;
     cwd?: string;
     isAdmin?: boolean;
@@ -22,6 +22,7 @@ export type ChatMessage = {
     answeringAt?: string;
     assistantStage?: AssistantStage;
     toolTrace?: ToolTrace;
+    hidden?: boolean;
 };
 
 export type ChatDialog = {

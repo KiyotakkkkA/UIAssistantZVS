@@ -41,7 +41,10 @@ export function useChat() {
     const [isStreaming, setIsStreaming] = useState(false);
     const messages = chatsStore.messages;
     const visibleMessages = useMemo(
-        () => messages.filter((message) => message.author !== "system"),
+        () =>
+            messages.filter(
+                (message) => message.author !== "system" && !message.hidden,
+            ),
         [messages],
     );
     const messagesRef = useRef<ChatMessage[]>(messages);
@@ -107,7 +110,10 @@ export function useChat() {
 
     const sendMessageMutation = useMutation({
         mutationFn: async (rawContent: string) => {
-            const content = rawContent.trim();
+            const isHiddenQa = rawContent.startsWith("__qa_hidden__");
+            const content = isHiddenQa
+                ? rawContent.slice("__qa_hidden__".length).trim()
+                : rawContent.trim();
             const scenarioLaunchPayload = parseScenarioLaunchPayload(content);
             const userVisibleContent =
                 scenarioLaunchPayload?.displayMessage || content;
@@ -140,6 +146,7 @@ export function useChat() {
                 author: "user",
                 content: userVisibleContent,
                 timestamp: getTimeStamp(),
+                ...(isHiddenQa ? { hidden: true } : {}),
             };
 
             const assistantTimestamp = getTimeStamp();

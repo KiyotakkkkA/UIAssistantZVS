@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { Button } from "../../../atoms";
+import { WorkspaceListItem } from "./WorkspaceListItem";
 
 type ScenarioItemProps = {
     id: string;
@@ -12,6 +13,9 @@ type ScenarioItemProps = {
     onDelete: (scenarioId: string) => void;
 };
 
+const iconBtnClass =
+    "border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100";
+
 export function ScenarioItem({
     id,
     title,
@@ -23,31 +27,18 @@ export function ScenarioItem({
     onDelete,
 }: ScenarioItemProps) {
     return (
-        <div
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelect(id)}
-            onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelect(id);
-                }
-            }}
-            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
-                active ? "bg-main-500/20" : "bg-transparent"
-            }`}
-        >
-            <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-main-100">
-                        {title}
-                    </p>
-                </div>
+        <WorkspaceListItem
+            id={id}
+            title={title}
+            preview={preview}
+            active={active}
+            onSelect={onSelect}
+            actions={
                 <div className="flex items-center gap-1">
                     <span className="text-xs text-main-400">{time}</span>
                     <Button
                         variant=""
-                        className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100"
+                        className={iconBtnClass}
                         onClick={(event) => {
                             event.stopPropagation();
                             onEdit(id);
@@ -62,7 +53,7 @@ export function ScenarioItem({
                     </Button>
                     <Button
                         variant=""
-                        className="border-transparent items-center justify-center rounded-lg cursor-pointer text-base text-main-300 hover:bg-main-700/70 hover:text-main-100"
+                        className={iconBtnClass}
                         onClick={(event) => {
                             event.stopPropagation();
                             onDelete(id);
@@ -76,8 +67,7 @@ export function ScenarioItem({
                         />
                     </Button>
                 </div>
-            </div>
-            <p className="mt-1 truncate text-xs text-main-400">{preview}</p>
-        </div>
+            }
+        />
     );
 }

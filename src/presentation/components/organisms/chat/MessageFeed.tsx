@@ -18,12 +18,12 @@ interface MessageFeedProps {
 
 function AssistantResponseBlock({
     stages,
-    sendMessage,
+    sendQaAnswer,
     onApproveCommandExec,
     onRejectCommandExec,
 }: {
     stages: ChatMessage[];
-    sendMessage: (content: string) => void;
+    sendQaAnswer: (qaMessageId: string, answer: string) => void;
     onApproveCommandExec: (messageId: string) => void;
     onRejectCommandExec: (messageId: string) => void;
 }) {
@@ -57,16 +57,22 @@ function AssistantResponseBlock({
                         <QaToolBubbleCard
                             key={message.id}
                             toolTrace={message.toolTrace}
-                            onSendAnswer={(answer) => sendMessage(answer)}
+                            answered={message.toolTrace?.status === "answered"}
+                            onSendAnswer={(answer) =>
+                                sendQaAnswer(message.id, answer)
+                            }
                         />
                     ) : (
                         <ToolBubbleCard
                             key={message.id}
-                            messageId={message.id}
                             content={message.content}
                             toolTrace={message.toolTrace}
-                            onApproveCommandExec={onApproveCommandExec}
-                            onRejectCommandExec={onRejectCommandExec}
+                            onApproveCommandExec={() =>
+                                onApproveCommandExec(message.id)
+                            }
+                            onRejectCommandExec={() =>
+                                onRejectCommandExec(message.id)
+                            }
                         />
                     ),
                 )}
@@ -106,6 +112,7 @@ export function MessageFeed({
         confirmDeleteMessage,
         approveCommandExec,
         rejectCommandExec,
+        sendQaAnswer,
     } = useMessages({ sendMessage });
 
     useEffect(() => {
@@ -158,7 +165,6 @@ export function MessageFeed({
                             return (
                                 <div key={message.id} className="space-y-3">
                                     <ChatUserBubbleCard
-                                        messageId={message.id}
                                         content={message.content}
                                         timestamp={message.timestamp}
                                         isEditing={
@@ -197,7 +203,7 @@ export function MessageFeed({
                                     {linkedStages.length > 0 && (
                                         <AssistantResponseBlock
                                             stages={linkedStages}
-                                            sendMessage={sendMessage}
+                                            sendQaAnswer={sendQaAnswer}
                                             onApproveCommandExec={
                                                 approveCommandExec
                                             }
@@ -218,7 +224,7 @@ export function MessageFeed({
                                 <div key={message.id}>
                                     <AssistantResponseBlock
                                         stages={[message]}
-                                        sendMessage={sendMessage}
+                                        sendQaAnswer={sendQaAnswer}
                                         onApproveCommandExec={
                                             approveCommandExec
                                         }

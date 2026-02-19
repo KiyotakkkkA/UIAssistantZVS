@@ -3,18 +3,15 @@ import { ShikiCodeBlock } from "../../render/ShikiCodeBlock";
 import type { ToolTrace } from "../../../../../types/Chat";
 
 type ToolBubbleCardProps = {
-    messageId: string;
     content: string;
     toolTrace?: ToolTrace;
-    onApproveCommandExec?: (messageId: string) => void;
-    onRejectCommandExec?: (messageId: string) => void;
+    onApproveCommandExec?: () => void;
+    onRejectCommandExec?: () => void;
 };
 
-type ToolTracePayload = Partial<ToolTrace>;
-
-const parseToolTrace = (raw: string): ToolTracePayload | null => {
+const parseToolTrace = (raw: string): Partial<ToolTrace> | null => {
     try {
-        const parsed = JSON.parse(raw) as ToolTracePayload;
+        const parsed = JSON.parse(raw) as Partial<ToolTrace>;
 
         if (!parsed || typeof parsed !== "object") {
             return null;
@@ -27,7 +24,6 @@ const parseToolTrace = (raw: string): ToolTracePayload | null => {
 };
 
 export function ToolBubbleCard({
-    messageId,
     content,
     toolTrace,
     onApproveCommandExec,
@@ -99,9 +95,7 @@ export function ToolBubbleCard({
                                         variant="primary"
                                         shape="rounded-lg"
                                         className="h-8 px-3"
-                                        onClick={() =>
-                                            onApproveCommandExec?.(messageId)
-                                        }
+                                        onClick={onApproveCommandExec}
                                     >
                                         Подтвердить
                                     </Button>
@@ -109,9 +103,7 @@ export function ToolBubbleCard({
                                         variant="secondary"
                                         shape="rounded-lg"
                                         className="h-8 px-3"
-                                        onClick={() =>
-                                            onRejectCommandExec?.(messageId)
-                                        }
+                                        onClick={onRejectCommandExec}
                                     >
                                         Отклонить
                                     </Button>

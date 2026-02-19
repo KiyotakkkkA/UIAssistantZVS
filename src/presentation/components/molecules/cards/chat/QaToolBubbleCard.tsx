@@ -5,6 +5,7 @@ import type { ToolTrace } from "../../../../../types/Chat";
 
 type QaToolBubbleCardProps = {
     toolTrace?: ToolTrace;
+    answered?: boolean;
     onSendAnswer: (answer: string) => void;
 };
 
@@ -21,6 +22,7 @@ const pickStringArray = (value: unknown): string[] => {
 
 export function QaToolBubbleCard({
     toolTrace,
+    answered = false,
     onSendAnswer,
 }: QaToolBubbleCardProps) {
     const [answer, setAnswer] = useState("");
@@ -32,20 +34,18 @@ export function QaToolBubbleCard({
         const question =
             pickString(result.question) || pickString(args.question);
         const reason = pickString(result.reason) || pickString(args.reason);
-        const expectedFormat =
-            pickString(result.expectedFormat) ||
-            pickString(args.expectedFormat);
         const selectAnswers = [
-            ...pickStringArray(result.selectAnswers),
-            ...pickStringArray(args.selectAnswers),
-        ].filter((value, index, all) => all.indexOf(value) === index);
+            ...new Set([
+                ...pickStringArray(result.selectAnswers),
+                ...pickStringArray(args.selectAnswers),
+            ]),
+        ];
         const userAnswerHint =
             pickString(result.userAnswer) || pickString(args.userAnswer);
 
         return {
             question,
             reason,
-            expectedFormat,
             selectAnswers,
             userAnswerHint,
         };
@@ -74,6 +74,17 @@ export function QaToolBubbleCard({
                 <p className="text-sm font-semibold text-main-100">
                     Уточнение от ассистента
                 </p>
+                {answered && (
+                    <span className="ml-auto text-xs text-main-400 flex items-center gap-1">
+                        <Icon
+                            icon="mdi:check"
+                            width={14}
+                            height={14}
+                            className="text-green-400"
+                        />
+                        Отвечено
+                    </span>
+                )}
             </div>
 
             <div className="rounded-xl border border-main-700/70 bg-main-900/45 p-3 space-y-2">
@@ -87,57 +98,55 @@ export function QaToolBubbleCard({
                         Причина: {payload.reason}
                     </p>
                 ) : null}
-
-                {payload.expectedFormat ? (
-                    <p className="text-xs text-main-400">
-                        Формат ответа: {payload.expectedFormat}
-                    </p>
-                ) : null}
             </div>
 
-            {payload.selectAnswers.length > 0 ? (
-                <div className="space-y-2">
-                    <p className="text-xs text-main-300">Быстрый выбор</p>
-                    <div className="flex flex-wrap gap-2">
-                        {payload.selectAnswers.map((option) => (
+            {!answered && (
+                <>
+                    {payload.selectAnswers.length > 0 ? (
+                        <div className="space-y-2">
+                            <p className="text-xs text-main-300">
+                                Быстрый выбор
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {payload.selectAnswers.map((option) => (
+                                    <Button
+                                        key={option}
+                                        variant="secondary"
+                                        shape="rounded-lg"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => onSendAnswer(option)}
+                                    >
+                                        {option}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <div className="space-y-2">
+                        <p className="text-xs text-main-300">
+                            Развёрнутый ответ
+                        </p>
+                        <InputBig
+                            value={answer}
+                            onChange={setAnswer}
+                            className="h-24 rounded-xl border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
+                            placeholder={"Введите ваш ответ"}
+                        />
+                        <div className="flex justify-end">
                             <Button
-                                key={option}
-                                variant="secondary"
+                                variant="primary"
                                 shape="rounded-lg"
                                 className="h-8 px-3 text-xs"
-                                onClick={() => onSendAnswer(option)}
+                                onClick={submitAnswer}
+                                disabled={!answer.trim()}
                             >
-                                {option}
+                                Отправить ответ
                             </Button>
-                        ))}
+                        </div>
                     </div>
-                </div>
-            ) : null}
-
-            <div className="space-y-2">
-                <p className="text-xs text-main-300">Развёрнутый ответ</p>
-                <InputBig
-                    value={answer}
-                    onChange={setAnswer}
-                    className="h-24 rounded-xl border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
-                    placeholder={
-                        payload.userAnswerHint ||
-                        payload.expectedFormat ||
-                        "Введите ваш ответ"
-                    }
-                />
-                <div className="flex justify-end">
-                    <Button
-                        variant="primary"
-                        shape="rounded-lg"
-                        className="h-8 px-3 text-xs"
-                        onClick={submitAnswer}
-                        disabled={!answer.trim()}
-                    >
-                        Отправить ответ
-                    </Button>
-                </div>
-            </div>
+                </>
+            )}
         </div>
     );
 }

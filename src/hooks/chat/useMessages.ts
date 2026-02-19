@@ -49,6 +49,32 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         setDeleteMessageId(null);
     };
 
+    const setToolTraceStatus = (
+        messageId: string,
+        status: "accepted" | "cancelled" | "answered",
+    ) => {
+        const dialog = chatsStore.activeDialog;
+        if (!dialog) return;
+
+        chatsStore.replaceByDialog({
+            ...dialog,
+            messages: dialog.messages.map((message) =>
+                message.id === messageId && message.toolTrace
+                    ? {
+                          ...message,
+                          toolTrace: { ...message.toolTrace, status },
+                      }
+                    : message,
+            ),
+            updatedAt: new Date().toISOString(),
+        });
+    };
+
+    const sendQaAnswer = (qaMessageId: string, answer: string) => {
+        setToolTraceStatus(qaMessageId, "answered");
+        sendMessage(`__qa_hidden__${answer}`);
+    };
+
     const truncateAndResend = async (messageId: string, content: string) => {
         const dialog = chatsStore.activeDialog;
         const trimmedContent = content.trim();
@@ -143,29 +169,7 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         messageId: string,
         status: "accepted" | "cancelled",
     ) => {
-        const dialog = chatsStore.activeDialog;
-
-        if (!dialog) {
-            return;
-        }
-
-        const nextMessages = dialog.messages.map((message) =>
-            message.id === messageId && message.toolTrace
-                ? {
-                      ...message,
-                      toolTrace: {
-                          ...message.toolTrace,
-                          status,
-                      },
-                  }
-                : message,
-        );
-
-        chatsStore.replaceByDialog({
-            ...dialog,
-            messages: nextMessages,
-            updatedAt: new Date().toISOString(),
-        });
+        setToolTraceStatus(messageId, status);
     };
 
     const approveCommandExec = (messageId: string) => {
@@ -193,5 +197,6 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         confirmDeleteMessage,
         approveCommandExec,
         rejectCommandExec,
+        sendQaAnswer,
     };
 };

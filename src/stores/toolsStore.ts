@@ -9,13 +9,16 @@ import type { ToolPackageDescriptor } from "../utils/ToolsBuilder";
 
 class ToolsStore {
     readonly packages: ToolPackageDescriptor[];
-    readonly systemPackages: ToolPackageDescriptor[];
+
     enabledToolNames = new Set<string>();
     requiredPromptToolNames = new Set<string>();
 
     constructor() {
-        this.packages = [...baseToolsPackage(), ...studyingToolsPackage()];
-        this.systemPackages = [...systemToolsPackage()];
+        this.packages = [
+            ...baseToolsPackage(),
+            ...studyingToolsPackage(),
+            ...systemToolsPackage(),
+        ];
         this.enabledToolNames = new Set(
             this.packages.flatMap((pkg) =>
                 pkg.tools.map((tool) => tool.schema.function.name),
@@ -95,9 +98,8 @@ class ToolsStore {
         const userTools = this.allTools.filter((tool) =>
             this.enabledToolNames.has(tool.schema.function.name),
         );
-        const systemTools = this.systemPackages.flatMap((pkg) => pkg.tools);
 
-        return [...userTools, ...systemTools].map((tool) => tool.schema);
+        return [...userTools].map((tool) => tool.schema);
     }
 
     getFilteredPackages(query: string): ToolPackageDescriptor[] {
@@ -143,9 +145,7 @@ class ToolsStore {
             ),
         );
 
-        const systemTools = this.systemPackages.flatMap((pkg) => pkg.tools);
-
-        return [...userTools, ...systemTools];
+        return [...userTools];
     }
 
     async executeTool(

@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { Button } from "../../../atoms";
+import { WorkspaceListItem } from "./WorkspaceListItem";
 
 type ProjectsItemProps = {
     id: string;
@@ -21,26 +22,13 @@ export function ProjectsItem({
     onDelete,
 }: ProjectsItemProps) {
     return (
-        <div
-            role="button"
-            tabIndex={0}
-            onClick={() => onSelect(id)}
-            onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onSelect(id);
-                }
-            }}
-            className={`w-full rounded-xl p-3 text-left transition-colors cursor-pointer hover:bg-main-600/70 ${
-                active ? "bg-main-500/20" : "bg-transparent"
-            }`}
-        >
-            <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-main-100">
-                        {title}
-                    </p>
-                </div>
+        <WorkspaceListItem
+            id={id}
+            title={title}
+            preview={preview}
+            active={active}
+            onSelect={onSelect}
+            actions={
                 <div className="flex items-center gap-1">
                     <span className="text-xs text-main-400">{time}</span>
                     <Button
@@ -59,8 +47,7 @@ export function ProjectsItem({
                         />
                     </Button>
                 </div>
-            </div>
-            <p className="mt-1 truncate text-xs text-main-400">{preview}</p>
-        </div>
+            }
+        />
     );
 }

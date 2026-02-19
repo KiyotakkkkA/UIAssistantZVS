@@ -7,13 +7,12 @@ export const systemToolsPackage = () => {
         .addPackage({
             id: "system-tools",
             title: "System Tools",
-            description:
-                "Системные инструменты, скрытые из пользовательского UI",
+            description: "Системные инструменты",
         })
         .addTool({
             name: "qa_tool",
             description:
-                "Используй для формализации уточняющего вопроса к пользователю, когда входных данных недостаточно.",
+                "Используется для формализации уточняющего вопроса к пользователю, когда входных данных недостаточно.",
             parameters: ToolsBuilder.objectSchema({
                 properties: {
                     question: ToolsBuilder.stringParam(
@@ -21,9 +20,6 @@ export const systemToolsPackage = () => {
                     ),
                     reason: ToolsBuilder.stringParam(
                         "Короткое объяснение, зачем нужен ответ",
-                    ),
-                    expectedFormat: ToolsBuilder.stringParam(
-                        "Ожидаемый формат ответа (например YYYY-MM-DD)",
                     ),
                     selectAnswers: {
                         type: "array",
@@ -44,10 +40,6 @@ export const systemToolsPackage = () => {
                     typeof args.question === "string" ? args.question : "";
                 const reason =
                     typeof args.reason === "string" ? args.reason : "";
-                const expectedFormat =
-                    typeof args.expectedFormat === "string"
-                        ? args.expectedFormat
-                        : "";
                 const selectAnswers = Array.isArray(args.selectAnswers)
                     ? args.selectAnswers.filter(
                           (item): item is string => typeof item === "string",
@@ -60,7 +52,6 @@ export const systemToolsPackage = () => {
                     status: "awaiting_user_response",
                     question,
                     reason,
-                    expectedFormat,
                     selectAnswers,
                     userAnswer,
                     instruction:

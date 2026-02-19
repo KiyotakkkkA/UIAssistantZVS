@@ -34,7 +34,6 @@ const parseScenarioLaunchCard = (
 };
 
 type ChatUserBubbleCardProps = {
-    messageId: string;
     content: string;
     timestamp: string;
     msgDelete?: () => void;
@@ -49,7 +48,6 @@ type ChatUserBubbleCardProps = {
 };
 
 export function ChatUserBubbleCard({
-    messageId,
     content,
     timestamp,
     msgDelete,
@@ -98,40 +96,19 @@ export function ChatUserBubbleCard({
                             </div>
                         </div>
                     ) : scenarioCard ? (
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <Icon
-                                    icon="mdi:script-text-play-outline"
-                                    width={18}
-                                    height={18}
-                                    className="text-main-200"
-                                />
-                                <p className="text-sm font-semibold text-main-100">
+                        <div className="flex items-center gap-2">
+                            <Icon
+                                icon="mdi:script-text-play-outline"
+                                width={16}
+                                height={16}
+                                className="shrink-0 text-main-300"
+                            />
+                            <div className="text-sm text-main-100">
+                                <span className="ml-1 font-semibold text-main-300">
                                     {scenarioCard.title}
-                                </p>
-                            </div>
-
-                            <div className="rounded-xl border border-main-700/70 bg-main-900/35 p-3 space-y-1">
-                                <p className="text-xs text-main-300">
-                                    Название
-                                </p>
-                                <p className="text-sm text-main-100">
-                                    {scenarioCard.name || "Без названия"}
-                                </p>
-
-                                <p className="pt-1 text-xs text-main-300">
-                                    Описание
-                                </p>
-                                <p className="text-sm text-main-100">
-                                    {scenarioCard.description || "Без описания"}
-                                </p>
-
-                                <p className="pt-1 text-xs text-main-300">
-                                    Статус
-                                </p>
-                                <p className="text-sm text-main-100">
-                                    {scenarioCard.status ||
-                                        "Ассистент выполняет шаги"}
+                                </span>
+                                <p className="text-xs text-main-400 text-right">
+                                    {scenarioCard.name}
                                 </p>
                             </div>
                         </div>
@@ -142,55 +119,54 @@ export function ChatUserBubbleCard({
                         {timestamp}
                     </p>
                 </div>
-                <Avatar label="YOU" tone="user" />
+                <Avatar label="ВЫ" tone="user" />
             </div>
-            {!isEditing ? (
-                <div
-                    className="flex justify-end gap-2 mt-2 mr-10"
-                    data-message-id={messageId}
+            <div className="flex justify-end gap-2 mt-2 mr-10">
+                {!isEditing && !scenarioCard ? (
+                    <>
+                        <Button
+                            variant=""
+                            className="border-transparent"
+                            onClick={msgRetry}
+                        >
+                            <Icon
+                                icon="mdi:refresh"
+                                className="text-main-400 hover:text-main-300 transition-colors"
+                            />
+                        </Button>
+                        <Button
+                            variant=""
+                            className="border-transparent"
+                            onClick={msgCopy}
+                        >
+                            <Icon
+                                icon="mdi:content-copy"
+                                className="text-main-400 hover:text-main-300 transition-colors"
+                            />
+                        </Button>
+                        <Button
+                            variant=""
+                            className="border-transparent"
+                            onClick={msgEdit}
+                        >
+                            <Icon
+                                icon="mdi:pencil"
+                                className="text-main-400 hover:text-main-300 transition-colors"
+                            />
+                        </Button>
+                    </>
+                ) : null}
+                <Button
+                    variant=""
+                    className="border-transparent"
+                    onClick={msgDelete}
                 >
-                    <Button
-                        variant=""
-                        className="border-transparent"
-                        onClick={msgRetry}
-                    >
-                        <Icon
-                            icon="mdi:refresh"
-                            className="text-main-400 hover:text-main-300 transition-colors"
-                        />
-                    </Button>
-                    <Button
-                        variant=""
-                        className="border-transparent"
-                        onClick={msgCopy}
-                    >
-                        <Icon
-                            icon="mdi:content-copy"
-                            className="text-main-400 hover:text-main-300 transition-colors"
-                        />
-                    </Button>
-                    <Button
-                        variant=""
-                        className="border-transparent"
-                        onClick={msgEdit}
-                    >
-                        <Icon
-                            icon="mdi:pencil"
-                            className="text-main-400 hover:text-main-300 transition-colors"
-                        />
-                    </Button>
-                    <Button
-                        variant=""
-                        className=" border-transparent"
-                        onClick={msgDelete}
-                    >
-                        <Icon
-                            icon="mdi:delete"
-                            className="text-main-400 hover:text-red-300 transition-colors"
-                        />
-                    </Button>
-                </div>
-            ) : null}
+                    <Icon
+                        icon="mdi:delete"
+                        className="text-main-400 hover:text-red-300 transition-colors"
+                    />
+                </Button>
+            </div>
         </article>
     );
 }
