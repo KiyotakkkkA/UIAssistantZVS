@@ -40,7 +40,7 @@ export function ScenarioToolBlock({
             onContextMenu={(event) => onContextMenu(event, block.id)}
         >
             <div className="flex h-full overflow-hidden rounded-xl">
-                <div className="flex w-12 items-center justify-center bg-main-800/90 text-main-100">
+                <div className="flex w-12 items-center justify-center bg-blue-800/90 text-main-100">
                     <Icon icon="mdi:robot-outline" width={20} height={20} />
                 </div>
                 <div className="min-w-0 flex-1 px-3 py-2">

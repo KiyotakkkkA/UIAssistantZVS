@@ -34,7 +34,7 @@ export function ScenarioSimpleBlock({
             onPointerDown={(event) => onPointerDown(event, block.id)}
         >
             <div className="flex h-full overflow-hidden rounded-xl">
-                <div className="flex w-12 items-center justify-center bg-main-800/90 text-main-100">
+                <div className="flex w-12 items-center justify-center bg-blue-800/90 text-main-100">
                     <Icon
                         icon={isStart ? "mdi:play" : "mdi:flag-checkered"}
                         width={20}

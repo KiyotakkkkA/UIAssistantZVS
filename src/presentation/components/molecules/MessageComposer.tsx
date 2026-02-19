@@ -1,8 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { observer } from "mobx-react-lite";
+import { useToasts } from "../../../hooks";
+import { useScenario, useScenarioConvert } from "../../../hooks/agents";
 import { useFileUpload } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
+import { encodeScenarioLaunchPayload } from "../../../utils/scenarioLaunchEnvelope";
 import { Button, Dropdown, InputBig, Modal } from "../atoms";
 import { RequiredToolsPickForm } from "./forms";
 
@@ -17,9 +20,17 @@ export const MessageComposer = observer(function MessageComposer({
     onCancelGeneration,
     isStreaming = false,
 }: MessageComposerProps) {
+    const toasts = useToasts();
+    const { scenarios, switchScenario } = useScenario();
+    const { scenarioToFlow } = useScenarioConvert();
+
     const [msgContent, setMsgContent] = useState("");
     const [isToolsModalOpen, setIsToolsModalOpen] = useState(false);
+    const [isScenarioModalOpen, setIsScenarioModalOpen] = useState(false);
     const [toolsQuery, setToolsQuery] = useState("");
+    const [startingScenarioId, setStartingScenarioId] = useState<string | null>(
+        null,
+    );
     const [attachedImages, setAttachedImages] = useState<UploadedFileData[]>(
         [],
     );
@@ -38,6 +49,26 @@ export const MessageComposer = observer(function MessageComposer({
         }
 
         return `${(kb / 1024).toFixed(1)} MB`;
+    };
+
+    const formatScenarioSavedAt = (savedAt: string) => {
+        if (!savedAt) {
+            return "Дата неизвестна";
+        }
+
+        const parsedDate = new Date(savedAt);
+
+        if (Number.isNaN(parsedDate.getTime())) {
+            return "Дата неизвестна";
+        }
+
+        return parsedDate.toLocaleString("ru-RU", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
     };
 
     const attachImages = useCallback(async () => {
@@ -91,6 +122,59 @@ export const MessageComposer = observer(function MessageComposer({
             areaRef.current?.focus();
         });
     };
+
+    const startScenario = useCallback(
+        async (scenarioId: string) => {
+            if (isStreaming) {
+                toasts.warning({
+                    title: "Дождитесь завершения ответа",
+                    description:
+                        "Нельзя запустить сценарий, пока модель формирует ответ.",
+                });
+                return;
+            }
+
+            setStartingScenarioId(scenarioId);
+
+            try {
+                const scenario = await switchScenario(scenarioId);
+
+                if (!scenario) {
+                    toasts.warning({
+                        title: "Сценарий не найден",
+                        description: "Не удалось загрузить выбранный сценарий.",
+                    });
+                    return;
+                }
+
+                const scenarioFlow = scenarioToFlow(scenario);
+                const displayMessage = [
+                    "Сценарий запущен",
+                    `Название: ${scenario.name}`,
+                    `Описание: ${scenario.description.trim() || "Без описания"}`,
+                    "Статус: ассистент выполняет шаги сценария",
+                ].join("\n");
+
+                const launchPayload = encodeScenarioLaunchPayload({
+                    scenarioName: scenario.name,
+                    displayMessage,
+                    scenarioFlow,
+                });
+
+                onMessageSend(launchPayload);
+
+                setMsgContent("");
+                setAttachedImages([]);
+                setIsScenarioModalOpen(false);
+                requestAnimationFrame(() => {
+                    areaRef.current?.focus();
+                });
+            } finally {
+                setStartingScenarioId(null);
+            }
+        },
+        [isStreaming, onMessageSend, scenarioToFlow, switchScenario, toasts],
+    );
 
     return (
         <>
@@ -169,6 +253,16 @@ export const MessageComposer = observer(function MessageComposer({
                                     <Icon icon="mdi:tools" />
                                 </Button>
 
+                                <Button
+                                    label="Tools"
+                                    className="h-9 w-9 p-0"
+                                    shape="rounded-md"
+                                    variant="secondary"
+                                    onClick={() => setIsScenarioModalOpen(true)}
+                                >
+                                    <Icon icon="mdi:script" />
+                                </Button>
+
                                 <div className="z-20">
                                     <Dropdown
                                         options={attachOptions}
@@ -183,6 +277,7 @@ export const MessageComposer = observer(function MessageComposer({
                                         }) => (
                                             <Button
                                                 label="Attach"
+                                                variant="primary"
                                                 className="h-9 w-9 p-0"
                                                 shape="rounded-r-full"
                                                 ref={triggerRef}
@@ -240,6 +335,78 @@ export const MessageComposer = observer(function MessageComposer({
                     toolsQuery={toolsQuery}
                     onToolsQueryChange={setToolsQuery}
                 />
+            </Modal>
+
+            <Modal
+                open={isScenarioModalOpen}
+                onClose={() => setIsScenarioModalOpen(false)}
+                title="Запуск сценария"
+                className="max-w-2xl"
+            >
+                {scenarios.length > 0 ? (
+                    <div className="space-y-2">
+                        {scenarios.map((scenario) => {
+                            const isStarting =
+                                startingScenarioId === scenario.id;
+
+                            return (
+                                <button
+                                    key={scenario.id}
+                                    type="button"
+                                    className="group flex w-full items-center justify-between gap-3 rounded-xl border border-main-700/70 bg-main-900/55 px-3 py-2.5 text-left transition-colors hover:bg-main-800/70 disabled:opacity-60"
+                                    onClick={() => {
+                                        void startScenario(scenario.id);
+                                    }}
+                                    disabled={Boolean(startingScenarioId)}
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <Icon
+                                                icon="mdi:script-text-outline"
+                                                className="text-main-300"
+                                                width={18}
+                                                height={18}
+                                            />
+                                            <p className="truncate text-sm font-medium text-main-100">
+                                                {scenario.title}
+                                            </p>
+                                        </div>
+                                        <p className="mt-1 truncate text-xs text-main-400">
+                                            {scenario.preview}
+                                        </p>
+                                        <p className="mt-1 truncate text-xs text-main-500">
+                                            Обновлён:{" "}
+                                            {formatScenarioSavedAt(
+                                                scenario.updatedAt,
+                                            )}
+                                        </p>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-2 text-xs text-main-400">
+                                        {isStarting ? (
+                                            <Icon
+                                                icon="mdi:loading"
+                                                className="animate-spin text-main-300"
+                                                width={16}
+                                                height={16}
+                                            />
+                                        ) : (
+                                            <Icon
+                                                icon="mdi:play-circle-outline"
+                                                className="text-main-500 transition-colors group-hover:text-main-300"
+                                                width={18}
+                                                height={18}
+                                            />
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="rounded-xl border border-dashed border-main-700/70 bg-main-900/40 px-3 py-4 text-center text-sm text-main-400">
+                        Сценарии отсутствуют.
+                    </p>
+                )}
             </Modal>
         </>
     );

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Avatar, Button, Loader, Modal } from "../../atoms";
 import {
     ChatUserBubbleCard,
+    QaToolBubbleCard,
     ThinkingBubbleCard,
     ToolBubbleCard,
 } from "../../molecules/cards/chat";
@@ -17,10 +18,12 @@ interface MessageFeedProps {
 
 function AssistantResponseBlock({
     stages,
+    sendMessage,
     onApproveCommandExec,
     onRejectCommandExec,
 }: {
     stages: ChatMessage[];
+    sendMessage: (content: string) => void;
     onApproveCommandExec: (messageId: string) => void;
     onRejectCommandExec: (messageId: string) => void;
 }) {
@@ -49,16 +52,24 @@ function AssistantResponseBlock({
                             .join("\n")}
                     />
                 )}
-                {toolStages.map((message) => (
-                    <ToolBubbleCard
-                        key={message.id}
-                        messageId={message.id}
-                        content={message.content}
-                        toolTrace={message.toolTrace}
-                        onApproveCommandExec={onApproveCommandExec}
-                        onRejectCommandExec={onRejectCommandExec}
-                    />
-                ))}
+                {toolStages.map((message) =>
+                    message.toolTrace?.toolName === "qa_tool" ? (
+                        <QaToolBubbleCard
+                            key={message.id}
+                            toolTrace={message.toolTrace}
+                            onSendAnswer={(answer) => sendMessage(answer)}
+                        />
+                    ) : (
+                        <ToolBubbleCard
+                            key={message.id}
+                            messageId={message.id}
+                            content={message.content}
+                            toolTrace={message.toolTrace}
+                            onApproveCommandExec={onApproveCommandExec}
+                            onRejectCommandExec={onRejectCommandExec}
+                        />
+                    ),
+                )}
                 {answerStage && (
                     <div>
                         <MarkdownStaticContent content={answerStage.content} />
@@ -186,6 +197,7 @@ export function MessageFeed({
                                     {linkedStages.length > 0 && (
                                         <AssistantResponseBlock
                                             stages={linkedStages}
+                                            sendMessage={sendMessage}
                                             onApproveCommandExec={
                                                 approveCommandExec
                                             }
@@ -206,6 +218,7 @@ export function MessageFeed({
                                 <div key={message.id}>
                                     <AssistantResponseBlock
                                         stages={[message]}
+                                        sendMessage={sendMessage}
                                         onApproveCommandExec={
                                             approveCommandExec
                                         }

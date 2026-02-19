@@ -1,15 +1,21 @@
 import { makeAutoObservable } from "mobx";
-import { baseToolsPackage, studyingToolsPackage } from "../tools";
+import {
+    baseToolsPackage,
+    studyingToolsPackage,
+    systemToolsPackage,
+} from "../tools";
 import type { OllamaToolDefinition } from "../types/Chat";
 import type { ToolPackageDescriptor } from "../utils/ToolsBuilder";
 
 class ToolsStore {
     readonly packages: ToolPackageDescriptor[];
+    readonly systemPackages: ToolPackageDescriptor[];
     enabledToolNames = new Set<string>();
     requiredPromptToolNames = new Set<string>();
 
     constructor() {
         this.packages = [...baseToolsPackage(), ...studyingToolsPackage()];
+        this.systemPackages = [...systemToolsPackage()];
         this.enabledToolNames = new Set(
             this.packages.flatMap((pkg) =>
                 pkg.tools.map((tool) => tool.schema.function.name),
@@ -86,11 +92,12 @@ class ToolsStore {
     }
 
     get toolDefinitions(): OllamaToolDefinition[] {
-        return this.allTools
-            .filter((tool) =>
-                this.enabledToolNames.has(tool.schema.function.name),
-            )
-            .map((tool) => tool.schema);
+        const userTools = this.allTools.filter((tool) =>
+            this.enabledToolNames.has(tool.schema.function.name),
+        );
+        const systemTools = this.systemPackages.flatMap((pkg) => pkg.tools);
+
+        return [...userTools, ...systemTools].map((tool) => tool.schema);
     }
 
     getFilteredPackages(query: string): ToolPackageDescriptor[] {
@@ -130,11 +137,15 @@ class ToolsStore {
     }
 
     private get activeTools() {
-        return this.packages.flatMap((pkg) =>
+        const userTools = this.packages.flatMap((pkg) =>
             pkg.tools.filter((tool) =>
                 this.enabledToolNames.has(tool.schema.function.name),
             ),
         );
+
+        const systemTools = this.systemPackages.flatMap((pkg) => pkg.tools);
+
+        return [...userTools, ...systemTools];
     }
 
     async executeTool(

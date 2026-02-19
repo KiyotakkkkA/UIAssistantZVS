@@ -11,6 +11,7 @@ import { chatsStore } from "../../stores/chatsStore";
 import { toolsStore } from "../../stores/toolsStore";
 import { projectsStore } from "../../stores/projectsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
+import { parseScenarioLaunchPayload } from "../../utils/scenarioLaunchEnvelope";
 import {
     getSystemPrompt,
     getUserPrompt,
@@ -107,8 +108,11 @@ export function useChat() {
     const sendMessageMutation = useMutation({
         mutationFn: async (rawContent: string) => {
             const content = rawContent.trim();
+            const scenarioLaunchPayload = parseScenarioLaunchPayload(content);
+            const userVisibleContent =
+                scenarioLaunchPayload?.displayMessage || content;
 
-            if (!content) {
+            if (!userVisibleContent) {
                 return;
             }
 
@@ -134,7 +138,7 @@ export function useChat() {
             const userMessage: ChatMessage = {
                 id: createMessageId(),
                 author: "user",
-                content,
+                content: userVisibleContent,
                 timestamp: getTimeStamp(),
             };
 
@@ -189,6 +193,20 @@ export function useChat() {
             const historyForStorage = [
                 ...initialSystemMessages,
                 ...requestBaseHistory,
+                ...(scenarioLaunchPayload
+                    ? [
+                          {
+                              id: createMessageId(),
+                              author: "system" as const,
+                              content: [
+                                  `SCENARIO_LAUNCH: ${scenarioLaunchPayload.scenarioName}`,
+                                  scenarioLaunchPayload.scenarioFlow,
+                                  "Instruction: execute scenario flow strictly by graph links. If data is missing, ask one clear question via qa_tool or plain assistant question.",
+                              ].join("\n\n"),
+                              timestamp: getTimeStamp(),
+                          },
+                      ]
+                    : []),
                 userMessage,
             ];
             const requestConstraintMessages: ChatMessage[] =
