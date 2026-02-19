@@ -167,6 +167,52 @@ export type AppApiNetworkNamespace = {
     ) => Promise<ProxyHttpRequestResult>;
 };
 
+export type FsDirectoryEntry = {
+    name: string;
+    type: "file" | "directory";
+    size: number;
+    modifiedAt: string;
+};
+
+export type FsListDirectoryResult = {
+    path: string;
+    entries: FsDirectoryEntry[];
+};
+
+export type FsCreateFileResult = {
+    success: boolean;
+    path: string;
+};
+
+export type FsCreateDirResult = {
+    success: boolean;
+    path: string;
+};
+
+export type FsReadFileResult = {
+    path: string;
+    content: string;
+    totalLines: number;
+    fromLine: number;
+    toLine: number;
+};
+
+export type AppApiFsNamespace = {
+    listDirectory: (cwd: string) => Promise<FsListDirectoryResult>;
+    createFile: (
+        cwd: string,
+        filename: string,
+        content?: string,
+    ) => Promise<FsCreateFileResult>;
+    createDir: (cwd: string, dirname: string) => Promise<FsCreateDirResult>;
+    readFile: (
+        filePath: string,
+        readAll: boolean,
+        fromLine?: number,
+        toLine?: number,
+    ) => Promise<FsReadFileResult>;
+};
+
 export type AppApi = {
     boot: AppApiBootNamespace;
     themes: AppApiThemesNamespace;
@@ -179,4 +225,5 @@ export type AppApi = {
     scenarios: AppApiScenariosNamespace;
     cache: AppApiCacheNamespace;
     network: AppApiNetworkNamespace;
+    fs: AppApiFsNamespace;
 };

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { chatsStore } from "../../stores/chatsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
 import { useToasts } from "../useToasts";
@@ -16,99 +16,109 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
     );
     const [editingValue, setEditingValue] = useState("");
 
-    const startEdit = (messageId: string, content: string) => {
+    const startEdit = useCallback((messageId: string, content: string) => {
         setEditingMessageId(messageId);
         setEditingValue(content);
-    };
+    }, []);
 
-    const cancelEdit = () => {
+    const cancelEdit = useCallback(() => {
         setEditingMessageId(null);
         setEditingValue("");
-    };
+    }, []);
 
-    const copyMessage = async (content: string) => {
-        try {
-            await navigator.clipboard.writeText(content);
-            toasts.success({
-                title: "Скопировано",
-                description: "Сообщение скопировано в буфер обмена.",
-            });
-        } catch {
-            toasts.danger({
-                title: "Ошибка копирования",
-                description: "Не удалось скопировать сообщение.",
-            });
-        }
-    };
-
-    const requestDeleteMessage = (messageId: string) => {
-        setDeleteMessageId(messageId);
-    };
-
-    const cancelDeleteMessage = () => {
-        setDeleteMessageId(null);
-    };
-
-    const setToolTraceStatus = (
-        messageId: string,
-        status: "accepted" | "cancelled" | "answered",
-    ) => {
-        const dialog = chatsStore.activeDialog;
-        if (!dialog) return;
-
-        chatsStore.replaceByDialog({
-            ...dialog,
-            messages: dialog.messages.map((message) =>
-                message.id === messageId && message.toolTrace
-                    ? {
-                          ...message,
-                          toolTrace: { ...message.toolTrace, status },
-                      }
-                    : message,
-            ),
-            updatedAt: new Date().toISOString(),
-        });
-    };
-
-    const sendQaAnswer = (qaMessageId: string, answer: string) => {
-        setToolTraceStatus(qaMessageId, "answered");
-        sendMessage(`__qa_hidden__${answer}`);
-    };
-
-    const truncateAndResend = async (messageId: string, content: string) => {
-        const dialog = chatsStore.activeDialog;
-        const trimmedContent = content.trim();
-
-        if (!dialog || !trimmedContent) {
-            return;
-        }
-
-        const api = window.appApi;
-
-        if (api?.dialogs.truncateDialogFromMessage) {
-            const updatedDialog = await api.dialogs.truncateDialogFromMessage(
-                dialog.id,
-                messageId,
-            );
-            chatsStore.replaceByDialog(updatedDialog);
-        } else {
-            const index = dialog.messages.findIndex(
-                (message) => message.id === messageId,
-            );
-            if (index !== -1) {
-                chatsStore.replaceByDialog({
-                    ...dialog,
-                    messages: dialog.messages.slice(0, index),
-                    updatedAt: new Date().toISOString(),
+    const copyMessage = useCallback(
+        async (content: string) => {
+            try {
+                await navigator.clipboard.writeText(content);
+                toasts.success({
+                    title: "Скопировано",
+                    description: "Сообщение скопировано в буфер обмена.",
+                });
+            } catch {
+                toasts.danger({
+                    title: "Ошибка копирования",
+                    description: "Не удалось скопировать сообщение.",
                 });
             }
-        }
+        },
+        [toasts],
+    );
 
-        cancelEdit();
-        sendMessage(trimmedContent);
-    };
+    const requestDeleteMessage = useCallback((messageId: string) => {
+        setDeleteMessageId(messageId);
+    }, []);
 
-    const submitEdit = async () => {
+    const cancelDeleteMessage = useCallback(() => {
+        setDeleteMessageId(null);
+    }, []);
+
+    const setToolTraceStatus = useCallback(
+        (messageId: string, status: "accepted" | "cancelled" | "answered") => {
+            const dialog = chatsStore.activeDialog;
+            if (!dialog) return;
+
+            chatsStore.replaceByDialog({
+                ...dialog,
+                messages: dialog.messages.map((message) =>
+                    message.id === messageId && message.toolTrace
+                        ? {
+                              ...message,
+                              toolTrace: { ...message.toolTrace, status },
+                          }
+                        : message,
+                ),
+                updatedAt: new Date().toISOString(),
+            });
+        },
+        [],
+    );
+
+    const sendQaAnswer = useCallback(
+        (qaMessageId: string, answer: string) => {
+            setToolTraceStatus(qaMessageId, "answered");
+            sendMessage(`__qa_hidden__${answer}`);
+        },
+        [setToolTraceStatus, sendMessage],
+    );
+
+    const truncateAndResend = useCallback(
+        async (messageId: string, content: string) => {
+            const dialog = chatsStore.activeDialog;
+            const trimmedContent = content.trim();
+
+            if (!dialog || !trimmedContent) {
+                return;
+            }
+
+            const api = window.appApi;
+
+            if (api?.dialogs.truncateDialogFromMessage) {
+                const updatedDialog =
+                    await api.dialogs.truncateDialogFromMessage(
+                        dialog.id,
+                        messageId,
+                    );
+                chatsStore.replaceByDialog(updatedDialog);
+            } else {
+                const index = dialog.messages.findIndex(
+                    (message) => message.id === messageId,
+                );
+                if (index !== -1) {
+                    chatsStore.replaceByDialog({
+                        ...dialog,
+                        messages: dialog.messages.slice(0, index),
+                        updatedAt: new Date().toISOString(),
+                    });
+                }
+            }
+
+            cancelEdit();
+            sendMessage(trimmedContent);
+        },
+        [cancelEdit, sendMessage],
+    );
+
+    const submitEdit = useCallback(async () => {
         if (!editingMessageId) {
             return;
         }
@@ -124,13 +134,16 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         }
 
         await truncateAndResend(editingMessageId, trimmedContent);
-    };
+    }, [editingMessageId, editingValue, toasts, truncateAndResend]);
 
-    const retryMessage = async (messageId: string, content: string) => {
-        await truncateAndResend(messageId, content);
-    };
+    const retryMessage = useCallback(
+        async (messageId: string, content: string) => {
+            await truncateAndResend(messageId, content);
+        },
+        [truncateAndResend],
+    );
 
-    const confirmDeleteMessage = async () => {
+    const confirmDeleteMessage = useCallback(async () => {
         const dialog = chatsStore.activeDialog;
 
         if (!dialog || !deleteMessageId) {
@@ -163,24 +176,23 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
         });
 
         setDeleteMessageId(null);
-    };
+    }, [deleteMessageId, toasts]);
 
-    const setCommandExecStatus = (
-        messageId: string,
-        status: "accepted" | "cancelled",
-    ) => {
-        setToolTraceStatus(messageId, status);
-    };
+    const approveCommandExec = useCallback(
+        (messageId: string) => {
+            setToolTraceStatus(messageId, "accepted");
+            commandExecApprovalService.resolve(messageId, true);
+        },
+        [setToolTraceStatus],
+    );
 
-    const approveCommandExec = (messageId: string) => {
-        setCommandExecStatus(messageId, "accepted");
-        commandExecApprovalService.resolve(messageId, true);
-    };
-
-    const rejectCommandExec = (messageId: string) => {
-        setCommandExecStatus(messageId, "cancelled");
-        commandExecApprovalService.resolve(messageId, false);
-    };
+    const rejectCommandExec = useCallback(
+        (messageId: string) => {
+            setToolTraceStatus(messageId, "cancelled");
+            commandExecApprovalService.resolve(messageId, false);
+        },
+        [setToolTraceStatus],
+    );
 
     return {
         editingMessageId,

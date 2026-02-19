@@ -132,6 +132,27 @@ const appApi: AppApi = {
         proxyHttpRequest: (payload) =>
             ipcRenderer.invoke("app:proxy-http-request", payload),
     },
+    fs: {
+        listDirectory: (cwd: string) =>
+            ipcRenderer.invoke("app:fs-list-directory", cwd),
+        createFile: (cwd: string, filename: string, content?: string) =>
+            ipcRenderer.invoke("app:fs-create-file", cwd, filename, content),
+        createDir: (cwd: string, dirname: string) =>
+            ipcRenderer.invoke("app:fs-create-dir", cwd, dirname),
+        readFile: (
+            filePath: string,
+            readAll: boolean,
+            fromLine?: number,
+            toLine?: number,
+        ) =>
+            ipcRenderer.invoke(
+                "app:fs-read-file",
+                filePath,
+                readAll,
+                fromLine,
+                toLine,
+            ),
+    },
 };
 
 contextBridge.exposeInMainWorld("appApi", appApi);

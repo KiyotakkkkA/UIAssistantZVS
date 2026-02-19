@@ -218,7 +218,10 @@ export function MessageFeed({
 
                         if (
                             message.author === "assistant" &&
-                            !message.answeringAt
+                            (!message.answeringAt ||
+                                !messages.some(
+                                    (m) => m.id === message.answeringAt,
+                                ))
                         ) {
                             return (
                                 <div key={message.id}>

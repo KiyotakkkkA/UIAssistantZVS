@@ -75,7 +75,15 @@ export function ChatHeader({
                             Документы
                         </Button>
                     ) : null}
-                    <Button label="Search" className="p-2">
+                    <Button
+                        label="Память"
+                        className="px-3 py-2 text-xs flex gap-2 items-center"
+                        disabled
+                    >
+                        <Icon icon="mdi:brain" width="16" height="16" />
+                        Память
+                    </Button>
+                    <Button label="Search" className="p-2" disabled>
                         <Icon icon="mdi:magnify" width="16" height="16" />
                     </Button>
                     <Button

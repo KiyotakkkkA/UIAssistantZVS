@@ -1,61 +1,67 @@
+import { useCallback, useEffect } from "react";
 import type { ChatDialog } from "../../types/Chat";
-import { useEffect } from "react";
 import { chatsStore } from "../../stores/chatsStore";
 
 export const useDialogs = () => {
+    useEffect(() => {
+        chatsStore.initialize();
+    }, []);
+
     const dialogs = chatsStore.dialogs;
     const activeDialogId = chatsStore.activeDialog?.id ?? "";
-
     const canDeleteDialog = dialogs.length > 1;
 
-    const switchDialog = async (dialogId: string) => {
-        if (!dialogId || dialogId === activeDialogId) {
+    const switchDialog = useCallback(async (dialogId: string) => {
+        if (!dialogId || dialogId === chatsStore.activeDialog?.id) {
             return;
         }
 
         await chatsStore.switchDialog(dialogId);
-    };
+    }, []);
 
-    const createDialog = async (title?: string): Promise<ChatDialog | null> => {
-        const createdDialog = await chatsStore.createDialog();
+    const createDialog = useCallback(
+        async (title?: string): Promise<ChatDialog | null> => {
+            const createdDialog = await chatsStore.createDialog();
 
-        if (!createdDialog) {
-            return null;
-        }
+            if (!createdDialog) {
+                return null;
+            }
 
-        const trimmedTitle = title?.trim() ?? "";
+            const trimmedTitle = title?.trim() ?? "";
 
-        if (!trimmedTitle) {
-            return createdDialog;
-        }
+            if (!trimmedTitle) {
+                return createdDialog;
+            }
 
-        const renamedDialog = await chatsStore.renameDialog(
-            createdDialog.id,
-            trimmedTitle,
-        );
+            const renamedDialog = await chatsStore.renameDialog(
+                createdDialog.id,
+                trimmedTitle,
+            );
 
-        return renamedDialog ?? createdDialog;
-    };
+            return renamedDialog ?? createdDialog;
+        },
+        [],
+    );
 
-    const renameDialog = async (dialogId: string, title: string) => {
-        const trimmedTitle = title.trim();
+    const renameDialog = useCallback(
+        async (dialogId: string, title: string) => {
+            const trimmedTitle = title.trim();
 
-        if (!trimmedTitle) {
-            return;
-        }
+            if (!trimmedTitle) {
+                return;
+            }
 
-        await chatsStore.renameDialog(dialogId, trimmedTitle);
-    };
+            await chatsStore.renameDialog(dialogId, trimmedTitle);
+        },
+        [],
+    );
 
-    const deleteDialog = async (dialogId: string) => {
-        if (!canDeleteDialog) {
+    const deleteDialog = useCallback(async (dialogId: string) => {
+        if (chatsStore.dialogs.length <= 1) {
             return;
         }
 
         await chatsStore.deleteDialog(dialogId);
-    };
-    useEffect(() => {
-        chatsStore.initialize();
     }, []);
 
     return {

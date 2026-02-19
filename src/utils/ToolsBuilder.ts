@@ -2,6 +2,8 @@ import type { OllamaToolDefinition, ToolParameterSchema } from "../types/Chat";
 
 export type ToolExecutionContext = {
     ollamaToken: string;
+    telegramId: string;
+    telegramBotToken: string;
 };
 
 export type ToolExecutor = (

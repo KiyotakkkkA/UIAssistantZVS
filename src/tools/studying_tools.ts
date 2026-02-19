@@ -8,7 +8,7 @@ export const studyingToolsPackage = () => {
     builder
         .addPackage({
             id: "studying-tools",
-            title: "Учебные сервисы",
+            title: "Учебные инструменты",
             description: "Инструменты для работы с учебными сервисами.",
         })
         .addTool({

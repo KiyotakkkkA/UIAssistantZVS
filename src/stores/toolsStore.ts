@@ -1,11 +1,16 @@
 import { makeAutoObservable } from "mobx";
 import {
     baseToolsPackage,
+    communicationToolsPackage,
+    filesystemToolsPackage,
     studyingToolsPackage,
     systemToolsPackage,
 } from "../tools";
 import type { OllamaToolDefinition } from "../types/Chat";
-import type { ToolPackageDescriptor } from "../utils/ToolsBuilder";
+import type {
+    ToolExecutionContext,
+    ToolPackageDescriptor,
+} from "../utils/ToolsBuilder";
 
 class ToolsStore {
     readonly packages: ToolPackageDescriptor[];
@@ -16,6 +21,8 @@ class ToolsStore {
     constructor() {
         this.packages = [
             ...baseToolsPackage(),
+            ...communicationToolsPackage(),
+            ...filesystemToolsPackage(),
             ...studyingToolsPackage(),
             ...systemToolsPackage(),
         ];
@@ -151,7 +158,7 @@ class ToolsStore {
     async executeTool(
         toolName: string,
         args: Record<string, unknown>,
-        context: { ollamaToken: string },
+        context: ToolExecutionContext,
     ): Promise<unknown> {
         const descriptor = this.activeTools.find(
             (tool) => tool.schema.function.name === toolName,

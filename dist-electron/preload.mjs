@@ -86,6 +86,18 @@ const appApi = {
   },
   network: {
     proxyHttpRequest: (payload) => electron.ipcRenderer.invoke("app:proxy-http-request", payload)
+  },
+  fs: {
+    listDirectory: (cwd) => electron.ipcRenderer.invoke("app:fs-list-directory", cwd),
+    createFile: (cwd, filename, content) => electron.ipcRenderer.invoke("app:fs-create-file", cwd, filename, content),
+    createDir: (cwd, dirname) => electron.ipcRenderer.invoke("app:fs-create-dir", cwd, dirname),
+    readFile: (filePath, readAll, fromLine, toLine) => electron.ipcRenderer.invoke(
+      "app:fs-read-file",
+      filePath,
+      readAll,
+      fromLine,
+      toLine
+    )
   }
 };
 electron.contextBridge.exposeInMainWorld("appApi", appApi);

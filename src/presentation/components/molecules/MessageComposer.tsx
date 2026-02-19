@@ -7,7 +7,7 @@ import { useFileUpload } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
 import { encodeScenarioLaunchPayload } from "../../../utils/scenarioLaunchEnvelope";
 import { Button, Dropdown, InputBig, Modal } from "../atoms";
-import { RequiredToolsPickForm } from "./forms";
+import { RequiredToolsPickForm } from "../organisms/forms";
 
 interface MessageComposerProps {
     onMessageSend: (content: string) => void;

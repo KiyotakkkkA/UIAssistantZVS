@@ -1,27 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import {
-    Button,
-    Dropdown,
-    InputBig,
-    InputCheckbox,
-    InputSmall,
-    Modal,
-    Select,
-} from "../../atoms";
+import { Button, Dropdown, InputSmall, Modal, Select } from "../../atoms";
 import { useToasts } from "../../../../hooks";
 import { useScenarioCanvas } from "../../../../hooks/agents";
 import type { ScenarioCanvasInsertPayload } from "../../../../hooks/agents";
 import type {
-    ScenarioBlockToolsParamsUsage,
     ScenarioConnection,
     ScenarioManualDatetimeGetMeta,
     ScenarioManualHttpRequestMeta,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
-    ScenarioToolMeta,
 } from "../../../../types/Scenario";
 import { ShikiCodeBlock } from "../../molecules/render/ShikiCodeBlock";
+import { ScenarioBlockSettingForm } from "../forms/ScenarioBlockSettingForm";
 import { ScenarioCanvasToolbar } from "./support/ScenarioCanvasToolbar";
 import { ScenarioConnectionsLayer } from "./support/ScenarioConnectionsLayer";
 import { ScenarioSimpleBlock } from "./blocks/ScenarioSimpleBlock";
@@ -109,65 +100,6 @@ const prettyResponse = (raw: string) => {
     }
 };
 
-type ScenarioToolSchemaProperty = {
-    description?: string;
-    default?: unknown;
-};
-
-type ScenarioToolSchemaField = {
-    param: string;
-    description: string;
-    schemaDefaultValue?: string;
-};
-
-const stringifySchemaValue = (value: unknown): string => {
-    if (typeof value === "string") {
-        return value;
-    }
-
-    try {
-        return JSON.stringify(value);
-    } catch {
-        return String(value);
-    }
-};
-
-const parseToolSchemaFields = (schema: string): ScenarioToolSchemaField[] => {
-    try {
-        const parsed = JSON.parse(schema) as {
-            properties?: Record<string, ScenarioToolSchemaProperty>;
-        };
-
-        if (!parsed.properties || typeof parsed.properties !== "object") {
-            return [];
-        }
-
-        return Object.entries(parsed.properties).map(([param, property]) => {
-            const hasDefault =
-                property &&
-                typeof property === "object" &&
-                "default" in property;
-
-            return {
-                param,
-                description:
-                    typeof property?.description === "string"
-                        ? property.description
-                        : "",
-                ...(hasDefault
-                    ? {
-                          schemaDefaultValue: stringifySchemaValue(
-                              property.default,
-                          ),
-                      }
-                    : {}),
-            };
-        });
-    } catch {
-        return [];
-    }
-};
-
 export function ScenarioCanvas({
     insertRequest,
     onInsertHandled,
@@ -233,10 +165,6 @@ export function ScenarioCanvas({
     const [datetimeTimezoneMode, setDatetimeTimezoneMode] = useState("current");
     const [datetimeTimezone, setDatetimeTimezone] = useState("UTC+0");
 
-    const [toolInput, setToolInput] = useState<ScenarioBlockToolsParamsUsage[]>(
-        [],
-    );
-
     useEffect(() => {
         setShowGrid(viewport.showGrid ?? true);
         setScale(viewport.scale ?? DEFAULT_SCALE);
@@ -253,27 +181,6 @@ export function ScenarioCanvas({
     const isHttpModalOpen = activeSettingsBlock?.kind === "manual-http";
     const isDatetimeModalOpen = activeSettingsBlock?.kind === "manual-datetime";
     const isToolModalOpen = activeSettingsBlock?.kind === "tool";
-
-    const toolSchemaFields = useMemo(() => {
-        if (!isToolModalOpen || !activeSettingsBlock) {
-            return [];
-        }
-
-        return parseToolSchemaFields(
-            activeSettingsBlock.meta?.tool?.toolSchema || "{}",
-        );
-    }, [activeSettingsBlock, isToolModalOpen]);
-
-    const toolSchemaDefaultsByParam = useMemo(
-        () =>
-            new Map(
-                toolSchemaFields.map((field) => [
-                    field.param,
-                    field.schemaDefaultValue,
-                ]),
-            ),
-        [toolSchemaFields],
-    );
 
     useEffect(() => {
         if (!activeSettingsBlock) {
@@ -307,45 +214,6 @@ export function ScenarioCanvas({
             setDatetimeTimezoneMode(meta.timezoneMode);
             setDatetimeTimezone(meta.timezone);
             return;
-        }
-
-        if (activeSettingsBlock.kind === "tool") {
-            const meta = (activeSettingsBlock.meta?.tool as
-                | ScenarioToolMeta
-                | undefined) ?? {
-                toolName: activeSettingsBlock.title,
-                toolSchema: "{}",
-                input: [],
-            };
-
-            const normalizedInput = Array.isArray(meta.input) ? meta.input : [];
-            const schemaFields = parseToolSchemaFields(meta.toolSchema || "{}");
-
-            if (schemaFields.length > 0) {
-                const byParam = new Map(
-                    normalizedInput.map((item) => [item.param, item]),
-                );
-
-                setToolInput(
-                    schemaFields.map((field) => {
-                        const existing = byParam.get(field.param);
-                        const defaultValue =
-                            existing?.defaultValue ?? field.schemaDefaultValue;
-
-                        return {
-                            param: field.param,
-                            description: field.description,
-                            comment: existing?.comment || "",
-                            ...(defaultValue !== undefined
-                                ? { defaultValue }
-                                : {}),
-                        };
-                    }),
-                );
-                return;
-            }
-
-            setToolInput(normalizedInput);
         }
     }, [activeSettingsBlock]);
 
@@ -816,37 +684,6 @@ export function ScenarioCanvas({
         });
         setSettingsBlockId(null);
     };
-
-    const saveToolSettings = () => {
-        if (!activeSettingsBlock || activeSettingsBlock.kind !== "tool") {
-            return;
-        }
-
-        updateToolMeta(activeSettingsBlock.id, {
-            toolName:
-                activeSettingsBlock.meta?.tool?.toolName ||
-                activeSettingsBlock.title,
-            toolSchema: activeSettingsBlock.meta?.tool?.toolSchema || "{}",
-            input: toolInput,
-        });
-        setSettingsBlockId(null);
-    };
-
-    const updateToolInput = useCallback(
-        (
-            param: string,
-            updater: (
-                prev: ScenarioBlockToolsParamsUsage,
-            ) => ScenarioBlockToolsParamsUsage,
-        ) => {
-            setToolInput((prev) =>
-                prev.map((item) =>
-                    item.param === param ? updater(item) : item,
-                ),
-            );
-        },
-        [],
-    );
 
     const checkHttpRequest = async () => {
         const url = httpUrl.trim();
@@ -1339,150 +1176,24 @@ export function ScenarioCanvas({
                 onClose={() => setSettingsBlockId(null)}
                 title="Настройка блока"
                 className="max-w-3xl"
-                footer={
-                    <Button
-                        variant="primary"
-                        shape="rounded-lg"
-                        className="h-9 px-4"
-                        onClick={saveToolSettings}
-                    >
-                        Сохранить
-                    </Button>
-                }
             >
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">
-                            Схема параметров
-                        </p>
-                        <ShikiCodeBlock
-                            code={
-                                activeSettingsBlock?.meta?.tool?.toolSchema ||
-                                "{}"
-                            }
-                            language="json"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">Ввод</p>
-
-                        {toolInput.length === 0 ? (
-                            <p className="rounded-xl border border-main-700/70 bg-main-900/50 px-3 py-2 text-xs text-main-400">
-                                В schema не найдено properties для настройки.
-                            </p>
-                        ) : (
-                            <div className="space-y-2">
-                                {toolInput.map((item) => {
-                                    const hasDefault =
-                                        item.defaultValue !== undefined;
-                                    const schemaDefaultValue =
-                                        toolSchemaDefaultsByParam.get(
-                                            item.param,
-                                        );
-
-                                    return (
-                                        <div
-                                            key={item.param}
-                                            className="space-y-2 rounded-xl border border-main-700/70 bg-main-900/50 p-3"
-                                        >
-                                            <div>
-                                                <p className="text-sm font-semibold text-main-100">
-                                                    {item.param}
-                                                </p>
-                                                {item.description ? (
-                                                    <p className="text-xs text-main-400">
-                                                        {item.description}
-                                                    </p>
-                                                ) : null}
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <p className="text-xs text-main-300">
-                                                    Комментарий
-                                                </p>
-                                                <InputBig
-                                                    value={item.comment}
-                                                    onChange={(value) => {
-                                                        updateToolInput(
-                                                            item.param,
-                                                            (prev) => ({
-                                                                ...prev,
-                                                                comment: value,
-                                                            }),
-                                                        );
-                                                    }}
-                                                    placeholder="Комментарий к параметру"
-                                                    className="h-20 rounded-lg border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
-                                                />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <p className="text-xs text-main-300">
-                                                        Значение по умолчанию
-                                                    </p>
-                                                    <InputCheckbox
-                                                        checked={hasDefault}
-                                                        onChange={(checked) => {
-                                                            if (!checked) {
-                                                                updateToolInput(
-                                                                    item.param,
-                                                                    (prev) => ({
-                                                                        param: prev.param,
-                                                                        description:
-                                                                            prev.description,
-                                                                        comment:
-                                                                            prev.comment,
-                                                                    }),
-                                                                );
-                                                                return;
-                                                            }
-
-                                                            updateToolInput(
-                                                                item.param,
-                                                                (prev) => ({
-                                                                    ...prev,
-                                                                    defaultValue:
-                                                                        prev.defaultValue ??
-                                                                        schemaDefaultValue ??
-                                                                        "",
-                                                                }),
-                                                            );
-                                                        }}
-                                                    />
-                                                </div>
-
-                                                {hasDefault ? (
-                                                    <InputSmall
-                                                        value={
-                                                            item.defaultValue ||
-                                                            ""
-                                                        }
-                                                        onChange={(event) => {
-                                                            const value =
-                                                                event.target
-                                                                    .value;
-                                                            updateToolInput(
-                                                                item.param,
-                                                                (prev) => ({
-                                                                    ...prev,
-                                                                    defaultValue:
-                                                                        value,
-                                                                }),
-                                                            );
-                                                        }}
-                                                        placeholder="Введите значение"
-                                                    />
-                                                ) : null}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                {activeSettingsBlock && isToolModalOpen ? (
+                    <ScenarioBlockSettingForm
+                        block={activeSettingsBlock}
+                        onSave={(blockId, input) => {
+                            updateToolMeta(blockId, {
+                                toolName:
+                                    activeSettingsBlock.meta?.tool?.toolName ||
+                                    activeSettingsBlock.title,
+                                toolSchema:
+                                    activeSettingsBlock.meta?.tool
+                                        ?.toolSchema || "{}",
+                                input,
+                            });
+                        }}
+                        onClose={() => setSettingsBlockId(null)}
+                    />
+                ) : null}
             </Modal>
         </>
     );

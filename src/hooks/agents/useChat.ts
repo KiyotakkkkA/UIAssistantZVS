@@ -267,6 +267,9 @@ export function useChat() {
                                 args,
                                 {
                                     ollamaToken: ollamaToken,
+                                    telegramId: userProfile.telegramId,
+                                    telegramBotToken:
+                                        userProfile.telegramBotToken,
                                 },
                             );
                         }
@@ -318,6 +321,8 @@ export function useChat() {
 
                         return await toolsStore.executeTool(toolName, args, {
                             ollamaToken: ollamaToken,
+                            telegramId: userProfile.telegramId,
+                            telegramBotToken: userProfile.telegramBotToken,
                         });
                     },
                     onToolCall: ({ callId, toolName, args }) => {

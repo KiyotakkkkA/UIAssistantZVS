@@ -563,6 +563,79 @@ app.whenReady()
             },
         );
 
+        ipcMain.handle("app:fs-list-directory", async (_event, cwd: string) => {
+            const entries = await fs.readdir(cwd, { withFileTypes: true });
+            const result = await Promise.all(
+                entries.map(async (entry) => {
+                    const entryPath = path.join(cwd, entry.name);
+                    const stat = await fs.stat(entryPath);
+                    return {
+                        name: entry.name,
+                        type: entry.isDirectory() ? "directory" : "file",
+                        size: stat.size,
+                        modifiedAt: stat.mtime.toISOString(),
+                    };
+                }),
+            );
+            return { path: cwd, entries: result };
+        });
+
+        ipcMain.handle(
+            "app:fs-create-file",
+            async (_event, cwd: string, filename: string, content = "") => {
+                const filePath = path.join(cwd, filename);
+                await fs.mkdir(path.dirname(filePath), { recursive: true });
+                await fs.writeFile(filePath, content, "utf-8");
+                return { success: true, path: filePath };
+            },
+        );
+
+        ipcMain.handle(
+            "app:fs-create-dir",
+            async (_event, cwd: string, dirname: string) => {
+                const dirPath = path.join(cwd, dirname);
+                await fs.mkdir(dirPath, { recursive: true });
+                return { success: true, path: dirPath };
+            },
+        );
+
+        ipcMain.handle(
+            "app:fs-read-file",
+            async (
+                _event,
+                filePath: string,
+                readAll: boolean,
+                fromLine?: number,
+                toLine?: number,
+            ) => {
+                const raw = await fs.readFile(filePath, "utf-8");
+                const lines = raw.split("\n");
+                const totalLines = lines.length;
+
+                if (readAll) {
+                    return {
+                        path: filePath,
+                        content: raw,
+                        totalLines,
+                        fromLine: 1,
+                        toLine: totalLines,
+                    };
+                }
+
+                const from = Math.max(1, fromLine ?? 1);
+                const to = Math.min(totalLines, toLine ?? totalLines);
+                const content = lines.slice(from - 1, to).join("\n");
+
+                return {
+                    path: filePath,
+                    content,
+                    totalLines,
+                    fromLine: from,
+                    toLine: to,
+                };
+            },
+        );
+
         createWindow();
     })
     .catch((error) => {

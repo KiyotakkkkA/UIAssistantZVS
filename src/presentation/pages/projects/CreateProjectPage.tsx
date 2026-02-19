@@ -14,7 +14,7 @@ import {
     InputSmall,
     Modal,
 } from "../../components/atoms";
-import { RequiredToolsPickForm } from "../../components/molecules/forms";
+import { RequiredToolsPickForm } from "../../components/organisms/forms";
 
 export const CreateProjectPage = observer(function CreateProjectPage() {
     const navigate = useNavigate();
