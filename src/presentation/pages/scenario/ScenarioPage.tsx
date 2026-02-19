@@ -83,26 +83,6 @@ export const ScenarioPage = observer(function ScenarioPage() {
             <div className="relative flex min-h-0 flex-1 gap-4">
                 <aside className="w-80">
                     <TreeView className="h-full overflow-y-auto">
-                        <TreeView.Catalog
-                            title="Встроенные механизмы"
-                            defaultOpen
-                        >
-                            <TreeView.Element
-                                label="http_request"
-                                description="Ручной HTTP-запрос с настройкой"
-                                onClick={() => {
-                                    requestInsert({ kind: "manual-http" });
-                                }}
-                            />
-                            <TreeView.Element
-                                label="datetime_get"
-                                description="Получение даты/времени"
-                                onClick={() => {
-                                    requestInsert({ kind: "manual-datetime" });
-                                }}
-                            />
-                        </TreeView.Catalog>
-
                         {toolsStore.packages.map((pkg) => (
                             <TreeView.Catalog
                                 key={pkg.id}

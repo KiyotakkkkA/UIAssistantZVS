@@ -115,7 +115,7 @@ const createInsertedBlock = (
             tool: {
                 toolName: payload.toolName || "tool",
                 toolSchema: payload.toolSchema || "{}",
-                input: "",
+                input: [],
             },
         },
     };
@@ -186,7 +186,7 @@ const normalizeManualDatetimeMeta = (
 const normalizeToolMeta = (raw: Record<string, unknown>): ScenarioToolMeta => ({
     toolName: typeof raw.toolName === "string" ? raw.toolName : "tool",
     toolSchema: typeof raw.toolSchema === "string" ? raw.toolSchema : "{}",
-    input: typeof raw.input === "string" ? raw.input : "",
+    input: Array.isArray(raw.input) ? raw.input : [],
 });
 
 const normalizeBlock = (

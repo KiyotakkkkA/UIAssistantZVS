@@ -30,10 +30,17 @@ export type ScenarioManualDatetimeGetMeta = {
     timezone: string;
 };
 
+export type ScenarioBlockToolsParamsUsage = {
+    param: string;
+    description: string;
+    comment: string;
+    defaultValue?: string;
+};
+
 export type ScenarioToolMeta = {
     toolName: string;
     toolSchema: string;
-    input: string;
+    input: ScenarioBlockToolsParamsUsage[];
 };
 
 export type ScenarioBlockMeta = {
