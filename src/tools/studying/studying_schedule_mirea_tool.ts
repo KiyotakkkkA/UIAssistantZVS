@@ -140,7 +140,15 @@ const buildCacheEntry = (
 };
 
 const fetchHtml = async (url: string): Promise<string> => {
-    const response = await fetch(url, {
+    const api = window.appApi;
+
+    if (!api?.network?.proxyHttpRequest) {
+        throw new Error("proxy_http_request_unavailable");
+    }
+
+    const response = await api.network.proxyHttpRequest({
+        url,
+        method: "GET",
         headers: {
             "User-Agent": "Mozilla/5.0",
         },
@@ -150,7 +158,7 @@ const fetchHtml = async (url: string): Promise<string> => {
         throw new Error(`request_failed_${response.status}`);
     }
 
-    return response.text();
+    return response.bodyText;
 };
 
 const extractIcalFromHtml = (htmlContent: string): string => {

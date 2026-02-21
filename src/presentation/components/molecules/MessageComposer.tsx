@@ -256,7 +256,7 @@ export const MessageComposer = observer(function MessageComposer({
                                 <Button
                                     label="Tools"
                                     className="h-9 w-9 p-0"
-                                    shape="rounded-md"
+                                    shape="rounded-sm"
                                     variant="secondary"
                                     onClick={() => setIsScenarioModalOpen(true)}
                                 >

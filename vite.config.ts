@@ -5,22 +5,6 @@ import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    server: {
-        proxy: {
-            "/ollama": {
-                target: "https://ollama.com",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(/^\/ollama/, "/api"),
-            },
-            "/mirea": {
-                target: "https://schedule-of.mirea.ru",
-                changeOrigin: true,
-                secure: true,
-                rewrite: (path) => path.replace(/^\/mirea/, ""),
-            },
-        },
-    },
     plugins: [
         react(),
         electron({

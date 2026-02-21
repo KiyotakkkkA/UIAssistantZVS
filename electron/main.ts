@@ -273,6 +273,14 @@ app.whenReady()
                     typeof payload?.method === "string"
                         ? payload.method.trim().toUpperCase()
                         : "GET";
+                const headers =
+                    payload && typeof payload.headers === "object"
+                        ? payload.headers
+                        : undefined;
+                const requestBodyText =
+                    typeof payload?.bodyText === "string"
+                        ? payload.bodyText
+                        : undefined;
 
                 if (!url) {
                     return {
@@ -288,15 +296,21 @@ app.whenReady()
                         method,
                         headers: {
                             Accept: "application/json, text/plain, */*",
+                            ...(headers || {}),
                         },
+                        ...(requestBodyText &&
+                        method !== "GET" &&
+                        method !== "HEAD"
+                            ? { body: requestBodyText }
+                            : {}),
                     });
-                    const bodyText = await response.text();
+                    const responseBodyText = await response.text();
 
                     return {
                         ok: response.ok,
                         status: response.status,
                         statusText: response.statusText,
-                        bodyText,
+                        bodyText: responseBodyText,
                     };
                 } catch (error) {
                     return {

@@ -1,8 +1,12 @@
-import { InputCheckbox, InputSmall } from "../../atoms";
+import { useState } from "react";
+import { Button, InputCheckbox, InputSmall, Modal } from "../../atoms";
 import { Icon } from "@iconify/react";
 import { useChatParams } from "../../../../hooks";
+import { SettingsChatOllamaModelsPickForm } from "../forms";
 
 export const SettingsChatPanel = () => {
+    const [isModelsPickOpen, setIsModelsPickOpen] = useState(false);
+
     const {
         chatDriver,
         ollamaModel,
@@ -107,13 +111,24 @@ export const SettingsChatPanel = () => {
                         <p className="text-sm font-medium text-main-200">
                             Модель
                         </p>
-                        <InputSmall
-                            value={ollamaModel}
-                            onChange={(event) =>
-                                setOllamaModel(event.target.value)
-                            }
-                            placeholder="gpt-oss:20b"
-                        />
+                        <div className="flex items-center gap-2 w-full">
+                            <div className="flex-1">
+                                <InputSmall
+                                    value={ollamaModel}
+                                    className="w-full"
+                                    readOnly
+                                    placeholder="gpt-oss:20b"
+                                />
+                            </div>
+                            <Button
+                                variant="primary"
+                                shape="rounded-lg"
+                                className="h-9 shrink-0 px-3"
+                                onClick={() => setIsModelsPickOpen(true)}
+                            >
+                                Выбрать
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="space-y-2">
@@ -174,6 +189,21 @@ export const SettingsChatPanel = () => {
                     </div>
                 </div>
             </div>
+
+            <Modal
+                open={isModelsPickOpen}
+                onClose={() => setIsModelsPickOpen(false)}
+                title="Выбор Ollama-модели"
+                className="max-w-6xl min-h-144"
+            >
+                <SettingsChatOllamaModelsPickForm
+                    currentModel={ollamaModel}
+                    onSelectModel={(modelName) => {
+                        void setOllamaModel(modelName);
+                    }}
+                    onClose={() => setIsModelsPickOpen(false)}
+                />
+            </Modal>
         </div>
     );
 };

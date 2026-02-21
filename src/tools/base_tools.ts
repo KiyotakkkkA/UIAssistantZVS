@@ -1,25 +1,11 @@
-import { createOllamaRequest } from "../hooks/agents/adapters/ollamaAdapter";
+import { postOllamaJson } from "../services/api";
 import { ToolsBuilder } from "../utils/ToolsBuilder";
 
 const postToolRequest = async (
     endpoint: "web_search" | "web_fetch",
     payload: Record<string, unknown>,
 ) => {
-    const request = createOllamaRequest(endpoint);
-    const response = await fetch(request.url, {
-        ...request.init,
-        body: JSON.stringify(payload),
-    });
-
-    const raw = await response.text();
-
-    if (!response.ok) {
-        throw new Error(
-            raw || `Ollama tool request failed: ${response.status}`,
-        );
-    }
-
-    return raw ? (JSON.parse(raw) as unknown) : {};
+    return postOllamaJson(endpoint, payload);
 };
 
 export const baseToolsPackage = () => {

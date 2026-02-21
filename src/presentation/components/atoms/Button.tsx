@@ -2,6 +2,8 @@ import { forwardRef, type ReactNode } from "react";
 
 type ButtonVariants = "primary" | "secondary";
 type ButtonShape =
+    | "rounded-none"
+    | "rounded-sm"
     | "rounded-md"
     | "rounded-lg"
     | "rounded-full"

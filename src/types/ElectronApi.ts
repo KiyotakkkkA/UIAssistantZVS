@@ -69,6 +69,8 @@ export type ProxyHttpRequestPayload = {
     url: string;
     method: string;
     formatter?: string;
+    headers?: Record<string, string>;
+    bodyText?: string;
 };
 
 export type ProxyHttpRequestResult = {

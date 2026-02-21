@@ -1647,6 +1647,8 @@ app.whenReady().then(() => {
     async (_event, payload) => {
       const url = typeof payload?.url === "string" ? payload.url.trim() : "";
       const method = typeof payload?.method === "string" ? payload.method.trim().toUpperCase() : "GET";
+      const headers = payload && typeof payload.headers === "object" ? payload.headers : void 0;
+      const requestBodyText = typeof payload?.bodyText === "string" ? payload.bodyText : void 0;
       if (!url) {
         return {
           ok: false,
@@ -1659,15 +1661,17 @@ app.whenReady().then(() => {
         const response = await fetch(url, {
           method,
           headers: {
-            Accept: "application/json, text/plain, */*"
-          }
+            Accept: "application/json, text/plain, */*",
+            ...headers || {}
+          },
+          ...requestBodyText && method !== "GET" && method !== "HEAD" ? { body: requestBodyText } : {}
         });
-        const bodyText = await response.text();
+        const responseBodyText = await response.text();
         return {
           ok: response.ok,
           status: response.status,
           statusText: response.statusText,
-          bodyText
+          bodyText: responseBodyText
         };
       } catch (error) {
         return {
