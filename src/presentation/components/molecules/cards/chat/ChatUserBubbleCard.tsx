@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { Avatar, Button, InputBig } from "../../../atoms";
+import { userProfileStore } from "../../../../../stores/userProfileStore";
 
 type ScenarioLaunchCardData = {
     title: string;
@@ -119,7 +120,10 @@ export function ChatUserBubbleCard({
                         {timestamp}
                     </p>
                 </div>
-                <Avatar label="ВЫ" tone="user" />
+                <Avatar
+                    label={userProfileStore.userProfile.userName[0]}
+                    tone="user"
+                />
             </div>
             <div className="flex justify-end gap-2 mt-2 mr-10">
                 {!isEditing && !scenarioCard ? (

@@ -1,6 +1,8 @@
 import { Icon } from "@iconify/react";
 import { Button } from "../../../atoms";
 import type { OllamaCatalogModel } from "../../../../../services/api";
+import { useMemo } from "react";
+import { Link } from "react-router-dom";
 
 type SettingsChatOllamaModelPickCardProps = {
     model: OllamaCatalogModel;
@@ -48,6 +50,10 @@ export function SettingsChatOllamaModelPickCard({
     selected,
     onPick,
 }: SettingsChatOllamaModelPickCardProps) {
+    const modelIdWithoutColon = useMemo(() => {
+        return model.name.split(":")[0];
+    }, [model.name]);
+
     return (
         <article className="rounded-xl border border-main-700/80 bg-main-900/45 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -109,7 +115,15 @@ export function SettingsChatOllamaModelPickCard({
                 Digest: {model.digest || "—"}
             </p>
 
-            <div className="mt-3 flex justify-end">
+            <div className="mt-3 flex justify-between items-center">
+                <Link
+                    to={`https://ollama.com/library/${modelIdWithoutColon}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-main-400 hover:text-main-200 hover:underline transition-colors"
+                >
+                    Подробнее
+                </Link>
                 <Button
                     variant={selected ? "secondary" : "primary"}
                     shape="rounded-lg"
