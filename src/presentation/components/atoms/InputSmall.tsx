@@ -18,7 +18,7 @@ export const InputSmall = forwardRef<HTMLInputElement, InputSmallProps>(
                 : "password"
             : type;
 
-        const readonlyStyles = "cursor-not-allowed";
+        const readonlyStyles = "read-only:cursor-not-allowed";
 
         return (
             <div className="relative">

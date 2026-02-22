@@ -22,6 +22,18 @@ export const studyingToolsPackage = () => {
                 },
                 required: ["date_value"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    date: { type: "string" },
+                    lessons: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                        },
+                    },
+                },
+            },
             execute: async (args) => {
                 const dateValue =
                     typeof args.date_value === "string"

@@ -83,36 +83,79 @@ export const ScenarioPage = observer(function ScenarioPage() {
             <div className="relative flex min-h-0 flex-1 gap-4">
                 <aside className="w-80">
                     <TreeView className="h-full overflow-y-auto">
-                        {toolsStore.packages.map((pkg) => (
-                            <TreeView.Catalog
-                                key={pkg.id}
-                                title={pkg.title}
-                                defaultOpen
-                            >
-                                {pkg.tools.map((tool) => (
-                                    <TreeView.Element
-                                        key={tool.schema.function.name}
-                                        label={tool.schema.function.name}
-                                        description={
-                                            tool.schema.function.description
-                                        }
-                                        onClick={() => {
-                                            requestInsert({
-                                                kind: "tool",
-                                                toolName:
-                                                    tool.schema.function.name,
-                                                toolSchema: JSON.stringify(
-                                                    tool.schema.function
-                                                        .parameters,
-                                                    null,
-                                                    2,
-                                                ),
-                                            });
-                                        }}
-                                    />
-                                ))}
-                            </TreeView.Catalog>
-                        ))}
+                        <TreeView.Catalog title="ИИ инструменты" defaultOpen>
+                            {toolsStore.packages.map((pkg) => (
+                                <TreeView.Catalog
+                                    key={pkg.id}
+                                    title={pkg.title}
+                                    defaultOpen
+                                >
+                                    {pkg.tools.map((tool) => (
+                                        <TreeView.Element
+                                            key={tool.schema.function.name}
+                                            label={tool.schema.function.name}
+                                            description={
+                                                tool.schema.function.description
+                                            }
+                                            onClick={() => {
+                                                requestInsert({
+                                                    kind: "tool",
+                                                    toolName:
+                                                        tool.schema.function
+                                                            .name,
+                                                    toolSchema: JSON.stringify(
+                                                        tool.schema.function
+                                                            .parameters,
+                                                        null,
+                                                        2,
+                                                    ),
+                                                    ...(tool.outputScheme
+                                                        ? {
+                                                              outputScheme:
+                                                                  JSON.stringify(
+                                                                      tool.outputScheme,
+                                                                      null,
+                                                                      2,
+                                                                  ),
+                                                          }
+                                                        : {}),
+                                                });
+                                            }}
+                                        />
+                                    ))}
+                                </TreeView.Catalog>
+                            ))}
+                        </TreeView.Catalog>
+
+                        <TreeView.Catalog title="Базовые структуры" defaultOpen>
+                            <TreeView.Element
+                                label="Переменная"
+                                description="Вёычисляемые переменные сценария"
+                                onClick={() => {
+                                    requestInsert({
+                                        kind: "variable",
+                                    });
+                                }}
+                            />
+                            <TreeView.Element
+                                label="Инструкция"
+                                description="Блок инструкции"
+                                onClick={() => {
+                                    requestInsert({
+                                        kind: "prompt",
+                                    });
+                                }}
+                            />
+                            <TreeView.Element
+                                label="Условие"
+                                description="Условие с ветками Да/Нет"
+                                onClick={() => {
+                                    requestInsert({
+                                        kind: "condition",
+                                    });
+                                }}
+                            />
+                        </TreeView.Catalog>
                     </TreeView>
                 </aside>
                 <ScenarioCanvas

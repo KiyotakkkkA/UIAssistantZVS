@@ -17,6 +17,7 @@ import {
     getUserPrompt,
     getProjectPrompt,
 } from "../../prompts/base";
+import type { OllamaResponseFormat } from "../../types/Chat";
 
 const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {
@@ -31,6 +32,57 @@ const getCommandRequestMeta = (args: Record<string, unknown>) => ({
     cwd: typeof args.cwd === "string" ? args.cwd : ".",
     isAdmin: false,
 });
+
+const getScenarioFormatHint = (
+    scenarioFlow?: string,
+): OllamaResponseFormat | undefined => {
+    if (!scenarioFlow) {
+        return undefined;
+    }
+
+    const marker = "MODEL_FORMAT_HINT_JSON_SCHEMA:";
+    const markerIndex = scenarioFlow.indexOf(marker);
+
+    if (markerIndex < 0) {
+        return undefined;
+    }
+
+    const jsonCandidate = scenarioFlow
+        .slice(markerIndex + marker.length)
+        .trim()
+        .split("\n")
+        .find((line) => line.trim().length > 0)
+        ?.trim();
+
+    if (!jsonCandidate) {
+        return undefined;
+    }
+
+    try {
+        const parsed = JSON.parse(jsonCandidate) as Record<string, unknown>;
+        return parsed;
+    } catch {
+        return undefined;
+    }
+};
+
+const buildScenarioRuntimeEnvText = () => {
+    const now = new Date().toLocaleString("ru-RU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    const projectDirectory = projectsStore.activeProject?.directoryPath?.trim();
+
+    return [
+        "SCENARIO_RUNTIME_ENV:",
+        `  - current_date=${now}`,
+        `  - project_directory=${projectDirectory || ""}`,
+    ].join("\n");
+};
 
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
@@ -115,6 +167,12 @@ export function useChat() {
                 ? rawContent.slice("__qa_hidden__".length).trim()
                 : rawContent.trim();
             const scenarioLaunchPayload = parseScenarioLaunchPayload(content);
+            const scenarioFormatHint = getScenarioFormatHint(
+                scenarioLaunchPayload?.scenarioFlow,
+            );
+            const scenarioRuntimeEnvText = scenarioLaunchPayload
+                ? buildScenarioRuntimeEnvText()
+                : "";
             const userVisibleContent =
                 scenarioLaunchPayload?.displayMessage || content;
 
@@ -208,6 +266,7 @@ export function useChat() {
                               content: [
                                   `SCENARIO_LAUNCH: ${scenarioLaunchPayload.scenarioName}`,
                                   scenarioLaunchPayload.scenarioFlow,
+                                  scenarioRuntimeEnvText,
                                   "Instruction: execute scenario flow strictly by graph links. If data is missing, ask one clear question via qa_tool or plain assistant question.",
                               ].join("\n\n"),
                               timestamp: getTimeStamp(),
@@ -256,6 +315,9 @@ export function useChat() {
                 await adapter.send({
                     history: historyForRequest,
                     tools: toolsStore.toolDefinitions,
+                    ...(scenarioFormatHint
+                        ? { format: scenarioFormatHint }
+                        : {}),
                     maxToolCalls:
                         userProfile.maxToolCallsPerResponse > 0
                             ? userProfile.maxToolCallsPerResponse
@@ -270,6 +332,12 @@ export function useChat() {
                                     telegramId: userProfile.telegramId,
                                     telegramBotToken:
                                         userProfile.telegramBotToken,
+                                    scenarioRuntimeEnv: {
+                                        current_date: new Date().toISOString(),
+                                        project_directory:
+                                            projectsStore.activeProject
+                                                ?.directoryPath ?? "",
+                                    },
                                 },
                             );
                         }
@@ -323,6 +391,12 @@ export function useChat() {
                             ollamaToken: ollamaToken,
                             telegramId: userProfile.telegramId,
                             telegramBotToken: userProfile.telegramBotToken,
+                            scenarioRuntimeEnv: {
+                                current_date: new Date().toISOString(),
+                                project_directory:
+                                    projectsStore.activeProject
+                                        ?.directoryPath ?? "",
+                            },
                         });
                     },
                     onToolCall: ({ callId, toolName, args }) => {

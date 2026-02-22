@@ -22,6 +22,25 @@ export const filesystemToolsPackage = () => {
                 },
                 required: ["cwd"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    items: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                name: { type: "string" },
+                                type: { type: "string" },
+                                size: { type: "number" },
+                                modifiedAt: { type: "string" },
+                            },
+                            required: ["name", "type"],
+                        },
+                    },
+                },
+                required: ["items"],
+            },
             execute: async (args) => {
                 const cwd = typeof args.cwd === "string" ? args.cwd.trim() : "";
 
@@ -63,6 +82,15 @@ export const filesystemToolsPackage = () => {
                 },
                 required: ["cwd", "filename"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    success: { type: "boolean" },
+                    filePath: { type: "string" },
+                    message: { type: "string" },
+                },
+                required: ["success"],
+            },
             execute: async (args) => {
                 const cwd = typeof args.cwd === "string" ? args.cwd.trim() : "";
                 const filename =
@@ -107,6 +135,15 @@ export const filesystemToolsPackage = () => {
                 },
                 required: ["cwd", "dirname"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    success: { type: "boolean" },
+                    dirPath: { type: "string" },
+                    message: { type: "string" },
+                },
+                required: ["success"],
+            },
             execute: async (args) => {
                 const cwd = typeof args.cwd === "string" ? args.cwd.trim() : "";
                 const dirname =
@@ -156,6 +193,16 @@ export const filesystemToolsPackage = () => {
                 },
                 required: ["filePath", "readAll"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    content: { type: "string" },
+                    totalLines: { type: "number" },
+                    readFromRow: { type: "number" },
+                    readToRow: { type: "number" },
+                },
+                required: ["content", "totalLines"],
+            },
             execute: async (args) => {
                 const filePath =
                     typeof args.filePath === "string"

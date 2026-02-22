@@ -1,10 +1,11 @@
-import type { ChatMessage } from "./Chat";
+import type { ChatMessage, OllamaResponseFormat } from "./Chat";
 import type { OllamaToolDefinition } from "./Chat";
 
 export type ChatAdapterRequest = {
     history: ChatMessage[];
     tools?: OllamaToolDefinition[];
     maxToolCalls?: number;
+    format?: OllamaResponseFormat;
     executeTool?: (
         toolName: string,
         args: Record<string, unknown>,

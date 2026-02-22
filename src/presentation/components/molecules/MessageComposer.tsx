@@ -147,7 +147,7 @@ export const MessageComposer = observer(function MessageComposer({
                     return;
                 }
 
-                const scenarioFlow = scenarioToFlow(scenario);
+                const scenarioFlow = await scenarioToFlow(scenario);
                 const displayMessage = [
                     "Сценарий запущен",
                     `Название: ${scenario.name}`,

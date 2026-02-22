@@ -71,6 +71,16 @@ export const systemToolsPackage = () => {
                 },
                 required: ["question"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    status: { type: "string" },
+                    question: { type: "string" },
+                    reason: { type: "string" },
+                    userAnswer: { type: "string" },
+                },
+                required: ["status", "question"],
+            },
             execute: async (args) => {
                 const question =
                     typeof args.question === "string" ? args.question : "";
@@ -127,6 +137,16 @@ export const systemToolsPackage = () => {
                 },
                 required: ["action"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    plan_id: { type: "string" },
+                    title: { type: "string" },
+                    progress: { type: "string" },
+                    is_complete: { type: "boolean" },
+                    instruction: { type: "string" },
+                },
+            },
             execute: (args) => {
                 const action =
                     typeof args.action === "string" ? args.action : "";

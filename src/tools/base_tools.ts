@@ -33,6 +33,14 @@ export const baseToolsPackage = () => {
                 },
                 required: ["command"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    stdout: { type: "string" },
+                    stderr: { type: "string" },
+                    code: { type: "number" },
+                },
+            },
             execute: async (args) => {
                 const command =
                     typeof args.command === "string" ? args.command : "";
@@ -58,6 +66,12 @@ export const baseToolsPackage = () => {
                 },
                 required: ["request"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    result: { type: "string" },
+                },
+            },
             execute: async (args) => {
                 const request =
                     typeof args.request === "string" ? args.request : "";
@@ -74,6 +88,12 @@ export const baseToolsPackage = () => {
                 },
                 required: ["url"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    content: { type: "string" },
+                },
+            },
             execute: async (args) => {
                 const url = typeof args.url === "string" ? args.url : "";
 

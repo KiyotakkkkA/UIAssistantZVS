@@ -1,22 +1,35 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { Button, Dropdown, InputSmall, Modal, Select } from "../../atoms";
+import { Button, Dropdown, InputBig, Modal } from "../../atoms";
 import { useToasts } from "../../../../hooks";
 import { useScenarioCanvas } from "../../../../hooks/agents";
 import type { ScenarioCanvasInsertPayload } from "../../../../hooks/agents";
 import type {
+    ScenarioConditionMeta,
     ScenarioConnection,
-    ScenarioManualDatetimeGetMeta,
-    ScenarioManualHttpRequestMeta,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
+    ScenarioVariableMeta,
 } from "../../../../types/Scenario";
-import { ShikiCodeBlock } from "../../molecules/render/ShikiCodeBlock";
-import { ScenarioBlockSettingForm } from "../forms/ScenarioBlockSettingForm";
+import { ScenarioBlockSettingsForm } from "../forms/ScenarioBlockSettingsForm";
+import { ScenarioConditionSettingsForm } from "../forms/ScenarioConditionSettingsForm";
+import { ScenarioVariableSettingsForm } from "../forms/ScenarioVariableSettingsForm";
 import { ScenarioCanvasToolbar } from "./support/ScenarioCanvasToolbar";
 import { ScenarioConnectionsLayer } from "./support/ScenarioConnectionsLayer";
 import { ScenarioSimpleBlock } from "./blocks/ScenarioSimpleBlock";
 import { ScenarioToolBlock } from "./blocks/ScenarioToolBlock";
+import { ScenarioPromptBlock } from "./blocks/ScenarioPromptBlock";
+import { ScenarioConditionBlock } from "./blocks/ScenarioConditionBlock";
+import { ScenarioVariableBlock } from "./blocks/ScenarioVariableBlock";
+import {
+    START_BLOCK_INPUT_PORT,
+    VARIABLE_CONTINUE_OUTPUT_PORT,
+} from "../../../../utils/scenarioVariables";
+import {
+    getToolParamInputPorts,
+    getToolParamOutputPorts,
+    getVariableParamOutputPorts,
+} from "../../../../utils/scenarioPorts";
 
 type Point = {
     x: number;
@@ -43,6 +56,11 @@ type BlockMenuState = {
     token: number;
 };
 
+type PendingConnectionState = {
+    blockId: string;
+    fromPortName?: string;
+};
+
 export type ScenarioCanvasInsertRequest = {
     token: number;
 } & ScenarioCanvasInsertPayload;
@@ -58,19 +76,225 @@ const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 const DEFAULT_SCALE = 1;
 const DEFAULT_OFFSET = { x: 80, y: 80 };
+const EMPTY_CONNECTED_INPUTS = new Set<string>();
+const DEFAULT_PORT_KEY = "__default__";
+
+const createDefaultConditionMeta = (): ScenarioConditionMeta => ({
+    fields: [{ id: crypto.randomUUID(), name: "value" }],
+    rules: [
+        {
+            id: crypto.randomUUID(),
+            title: "Условие 1",
+            operands: [
+                {
+                    id: crypto.randomUUID(),
+                    leftSource: "field",
+                    leftValue: "value",
+                    operator: "=",
+                    rightSource: "value",
+                    rightValue: "",
+                },
+            ],
+        },
+    ],
+});
+
+const createDefaultVariableMeta = (): ScenarioVariableMeta => ({
+    selectedVariables: ["current_date"],
+});
 
 const clamp = (value: number, min: number, max: number) =>
     Math.max(min, Math.min(max, value));
 
-const getOutPoint = (block: ScenarioSimpleBlockNode): Point => ({
-    x: block.x + block.width + 10,
-    y: block.y + block.height / 2,
-});
+const getVariableOutputPorts = (block: ScenarioSimpleBlockNode): string[] => {
+    if (block.kind !== "variable") {
+        return [VARIABLE_CONTINUE_OUTPUT_PORT];
+    }
 
-const getInPoint = (block: ScenarioSimpleBlockNode): Point => ({
-    x: block.x - 10,
-    y: block.y + block.height / 2,
-});
+    const selected = getVariableParamOutputPorts(block);
+
+    return [...selected, VARIABLE_CONTINUE_OUTPUT_PORT];
+};
+
+const getAnchoredPoint = (
+    block: ScenarioSimpleBlockNode,
+    direction: "inputs" | "outputs",
+    portName?: string,
+): Point | null => {
+    const key = portName && portName.trim().length > 0 ? portName : DEFAULT_PORT_KEY;
+    const anchor = block.portAnchors?.[direction]?.[key];
+
+    if (!anchor) {
+        return null;
+    }
+
+    return {
+        x: block.x + anchor.x,
+        y: block.y + anchor.y,
+    };
+};
+
+const getOutPoint = (
+    block: ScenarioSimpleBlockNode,
+    outputName?: string,
+): Point => {
+    const anchored = getAnchoredPoint(block, "outputs", outputName);
+    if (anchored) {
+        return anchored;
+    }
+
+    if (block.kind === "tool") {
+        const outputs = [
+            ...getToolParamOutputPorts(block),
+            VARIABLE_CONTINUE_OUTPUT_PORT,
+        ];
+        const count = Math.max(outputs.length, 1);
+        const index = outputName
+            ? Math.max(
+                  0,
+                  outputs.findIndex((item) => item === outputName),
+              )
+            : count - 1;
+
+        return {
+            x: block.x + block.width + 10,
+            y: block.y + ((index + 1) * block.height) / (count + 1),
+        };
+    }
+
+    if (block.kind === "prompt") {
+        return {
+            x: block.x + block.width + 10,
+            y: block.y + block.height / 2,
+        };
+    }
+
+    if (block.kind === "condition" && outputName) {
+        const outputOffsets: Record<string, number> = {
+            yes: 0.28,
+            no: 0.5,
+            always: 0.72,
+        };
+
+        return {
+            x: block.x + block.width + 10,
+            y: block.y + block.height * (outputOffsets[outputName] ?? 0.5),
+        };
+    }
+
+    if (block.kind === "variable") {
+        const outputs = getVariableOutputPorts(block);
+        const count = Math.max(outputs.length, 1);
+        const index = outputName
+            ? Math.max(
+                  0,
+                  outputs.findIndex((item) => item === outputName),
+              )
+            : count - 1;
+
+        return {
+            x: block.x + block.width + 10,
+            y: block.y + ((index + 1) * block.height) / (count + 1),
+        };
+    }
+
+    return {
+        x: block.x + block.width + 10,
+        y: block.y + block.height / 2,
+    };
+};
+
+const getInPoint = (block: ScenarioSimpleBlockNode): Point => {
+    const anchored = getAnchoredPoint(block, "inputs");
+    if (anchored) {
+        return anchored;
+    }
+
+    return {
+        x: block.x - 10,
+        y: block.y + block.height / 2,
+    };
+};
+
+const getInputPoint = (
+    block: ScenarioSimpleBlockNode,
+    inputName: string,
+): Point => {
+    const anchored = getAnchoredPoint(block, "inputs", inputName);
+    if (anchored) {
+        return anchored;
+    }
+
+    if (inputName === START_BLOCK_INPUT_PORT) {
+        if (block.kind === "prompt") {
+            return {
+                x: block.x - 10,
+                y: block.y + block.height * 0.32,
+            };
+        }
+
+        if (block.kind === "variable") {
+            return {
+                x: block.x - 10,
+                y: block.y + block.height * 0.32,
+            };
+        }
+
+        if (block.kind === "condition") {
+            return {
+                x: block.x - 10,
+                y: block.y + block.height * 0.14,
+            };
+        }
+
+        return {
+            x: block.x - 10,
+            y: block.y + block.height * 0.14,
+        };
+    }
+
+    if (block.kind === "condition") {
+        const fields = block.meta?.condition?.fields ?? [];
+        const count = Math.max(fields.length, 1);
+        const index = Math.max(
+            0,
+            fields.findIndex((item) => item.name === inputName),
+        );
+
+        return {
+            x: block.x - 10,
+            y:
+                block.y +
+                block.height * (0.24 + ((index + 1) / (count + 1)) * 0.68),
+        };
+    }
+
+    if (block.kind === "variable") {
+        return {
+            x: block.x - 10,
+            y: block.y + block.height / 2,
+        };
+    }
+
+    if (block.kind === "prompt") {
+        return {
+            x: block.x - 10,
+            y: block.y + block.height / 2,
+        };
+    }
+
+    const inputs = getToolParamInputPorts(block);
+    const countWithStart = Math.max(inputs.length + 1, 2);
+    const index = Math.max(
+        0,
+        inputs.findIndex((item) => item === inputName),
+    );
+
+    return {
+        x: block.x - 10,
+        y: block.y + ((index + 2) * block.height) / (countWithStart + 1),
+    };
+};
 
 const buildConnectionPath = (from: Point, to: Point) => {
     const distance = Math.abs(to.x - from.x);
@@ -92,14 +316,6 @@ const toScenePoint = (
     };
 };
 
-const prettyResponse = (raw: string) => {
-    try {
-        return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-        return raw;
-    }
-};
-
 export function ScenarioCanvas({
     insertRequest,
     onInsertHandled,
@@ -110,6 +326,12 @@ export function ScenarioCanvas({
     const panOriginRef = useRef<Point | null>(null);
     const dragStateRef = useRef<DragState | null>(null);
     const pendingBlockPositionsRef = useRef<Record<string, Point> | null>(null);
+    const blocksByIdRef = useRef<Map<string, ScenarioSimpleBlockNode>>(
+        new Map(),
+    );
+    const pendingConnectionFromRef = useRef<PendingConnectionState | null>(
+        null,
+    );
     const dropdownTriggerRef = useRef<HTMLButtonElement | null>(null);
     const blockMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -128,16 +350,16 @@ export function ScenarioCanvas({
         removeBlock,
         completeConnection,
         deleteConnection,
-        updateManualHttpMeta,
-        updateManualDatetimeMeta,
         updateToolMeta,
+        updatePromptMeta,
+        updateConditionMeta,
+        updateVariableMeta,
         saveScene,
     } = useScenarioCanvas();
 
     const [isPanning, setIsPanning] = useState(false);
-    const [pendingConnectionFrom, setPendingConnectionFrom] = useState<
-        string | null
-    >(null);
+    const [pendingConnectionFrom, setPendingConnectionFrom] =
+        useState<PendingConnectionState | null>(null);
     const [pointerScenePoint, setPointerScenePoint] = useState<Point | null>(
         null,
     );
@@ -155,15 +377,24 @@ export function ScenarioCanvas({
     const [settingsBlockId, setSettingsBlockId] = useState<string | null>(null);
     const [deleteBlockId, setDeleteBlockId] = useState<string | null>(null);
 
-    const [httpUrl, setHttpUrl] = useState("");
-    const [httpMethod, setHttpMethod] = useState("GET");
-    const [httpFormatter, setHttpFormatter] = useState("");
-    const [httpResponse, setHttpResponse] = useState("");
-    const [isHttpChecking, setIsHttpChecking] = useState(false);
+    const [promptInstruction, setPromptInstruction] = useState("");
+    const [conditionMeta, setConditionMeta] = useState<ScenarioConditionMeta>(
+        createDefaultConditionMeta,
+    );
+    const [variableMeta, setVariableMeta] = useState<ScenarioVariableMeta>(
+        createDefaultVariableMeta,
+    );
 
-    const [datetimeMode, setDatetimeMode] = useState("datetime");
-    const [datetimeTimezoneMode, setDatetimeTimezoneMode] = useState("current");
-    const [datetimeTimezone, setDatetimeTimezone] = useState("UTC+0");
+    useEffect(() => {
+        blocksByIdRef.current = blocksById;
+    }, [blocksById]);
+
+    useEffect(() => {
+        pendingConnectionFromRef.current = pendingConnectionFrom;
+        if (!pendingConnectionFrom) {
+            setPointerScenePoint(null);
+        }
+    }, [pendingConnectionFrom]);
 
     useEffect(() => {
         setShowGrid(viewport.showGrid ?? true);
@@ -177,43 +408,36 @@ export function ScenarioCanvas({
     const activeSettingsBlock = settingsBlockId
         ? (blocksById.get(settingsBlockId) ?? null)
         : null;
-
-    const isHttpModalOpen = activeSettingsBlock?.kind === "manual-http";
-    const isDatetimeModalOpen = activeSettingsBlock?.kind === "manual-datetime";
     const isToolModalOpen = activeSettingsBlock?.kind === "tool";
+    const isPromptModalOpen = activeSettingsBlock?.kind === "prompt";
+    const isConditionModalOpen = activeSettingsBlock?.kind === "condition";
+    const isVariableModalOpen = activeSettingsBlock?.kind === "variable";
 
     useEffect(() => {
         if (!activeSettingsBlock) {
             return;
         }
 
-        if (activeSettingsBlock.kind === "manual-http") {
-            const meta = (activeSettingsBlock.meta?.manualHttp as
-                | ScenarioManualHttpRequestMeta
-                | undefined) ?? {
-                url: "",
-                method: "GET",
-                formatter: "",
-            };
-            setHttpUrl(meta.url);
-            setHttpMethod(meta.method || "GET");
-            setHttpFormatter(meta.formatter || "");
-            setHttpResponse(meta.lastResponseText || "");
+        if (activeSettingsBlock.kind === "prompt") {
+            setPromptInstruction(
+                activeSettingsBlock.meta?.prompt?.instruction ?? "",
+            );
             return;
         }
 
-        if (activeSettingsBlock.kind === "manual-datetime") {
-            const meta = (activeSettingsBlock.meta?.manualDatetime as
-                | ScenarioManualDatetimeGetMeta
-                | undefined) ?? {
-                mode: "datetime",
-                timezoneMode: "current",
-                timezone: "UTC+0",
-            };
-            setDatetimeMode(meta.mode);
-            setDatetimeTimezoneMode(meta.timezoneMode);
-            setDatetimeTimezone(meta.timezone);
+        if (activeSettingsBlock.kind === "condition") {
+            setConditionMeta(
+                activeSettingsBlock.meta?.condition ??
+                    createDefaultConditionMeta(),
+            );
             return;
+        }
+
+        if (activeSettingsBlock.kind === "variable") {
+            setVariableMeta(
+                activeSettingsBlock.meta?.variable ??
+                    createDefaultVariableMeta(),
+            );
         }
     }, [activeSettingsBlock]);
 
@@ -248,8 +472,7 @@ export function ScenarioCanvas({
         }
 
         return {
-            backgroundImage:
-                "linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)",
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.22) 1px, transparent 1px)`,
             backgroundSize: `${32 * scale}px ${32 * scale}px`,
             backgroundPosition: `${offset.x}px ${offset.y}px`,
         };
@@ -271,7 +494,7 @@ export function ScenarioCanvas({
         [offset.x, offset.y, scale, setViewport, showGrid],
     );
 
-    const scheduleBlocksCommit = () => {
+    const scheduleBlocksCommit = useCallback(() => {
         if (rafRef.current !== null) {
             return;
         }
@@ -301,113 +524,121 @@ export function ScenarioCanvas({
                 }),
             );
         });
-    };
+    }, [setBlocks]);
 
-    const beginPan = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (event.button !== 0 || dragStateRef.current) {
-            return;
-        }
+    const beginPan = useCallback(
+        (event: React.MouseEvent<HTMLDivElement>) => {
+            if (event.button !== 0 || dragStateRef.current) {
+                return;
+            }
 
-        setConnectionMenu(null);
-        setBlockMenu(null);
-        setIsPanning(true);
-        panStartRef.current = { x: event.clientX, y: event.clientY };
-        panOriginRef.current = offset;
-    };
+            setConnectionMenu(null);
+            setBlockMenu(null);
+            setIsPanning(true);
+            panStartRef.current = { x: event.clientX, y: event.clientY };
+            panOriginRef.current = offset;
+        },
+        [offset],
+    );
 
-    const openBlockContextMenu = (
-        event: React.MouseEvent<HTMLDivElement>,
-        blockId: string,
-    ) => {
-        event.preventDefault();
-        event.stopPropagation();
+    const openBlockContextMenu = useCallback(
+        (event: React.MouseEvent<HTMLDivElement>, blockId: string) => {
+            event.preventDefault();
+            event.stopPropagation();
 
-        const block = blocksById.get(blockId);
-        const rect = viewportRef.current?.getBoundingClientRect();
+            const block = blocksByIdRef.current.get(blockId);
+            const rect = viewportRef.current?.getBoundingClientRect();
 
-        if (!block || !rect) {
-            return;
-        }
+            if (!block || !rect) {
+                return;
+            }
 
-        if (block.kind === "start" || block.kind === "end") {
-            return;
-        }
+            if (block.kind === "start" || block.kind === "end") {
+                return;
+            }
 
-        setConnectionMenu(null);
-        setBlockMenu({
-            blockId,
-            x: event.clientX - rect.left,
-            y: event.clientY - rect.top,
-            token: Date.now(),
-        });
-    };
+            setConnectionMenu(null);
+            setBlockMenu({
+                blockId,
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top,
+                token: Date.now(),
+            });
+        },
+        [],
+    );
 
-    const beginDragBlock = (
-        event: React.PointerEvent<HTMLDivElement>,
-        blockId: string,
-    ) => {
-        event.stopPropagation();
+    const beginDragBlock = useCallback(
+        (event: React.PointerEvent<HTMLDivElement>, blockId: string) => {
+            event.stopPropagation();
 
-        const block = blocksById.get(blockId);
+            const block = blocksByIdRef.current.get(blockId);
 
-        if (!block) {
-            return;
-        }
+            if (!block) {
+                return;
+            }
 
-        dragStateRef.current = {
-            blockId,
-            startClient: { x: event.clientX, y: event.clientY },
-            origin: { x: block.x, y: block.y },
-        };
-
-        setConnectionMenu(null);
-    };
-
-    const onMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-        const viewportRect = viewportRef.current?.getBoundingClientRect();
-
-        if (viewportRect) {
-            const scenePoint = toScenePoint(
-                event.clientX,
-                event.clientY,
-                viewportRect,
-                offset,
-                scale,
-            );
-            setPointerScenePoint(scenePoint);
-        }
-
-        if (dragStateRef.current && viewportRect) {
-            const dragState = dragStateRef.current;
-            const deltaX = (event.clientX - dragState.startClient.x) / scale;
-            const deltaY = (event.clientY - dragState.startClient.y) / scale;
-
-            pendingBlockPositionsRef.current = {
-                ...(pendingBlockPositionsRef.current || {}),
-                [dragState.blockId]: {
-                    x: dragState.origin.x + deltaX,
-                    y: dragState.origin.y + deltaY,
-                },
+            dragStateRef.current = {
+                blockId,
+                startClient: { x: event.clientX, y: event.clientY },
+                origin: { x: block.x, y: block.y },
             };
 
-            scheduleBlocksCommit();
-            return;
-        }
+            setConnectionMenu(null);
+        },
+        [],
+    );
 
-        if (!isPanning || !panStartRef.current || !panOriginRef.current) {
-            return;
-        }
+    const onMouseMove = useCallback(
+        (event: React.MouseEvent<HTMLDivElement>) => {
+            const viewportRect = viewportRef.current?.getBoundingClientRect();
 
-        const deltaX = event.clientX - panStartRef.current.x;
-        const deltaY = event.clientY - panStartRef.current.y;
+            if (viewportRect && pendingConnectionFromRef.current) {
+                const scenePoint = toScenePoint(
+                    event.clientX,
+                    event.clientY,
+                    viewportRect,
+                    offset,
+                    scale,
+                );
+                setPointerScenePoint(scenePoint);
+            }
 
-        setOffset({
-            x: panOriginRef.current.x + deltaX,
-            y: panOriginRef.current.y + deltaY,
-        });
-    };
+            if (dragStateRef.current && viewportRect) {
+                const dragState = dragStateRef.current;
+                const deltaX =
+                    (event.clientX - dragState.startClient.x) / scale;
+                const deltaY =
+                    (event.clientY - dragState.startClient.y) / scale;
 
-    const endPointerInteractions = () => {
+                pendingBlockPositionsRef.current = {
+                    ...(pendingBlockPositionsRef.current || {}),
+                    [dragState.blockId]: {
+                        x: dragState.origin.x + deltaX,
+                        y: dragState.origin.y + deltaY,
+                    },
+                };
+
+                scheduleBlocksCommit();
+                return;
+            }
+
+            if (!isPanning || !panStartRef.current || !panOriginRef.current) {
+                return;
+            }
+
+            const deltaX = event.clientX - panStartRef.current.x;
+            const deltaY = event.clientY - panStartRef.current.y;
+
+            setOffset({
+                x: panOriginRef.current.x + deltaX,
+                y: panOriginRef.current.y + deltaY,
+            });
+        },
+        [isPanning, offset, scale, scheduleBlocksCommit],
+    );
+
+    const endPointerInteractions = useCallback(() => {
         if (dragStateRef.current) {
             dragStateRef.current = null;
             pendingBlockPositionsRef.current = null;
@@ -418,7 +649,7 @@ export function ScenarioCanvas({
             panStartRef.current = null;
             panOriginRef.current = null;
         }
-    };
+    }, [isPanning]);
 
     const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -458,36 +689,67 @@ export function ScenarioCanvas({
         });
     };
 
-    const handleCreateInitialScene = () => {
+    const handleCreateInitialScene = useCallback(() => {
         createInitialScene();
         setConnectionMenu(null);
         setPendingConnectionFrom(null);
-    };
+    }, [createInitialScene]);
 
-    const resetView = () => {
+    const resetView = useCallback(() => {
         setScale(DEFAULT_SCALE);
         setOffset(DEFAULT_OFFSET);
-    };
+    }, []);
 
-    const handleStartConnection = (blockId: string) => {
-        const block = blocksById.get(blockId);
+    const handleStartConnection = useCallback(
+        (blockId: string, fromPortName?: string) => {
+            const block = blocksByIdRef.current.get(blockId);
 
-        if (!block || block.kind === "end") {
-            return;
-        }
+            if (!block || block.kind === "end") {
+                return;
+            }
 
-        setConnectionMenu(null);
-        setPendingConnectionFrom((prev) => (prev === blockId ? null : blockId));
-    };
+            setConnectionMenu(null);
+            setPendingConnectionFrom((prev) =>
+                prev?.blockId === blockId &&
+                (prev.fromPortName ?? "") === (fromPortName ?? "")
+                    ? null
+                    : {
+                          blockId,
+                          ...(fromPortName ? { fromPortName } : {}),
+                      },
+            );
+        },
+        [],
+    );
 
-    const handleCompleteConnection = (blockId: string) => {
-        if (!pendingConnectionFrom) {
-            return;
-        }
+    const handleCompleteConnection = useCallback(
+        (blockId: string, toPortName?: string) => {
+            const pendingConnection = pendingConnectionFromRef.current;
 
-        completeConnection(pendingConnectionFrom, blockId);
-        setPendingConnectionFrom(null);
-    };
+            if (!pendingConnection) {
+                return;
+            }
+
+            const connected = completeConnection(
+                pendingConnection.blockId,
+                blockId,
+                pendingConnection.fromPortName,
+                toPortName,
+            );
+
+            if (!connected) {
+                toasts.warning({
+                    title: "Соединение отклонено",
+                    description:
+                        "Проверьте направление связи и совместимость типов входа/выхода.",
+                });
+                return;
+            }
+
+            setPendingConnectionFrom(null);
+        },
+        [completeConnection, toasts],
+    );
 
     const handleConnectionClick = (
         event: React.MouseEvent<SVGPathElement>,
@@ -509,8 +771,8 @@ export function ScenarioCanvas({
         });
     };
 
-    const requestDeleteBlock = (blockId: string) => {
-        const block = blocksById.get(blockId);
+    const requestDeleteBlock = useCallback((blockId: string) => {
+        const block = blocksByIdRef.current.get(blockId);
 
         if (!block || block.kind === "start" || block.kind === "end") {
             return;
@@ -518,7 +780,7 @@ export function ScenarioCanvas({
 
         setBlockMenu(null);
         setDeleteBlockId(blockId);
-    };
+    }, []);
 
     const confirmDeleteBlock = () => {
         if (!deleteBlockId) {
@@ -531,7 +793,7 @@ export function ScenarioCanvas({
             setSettingsBlockId(null);
         }
 
-        if (pendingConnectionFrom === deleteBlockId) {
+        if (pendingConnectionFrom?.blockId === deleteBlockId) {
             setPendingConnectionFrom(null);
         }
 
@@ -643,99 +905,61 @@ export function ScenarioCanvas({
             return null;
         }
 
-        const sourceBlock = blocksById.get(pendingConnectionFrom);
+        const sourceBlock = blocksById.get(pendingConnectionFrom.blockId);
 
         if (!sourceBlock) {
             return null;
         }
 
-        return buildConnectionPath(getOutPoint(sourceBlock), pointerScenePoint);
+        return buildConnectionPath(
+            getOutPoint(sourceBlock, pendingConnectionFrom.fromPortName),
+            pointerScenePoint,
+        );
     }, [blocksById, pendingConnectionFrom, pointerScenePoint]);
 
-    const saveHttpSettings = () => {
-        if (
-            !activeSettingsBlock ||
-            activeSettingsBlock.kind !== "manual-http"
-        ) {
+    const connectedInputNamesByBlock = useMemo(() => {
+        const map = new Map<string, Set<string>>();
+
+        connections.forEach((connection) => {
+            if (!connection.toPortName) {
+                return;
+            }
+
+            const bucket = map.get(connection.toBlockId) ?? new Set<string>();
+            bucket.add(connection.toPortName);
+            map.set(connection.toBlockId, bucket);
+        });
+
+        return map;
+    }, [connections]);
+
+    const savePromptSettings = () => {
+        if (!activeSettingsBlock || activeSettingsBlock.kind !== "prompt") {
             return;
         }
 
-        updateManualHttpMeta(activeSettingsBlock.id, {
-            url: httpUrl,
-            method: httpMethod,
-            formatter: httpFormatter,
-            lastResponseText: httpResponse,
+        updatePromptMeta(activeSettingsBlock.id, {
+            instruction: promptInstruction,
         });
         setSettingsBlockId(null);
     };
 
-    const saveDatetimeSettings = () => {
-        if (
-            !activeSettingsBlock ||
-            activeSettingsBlock.kind !== "manual-datetime"
-        ) {
+    const saveConditionSettings = () => {
+        if (!activeSettingsBlock || activeSettingsBlock.kind !== "condition") {
             return;
         }
 
-        updateManualDatetimeMeta(activeSettingsBlock.id, {
-            mode: datetimeMode as "date" | "time" | "datetime",
-            timezoneMode: datetimeTimezoneMode as "current" | "manual",
-            timezone: datetimeTimezone,
-        });
+        updateConditionMeta(activeSettingsBlock.id, conditionMeta);
         setSettingsBlockId(null);
     };
 
-    const checkHttpRequest = async () => {
-        const url = httpUrl.trim();
-
-        if (!url) {
-            toasts.warning({
-                title: "Укажите URL",
-                description: "Поле URL не может быть пустым.",
-            });
+    const saveVariableSettings = () => {
+        if (!activeSettingsBlock || activeSettingsBlock.kind !== "variable") {
             return;
         }
 
-        const api = window.appApi;
-
-        if (!api?.network?.proxyHttpRequest) {
-            toasts.danger({
-                title: "Прокси недоступен",
-                description: "Не найден backend-обработчик HTTP прокси.",
-            });
-            return;
-        }
-
-        setIsHttpChecking(true);
-
-        try {
-            const result = await api.network.proxyHttpRequest({
-                url,
-                method: httpMethod,
-                formatter: httpFormatter,
-            });
-
-            const text = result.bodyText || result.statusText;
-            const formatted = prettyResponse(text);
-
-            setHttpResponse(formatted);
-            toasts.info({
-                title: `HTTP ${result.status}`,
-                description: result.ok
-                    ? "Запрос выполнен успешно."
-                    : "Запрос завершился с ошибкой.",
-            });
-        } catch (error) {
-            toasts.danger({
-                title: "Ошибка запроса",
-                description:
-                    error instanceof Error
-                        ? error.message
-                        : "Не удалось выполнить запрос.",
-            });
-        } finally {
-            setIsHttpChecking(false);
-        }
+        updateVariableMeta(activeSettingsBlock.id, variableMeta);
+        setSettingsBlockId(null);
     };
 
     return (
@@ -785,6 +1009,7 @@ export function ScenarioCanvas({
                             buildConnectionPath={buildConnectionPath}
                             getOutPoint={getOutPoint}
                             getInPoint={getInPoint}
+                            getInputPoint={getInputPoint}
                             onConnectionMouseDown={handleConnectionClick}
                         />
 
@@ -795,7 +1020,13 @@ export function ScenarioCanvas({
                                         key={block.id}
                                         block={block}
                                         isConnectSource={
-                                            pendingConnectionFrom === block.id
+                                            pendingConnectionFrom?.blockId ===
+                                            block.id
+                                        }
+                                        connectedInputNames={
+                                            connectedInputNamesByBlock.get(
+                                                block.id,
+                                            ) ?? EMPTY_CONNECTED_INPUTS
                                         }
                                         onPointerDown={beginDragBlock}
                                         onStartConnection={
@@ -811,12 +1042,87 @@ export function ScenarioCanvas({
                                 );
                             }
 
+                            if (block.kind === "prompt") {
+                                return (
+                                    <ScenarioPromptBlock
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom?.blockId ===
+                                            block.id
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onContextMenu={openBlockContextMenu}
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                    />
+                                );
+                            }
+
+                            if (block.kind === "condition") {
+                                return (
+                                    <ScenarioConditionBlock
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom?.blockId ===
+                                            block.id
+                                        }
+                                        connectedInputNames={
+                                            connectedInputNamesByBlock.get(
+                                                block.id,
+                                            ) ?? EMPTY_CONNECTED_INPUTS
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onContextMenu={openBlockContextMenu}
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                    />
+                                );
+                            }
+
+                            if (block.kind === "variable") {
+                                return (
+                                    <ScenarioVariableBlock
+                                        key={block.id}
+                                        block={block}
+                                        isConnectSource={
+                                            pendingConnectionFrom?.blockId ===
+                                            block.id
+                                        }
+                                        onPointerDown={beginDragBlock}
+                                        onStartConnection={
+                                            handleStartConnection
+                                        }
+                                        onCompleteConnection={
+                                            handleCompleteConnection
+                                        }
+                                        onContextMenu={openBlockContextMenu}
+                                        onOpenSettings={setSettingsBlockId}
+                                        onRequestDelete={requestDeleteBlock}
+                                    />
+                                );
+                            }
+
                             return (
                                 <ScenarioSimpleBlock
                                     key={block.id}
                                     block={block}
                                     isConnectSource={
-                                        pendingConnectionFrom === block.id
+                                        pendingConnectionFrom?.blockId ===
+                                        block.id
                                     }
                                     onPointerDown={beginDragBlock}
                                     onStartConnection={handleStartConnection}
@@ -1029,157 +1335,19 @@ export function ScenarioCanvas({
             </Modal>
 
             <Modal
-                open={Boolean(isHttpModalOpen && activeSettingsBlock)}
-                onClose={() => setSettingsBlockId(null)}
-                title="ScenarioManualHttpRequest"
-                className="max-w-2xl"
-                footer={
-                    <Button
-                        variant="primary"
-                        shape="rounded-lg"
-                        className="h-9 px-4"
-                        onClick={saveHttpSettings}
-                    >
-                        Сохранить
-                    </Button>
-                }
-            >
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">URL</p>
-                        <InputSmall
-                            value={httpUrl}
-                            onChange={(event) => setHttpUrl(event.target.value)}
-                            placeholder="https://example.com/api"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">Метод</p>
-                        <Select
-                            value={httpMethod}
-                            onChange={setHttpMethod}
-                            options={[
-                                { value: "GET", label: "GET" },
-                                { value: "POST", label: "POST" },
-                                { value: "PUT", label: "PUT" },
-                                { value: "DELETE", label: "DELETE" },
-                                { value: "PATCH", label: "PATCH" },
-                            ]}
-                            className="h-9 border border-main-700/70 bg-main-800"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">Форматтер (JS)</p>
-                        <InputSmall
-                            value={httpFormatter}
-                            onChange={(event) =>
-                                setHttpFormatter(event.target.value)
-                            }
-                            placeholder="response.items?.[0]?.title"
-                        />
-                    </div>
-
-                    <div>
-                        <Button
-                            variant="secondary"
-                            shape="rounded-lg"
-                            className="h-9 px-4"
-                            onClick={() => {
-                                void checkHttpRequest();
-                            }}
-                            disabled={isHttpChecking}
-                        >
-                            {isHttpChecking ? "Проверка..." : "Проверить"}
-                        </Button>
-                    </div>
-
-                    {httpResponse ? (
-                        <div className="space-y-1">
-                            <p className="text-sm text-main-300">Ответ</p>
-                            <ShikiCodeBlock
-                                code={httpResponse}
-                                language="json"
-                            />
-                        </div>
-                    ) : null}
-                </div>
-            </Modal>
-
-            <Modal
-                open={Boolean(isDatetimeModalOpen && activeSettingsBlock)}
-                onClose={() => setSettingsBlockId(null)}
-                title="ScenarioManualDatetimeGet"
-                className="max-w-xl"
-                footer={
-                    <Button
-                        variant="primary"
-                        shape="rounded-lg"
-                        className="h-9 px-4"
-                        onClick={saveDatetimeSettings}
-                    >
-                        Сохранить
-                    </Button>
-                }
-            >
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">Тип получения</p>
-                        <Select
-                            value={datetimeMode}
-                            onChange={setDatetimeMode}
-                            options={[
-                                { value: "date", label: "Дата" },
-                                { value: "time", label: "Время" },
-                                { value: "datetime", label: "Дата и время" },
-                            ]}
-                            className="h-9 border border-main-700/70 bg-main-800"
-                        />
-                    </div>
-
-                    <div className="space-y-1">
-                        <p className="text-sm text-main-300">Часовой пояс</p>
-                        <Select
-                            value={datetimeTimezoneMode}
-                            onChange={setDatetimeTimezoneMode}
-                            options={[
-                                { value: "current", label: "Текущий" },
-                                {
-                                    value: "manual",
-                                    label: "Ручная установка",
-                                },
-                            ]}
-                            className="h-9 border border-main-700/70 bg-main-800"
-                        />
-                    </div>
-
-                    {datetimeTimezoneMode === "manual" ? (
-                        <div className="space-y-1">
-                            <p className="text-sm text-main-300">
-                                Пояс (UTC+N / UTC-N)
-                            </p>
-                            <InputSmall
-                                value={datetimeTimezone}
-                                onChange={(event) =>
-                                    setDatetimeTimezone(event.target.value)
-                                }
-                                placeholder="UTC+3"
-                            />
-                        </div>
-                    ) : null}
-                </div>
-            </Modal>
-
-            <Modal
                 open={Boolean(isToolModalOpen && activeSettingsBlock)}
                 onClose={() => setSettingsBlockId(null)}
                 title="Настройка блока"
                 className="max-w-3xl"
             >
                 {activeSettingsBlock && isToolModalOpen ? (
-                    <ScenarioBlockSettingForm
+                    <ScenarioBlockSettingsForm
                         block={activeSettingsBlock}
+                        connectedInputNames={
+                            connectedInputNamesByBlock.get(
+                                activeSettingsBlock.id,
+                            ) ?? EMPTY_CONNECTED_INPUTS
+                        }
                         onSave={(blockId, input) => {
                             updateToolMeta(blockId, {
                                 toolName:
@@ -1189,11 +1357,94 @@ export function ScenarioCanvas({
                                     activeSettingsBlock.meta?.tool
                                         ?.toolSchema || "{}",
                                 input,
+                                ...(activeSettingsBlock.meta?.tool?.outputScheme
+                                    ? {
+                                          outputScheme:
+                                              activeSettingsBlock.meta?.tool
+                                                  ?.outputScheme,
+                                      }
+                                    : {}),
                             });
                         }}
                         onClose={() => setSettingsBlockId(null)}
                     />
                 ) : null}
+            </Modal>
+
+            <Modal
+                open={Boolean(isPromptModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="Инструкция"
+                className="max-w-2xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={savePromptSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <div className="space-y-2">
+                    <p className="text-sm text-main-300">
+                        Инструкция для модели
+                    </p>
+                    <InputBig
+                        value={promptInstruction}
+                        onChange={setPromptInstruction}
+                        placeholder="Опишите, что должна сделать модель на этом шаге"
+                        className="h-28 rounded-lg border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
+                    />
+                </div>
+            </Modal>
+
+            <Modal
+                closeOnOverlayClick={false}
+                open={Boolean(isConditionModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="Условие"
+                className="max-w-6xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={saveConditionSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <div className="max-h-[68vh] overflow-y-auto pr-1">
+                    <ScenarioConditionSettingsForm
+                        value={conditionMeta}
+                        onChange={setConditionMeta}
+                    />
+                </div>
+            </Modal>
+
+            <Modal
+                open={Boolean(isVariableModalOpen && activeSettingsBlock)}
+                onClose={() => setSettingsBlockId(null)}
+                title="Переменные"
+                className="max-w-2xl"
+                footer={
+                    <Button
+                        variant="primary"
+                        shape="rounded-lg"
+                        className="h-9 px-4"
+                        onClick={saveVariableSettings}
+                    >
+                        Сохранить
+                    </Button>
+                }
+            >
+                <ScenarioVariableSettingsForm
+                    value={variableMeta}
+                    onChange={setVariableMeta}
+                />
             </Modal>
         </>
     );

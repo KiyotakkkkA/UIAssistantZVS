@@ -1,16 +1,30 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScenario } from "./useScenario";
 import type {
     ScenarioBlockKind,
+    ScenarioBlockPortAnchors,
     ScenarioBlockExecutionType,
+    ScenarioBlockToolsParamsUsage,
+    ScenarioConditionField,
+    ScenarioConditionMeta,
+    ScenarioConditionOperand,
+    ScenarioConditionOperator,
+    ScenarioConditionRule,
     ScenarioConnection,
-    ScenarioManualDatetimeGetMeta,
-    ScenarioManualHttpRequestMeta,
+    ScenarioPromptMeta,
     ScenarioScene,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
     ScenarioToolMeta,
+    ScenarioPortPoint,
+    ScenarioVariableKey,
+    ScenarioVariableMeta,
 } from "../../types/Scenario";
+import {
+    START_BLOCK_INPUT_PORT,
+    VARIABLE_CONTINUE_OUTPUT_PORT,
+} from "../../utils/scenarioVariables";
+import { getConnectionSemantic } from "../../utils/scenarioPorts";
 
 type Point = {
     x: number;
@@ -18,9 +32,10 @@ type Point = {
 };
 
 export type ScenarioCanvasInsertPayload = {
-    kind: "manual-http" | "manual-datetime" | "tool";
+    kind: "tool" | "prompt" | "condition" | "variable";
     toolName?: string;
     toolSchema?: string;
+    outputScheme?: string | Record<string, unknown>;
 };
 
 const DEFAULT_VIEWPORT: ScenarioSceneViewport = {
@@ -32,77 +47,678 @@ const DEFAULT_VIEWPORT: ScenarioSceneViewport = {
     canvasHeight: 2000,
 };
 
+const DEFAULT_PORT_KEY = "__default__";
+
 const hasInputPort = (kind: ScenarioBlockKind) => kind !== "start";
 const hasOutputPort = (kind: ScenarioBlockKind) => kind !== "end";
 
+const VARIABLE_KEYS: ScenarioVariableKey[] = [
+    "project_directory",
+    "current_date",
+];
+
+const createDefaultVariableMeta = (): ScenarioVariableMeta => ({
+    selectedVariables: ["current_date"],
+});
+
+const calcBlockHeight = (
+    inputPortsCount: number,
+    outputPortsCount: number,
+    minHeight = 96,
+) => {
+    const rows = Math.max(inputPortsCount, outputPortsCount, 1);
+    return Math.max(minHeight, 56 + rows * 26);
+};
+
+const toPortKey = (portName?: string) =>
+    portName && portName.trim().length > 0 ? portName : DEFAULT_PORT_KEY;
+
+const buildEvenlyDistributedAnchors = (
+    portNames: string[],
+    x: number,
+    height: number,
+): Record<string, ScenarioPortPoint> => {
+    const count = Math.max(portNames.length, 1);
+
+    return portNames.reduce<Record<string, ScenarioPortPoint>>(
+        (acc, portName, index) => {
+            acc[toPortKey(portName)] = {
+                x,
+                y: ((index + 1) * height) / (count + 1),
+            };
+            return acc;
+        },
+        {},
+    );
+};
+
+const normalizeOutputSchemeString = (raw: unknown): string | undefined => {
+    if (typeof raw === "string" && raw.trim().length > 0) {
+        return raw;
+    }
+
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        try {
+            return JSON.stringify(raw, null, 2);
+        } catch {
+            return undefined;
+        }
+    }
+
+    return undefined;
+};
+
+const parseToolInputFromSchema = (
+    toolSchema: string,
+): ScenarioBlockToolsParamsUsage[] => {
+    try {
+        const parsed = JSON.parse(toolSchema) as {
+            properties?: Record<
+                string,
+                {
+                    description?: unknown;
+                    default?: unknown;
+                }
+            >;
+            required?: unknown;
+        };
+
+        const required = Array.isArray(parsed.required)
+            ? new Set(
+                  parsed.required.filter(
+                      (item): item is string => typeof item === "string",
+                  ),
+              )
+            : null;
+
+        if (!parsed.properties || typeof parsed.properties !== "object") {
+            return [];
+        }
+
+        return Object.entries(parsed.properties)
+            .filter(([param]) => !required || required.has(param))
+            .map(([param, property]) => {
+                const hasDefault =
+                    property &&
+                    typeof property === "object" &&
+                    "default" in property;
+
+                return {
+                    param,
+                    description:
+                        typeof property?.description === "string"
+                            ? property.description
+                            : "",
+                    comment: "",
+                    ...(hasDefault
+                        ? {
+                              defaultValue:
+                                  typeof property.default === "string"
+                                      ? property.default
+                                      : JSON.stringify(property.default),
+                          }
+                        : {}),
+                };
+            });
+    } catch {
+        return [];
+    }
+};
+
+const parseToolOutputNamesFromSchema = (rawSchema?: unknown): string[] => {
+    const normalizedRawSchema = normalizeOutputSchemeString(rawSchema);
+
+    if (!normalizedRawSchema) {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(normalizedRawSchema) as {
+            properties?: Record<string, unknown>;
+        };
+
+        return Object.keys(parsed.properties ?? {});
+    } catch {
+        return [];
+    }
+};
+
+const getBlockInputPortNames = (block: ScenarioSimpleBlockNode): string[] => {
+    if (block.kind === "end") {
+        return [DEFAULT_PORT_KEY];
+    }
+
+    if (block.kind === "start") {
+        return [];
+    }
+
+    if (block.kind === "prompt" || block.kind === "variable") {
+        return [START_BLOCK_INPUT_PORT];
+    }
+
+    if (block.kind === "condition") {
+        const fields = block.meta?.condition?.fields ?? [];
+        return [
+            START_BLOCK_INPUT_PORT,
+            ...fields
+                .map((field) => field.name)
+                .filter((name) => Boolean(name)),
+        ];
+    }
+
+    const toolInputs = (block.meta?.tool?.input ?? [])
+        .map((item) => item.param)
+        .filter((name) => Boolean(name));
+
+    return [START_BLOCK_INPUT_PORT, ...toolInputs];
+};
+
+const getBlockOutputPortNames = (block: ScenarioSimpleBlockNode): string[] => {
+    if (block.kind === "end") {
+        return [];
+    }
+
+    if (block.kind === "condition") {
+        return ["yes", "no", "always"];
+    }
+
+    if (block.kind === "tool") {
+        return [
+            ...parseToolOutputNamesFromSchema(block.meta?.tool?.outputScheme),
+            VARIABLE_CONTINUE_OUTPUT_PORT,
+        ];
+    }
+
+    if (block.kind === "variable") {
+        return [
+            ...(block.meta?.variable?.selectedVariables ?? []),
+            VARIABLE_CONTINUE_OUTPUT_PORT,
+        ];
+    }
+
+    if (block.kind === "start" || block.kind === "prompt") {
+        return [VARIABLE_CONTINUE_OUTPUT_PORT];
+    }
+
+    return [];
+};
+
+const buildBlockPortAnchors = (
+    block: Pick<ScenarioSimpleBlockNode, "kind" | "width" | "height" | "meta">,
+): ScenarioBlockPortAnchors => {
+    const inputAnchors: Record<string, ScenarioPortPoint> = {};
+    const outputAnchors: Record<string, ScenarioPortPoint> = {};
+
+    if (block.kind === "start") {
+        outputAnchors[VARIABLE_CONTINUE_OUTPUT_PORT] = {
+            x: block.width + 10,
+            y: block.height / 2,
+        };
+
+        return {
+            inputs: inputAnchors,
+            outputs: outputAnchors,
+        };
+    }
+
+    if (block.kind === "end") {
+        inputAnchors[DEFAULT_PORT_KEY] = {
+            x: -10,
+            y: block.height / 2,
+        };
+
+        return {
+            inputs: inputAnchors,
+            outputs: outputAnchors,
+        };
+    }
+
+    if (block.kind === "prompt" || block.kind === "variable") {
+        inputAnchors[START_BLOCK_INPUT_PORT] = {
+            x: -10,
+            y: block.height / 2,
+        };
+    } else if (block.kind === "condition") {
+        inputAnchors[START_BLOCK_INPUT_PORT] = {
+            x: -10,
+            y: block.height * 0.14,
+        };
+
+        const fields = block.meta?.condition?.fields ?? [];
+        fields.forEach((field, index) => {
+            inputAnchors[toPortKey(field.name)] = {
+                x: -10,
+                y:
+                    block.height *
+                    (0.24 + ((index + 1) / (fields.length + 1)) * 0.68),
+            };
+        });
+    } else {
+        const inputPorts = getBlockInputPortNames(
+            block as ScenarioSimpleBlockNode,
+        );
+        Object.assign(
+            inputAnchors,
+            buildEvenlyDistributedAnchors(inputPorts, -10, block.height),
+        );
+    }
+
+    if (block.kind === "condition") {
+        outputAnchors.yes = { x: block.width + 10, y: block.height * 0.28 };
+        outputAnchors.no = { x: block.width + 10, y: block.height * 0.5 };
+        outputAnchors.always = { x: block.width + 10, y: block.height * 0.72 };
+    } else {
+        const outputPorts = getBlockOutputPortNames(
+            block as ScenarioSimpleBlockNode,
+        );
+        Object.assign(
+            outputAnchors,
+            buildEvenlyDistributedAnchors(
+                outputPorts,
+                block.width + 10,
+                block.height,
+            ),
+        );
+    }
+
+    return {
+        inputs: inputAnchors,
+        outputs: outputAnchors,
+    };
+};
+
+const resolveNormalizedPortAnchors = (
+    raw: unknown,
+    fallback: ScenarioBlockPortAnchors,
+): ScenarioBlockPortAnchors => {
+    if (!raw || typeof raw !== "object") {
+        return fallback;
+    }
+
+    const source = raw as {
+        inputs?: Record<string, { x?: unknown; y?: unknown }>;
+        outputs?: Record<string, { x?: unknown; y?: unknown }>;
+    };
+
+    const normalizeMap = (
+        record: Record<string, { x?: unknown; y?: unknown }> | undefined,
+    ) => {
+        if (!record || typeof record !== "object") {
+            return {} as Record<string, ScenarioPortPoint>;
+        }
+
+        return Object.entries(record).reduce<Record<string, ScenarioPortPoint>>(
+            (acc, [key, value]) => {
+                if (!key) {
+                    return acc;
+                }
+
+                if (!Number.isFinite(value?.x) || !Number.isFinite(value?.y)) {
+                    return acc;
+                }
+
+                acc[toPortKey(key)] = {
+                    x: Number(value.x),
+                    y: Number(value.y),
+                };
+                return acc;
+            },
+            {},
+        );
+    };
+
+    const inputs = normalizeMap(source.inputs);
+    const outputs = normalizeMap(source.outputs);
+
+    return {
+        inputs: Object.keys(inputs).length > 0 ? inputs : fallback.inputs,
+        outputs: Object.keys(outputs).length > 0 ? outputs : fallback.outputs,
+    };
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const readSchemaPropertyType = (
+    rawSchema: string | undefined,
+    propertyName: string,
+): string | undefined => {
+    if (!rawSchema || !propertyName) {
+        return undefined;
+    }
+
+    try {
+        const parsed = JSON.parse(rawSchema) as {
+            properties?: Record<string, { type?: unknown }>;
+        };
+
+        const prop = parsed.properties?.[propertyName];
+        return typeof prop?.type === "string" ? prop.type : undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+const createDefaultConditionFields = (): ScenarioConditionField[] => [
+    {
+        id: crypto.randomUUID(),
+        name: "value",
+    },
+];
+
+const CONDITION_OPERATORS: ScenarioConditionOperator[] = [
+    "=",
+    "!=",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "contains",
+    "not_contains",
+];
+
+const createDefaultConditionOperand = (): ScenarioConditionOperand => ({
+    id: crypto.randomUUID(),
+    leftSource: "field",
+    leftValue: "value",
+    operator: "=",
+    rightSource: "value",
+    rightValue: "",
+});
+
+const createDefaultConditionRules = (): ScenarioConditionRule[] => [
+    {
+        id: crypto.randomUUID(),
+        title: "Условие 1",
+        operands: [createDefaultConditionOperand()],
+    },
+];
+
+const normalizeConditionFields = (raw: unknown): ScenarioConditionField[] => {
+    if (!Array.isArray(raw)) {
+        return createDefaultConditionFields();
+    }
+
+    const fields = raw
+        .filter(
+            (item): item is Record<string, unknown> =>
+                Boolean(item) && typeof item === "object",
+        )
+        .map((item) => {
+            const name = typeof item.name === "string" ? item.name.trim() : "";
+
+            return {
+                id:
+                    typeof item.id === "string" && item.id.trim().length > 0
+                        ? item.id
+                        : crypto.randomUUID(),
+                name: name || "value",
+            };
+        });
+
+    return fields.length > 0 ? fields : createDefaultConditionFields();
+};
+
+const normalizeConditionOperandSource = (value: unknown): "field" | "value" =>
+    value === "field" || value === "value" ? value : "value";
+
+const normalizeConditionOperator = (
+    value: unknown,
+): ScenarioConditionOperator => {
+    if (
+        typeof value === "string" &&
+        CONDITION_OPERATORS.includes(value as ScenarioConditionOperator)
+    ) {
+        return value as ScenarioConditionOperator;
+    }
+
+    return "=";
+};
+
+const normalizeConditionOperands = (
+    raw: unknown,
+    fields: ScenarioConditionField[],
+): ScenarioConditionOperand[] => {
+    if (!Array.isArray(raw)) {
+        return [
+            {
+                ...createDefaultConditionOperand(),
+                leftValue: fields[0]?.name || "value",
+            },
+        ];
+    }
+
+    const allowedFieldNames = new Set(fields.map((field) => field.name));
+
+    const operands = raw
+        .filter(
+            (item): item is Record<string, unknown> =>
+                Boolean(item) && typeof item === "object",
+        )
+        .map((item) => {
+            const leftSource = normalizeConditionOperandSource(item.leftSource);
+            const rightSource = normalizeConditionOperandSource(
+                item.rightSource,
+            );
+            const leftRaw =
+                typeof item.leftValue === "string" ? item.leftValue.trim() : "";
+            const rightRaw =
+                typeof item.rightValue === "string"
+                    ? item.rightValue.trim()
+                    : "";
+
+            const firstFieldName = fields[0]?.name || "value";
+            const leftValue =
+                leftSource === "field"
+                    ? allowedFieldNames.has(leftRaw)
+                        ? leftRaw
+                        : firstFieldName
+                    : leftRaw;
+            const rightValue =
+                rightSource === "field"
+                    ? allowedFieldNames.has(rightRaw)
+                        ? rightRaw
+                        : firstFieldName
+                    : rightRaw;
+
+            return {
+                id:
+                    typeof item.id === "string" && item.id.trim().length > 0
+                        ? item.id
+                        : crypto.randomUUID(),
+                leftSource,
+                leftValue,
+                operator: normalizeConditionOperator(item.operator),
+                rightSource,
+                rightValue,
+            };
+        });
+
+    if (operands.length > 0) {
+        return operands;
+    }
+
+    return [
+        {
+            ...createDefaultConditionOperand(),
+            leftValue: fields[0]?.name || "value",
+        },
+    ];
+};
+
+const normalizeConditionRules = (
+    raw: unknown,
+    fields: ScenarioConditionField[],
+): ScenarioConditionRule[] => {
+    if (!Array.isArray(raw)) {
+        return [
+            {
+                ...createDefaultConditionRules()[0],
+                operands: normalizeConditionOperands(undefined, fields),
+            },
+        ];
+    }
+
+    const rules = raw
+        .filter(
+            (item): item is Record<string, unknown> =>
+                Boolean(item) && typeof item === "object",
+        )
+        .map((item, index) => {
+            const title =
+                typeof item.title === "string" && item.title.trim().length > 0
+                    ? item.title.trim()
+                    : `Условие ${index + 1}`;
+
+            return {
+                id:
+                    typeof item.id === "string" && item.id.trim().length > 0
+                        ? item.id
+                        : crypto.randomUUID(),
+                title,
+                operands: normalizeConditionOperands(item.operands, fields),
+            };
+        });
+
+    if (rules.length > 0) {
+        return rules;
+    }
+
+    return [
+        {
+            ...createDefaultConditionRules()[0],
+            operands: normalizeConditionOperands(undefined, fields),
+        },
+    ];
+};
+
 const createStartEndBlocks = (): ScenarioSimpleBlockNode[] => [
-    {
-        id: crypto.randomUUID(),
-        kind: "start",
-        executionType: "system",
-        title: "Стартовый",
-        x: 420,
-        y: 220,
-        width: 240,
-        height: 96,
-    },
-    {
-        id: crypto.randomUUID(),
-        kind: "end",
-        executionType: "system",
-        title: "Конечный",
-        x: 900,
-        y: 220,
-        width: 240,
-        height: 96,
-    },
+    (() => {
+        const block: ScenarioSimpleBlockNode = {
+            id: crypto.randomUUID(),
+            kind: "start",
+            executionType: "system",
+            title: "Стартовый",
+            x: 420,
+            y: 220,
+            width: 240,
+            height: 96,
+        };
+
+        return {
+            ...block,
+            portAnchors: buildBlockPortAnchors(block),
+        };
+    })(),
+    (() => {
+        const block: ScenarioSimpleBlockNode = {
+            id: crypto.randomUUID(),
+            kind: "end",
+            executionType: "system",
+            title: "Конечный",
+            x: 900,
+            y: 220,
+            width: 240,
+            height: 96,
+        };
+
+        return {
+            ...block,
+            portAnchors: buildBlockPortAnchors(block),
+        };
+    })(),
 ];
 
 const createInsertedBlock = (
     payload: ScenarioCanvasInsertPayload,
     center: Point,
 ): ScenarioSimpleBlockNode => {
-    if (payload.kind === "manual-http") {
-        return {
+    if (payload.kind === "prompt") {
+        const inputPorts = 1;
+        const outputPorts = 1;
+
+        const block: ScenarioSimpleBlockNode = {
             id: crypto.randomUUID(),
-            kind: "manual-http",
+            kind: "prompt",
             executionType: "manual",
-            title: "HTTP запрос",
+            title: "Инструкция",
             x: center.x,
             y: center.y,
-            width: 280,
-            height: 96,
+            width: 320,
+            height: calcBlockHeight(inputPorts, outputPorts, 96),
             meta: {
-                manualHttp: {
-                    url: "",
-                    method: "GET",
-                    formatter: "",
+                prompt: {
+                    instruction: "",
                 },
             },
         };
-    }
 
-    if (payload.kind === "manual-datetime") {
         return {
-            id: crypto.randomUUID(),
-            kind: "manual-datetime",
-            executionType: "manual",
-            title: "Дата и время",
-            x: center.x,
-            y: center.y,
-            width: 280,
-            height: 96,
-            meta: {
-                manualDatetime: {
-                    mode: "datetime",
-                    timezoneMode: "current",
-                    timezone: "UTC+0",
-                },
-            },
+            ...block,
+            portAnchors: buildBlockPortAnchors(block),
         };
     }
 
-    return {
+    if (payload.kind === "condition") {
+        const defaultFields = createDefaultConditionFields();
+        const inputPorts = defaultFields.length + 1;
+        const outputPorts = 3;
+
+        const block: ScenarioSimpleBlockNode = {
+            id: crypto.randomUUID(),
+            kind: "condition",
+            executionType: "manual",
+            title: "Условие",
+            x: center.x,
+            y: center.y,
+            width: 320,
+            height: calcBlockHeight(inputPorts, outputPorts, 120),
+            meta: {
+                condition: {
+                    fields: defaultFields,
+                    rules: createDefaultConditionRules(),
+                },
+            },
+        };
+
+        return {
+            ...block,
+            portAnchors: buildBlockPortAnchors(block),
+        };
+    }
+
+    if (payload.kind === "variable") {
+        const defaultMeta = createDefaultVariableMeta();
+        const inputPorts = 1;
+        const outputPorts = defaultMeta.selectedVariables.length + 1;
+
+        const block: ScenarioSimpleBlockNode = {
+            id: crypto.randomUUID(),
+            kind: "variable",
+            executionType: "manual",
+            title: "Переменная",
+            x: center.x,
+            y: center.y,
+            width: 320,
+            height: calcBlockHeight(inputPorts, outputPorts, 96),
+            meta: {
+                variable: defaultMeta,
+            },
+        };
+
+        return {
+            ...block,
+            portAnchors: buildBlockPortAnchors(block),
+        };
+    }
+
+    const parsedInputs = parseToolInputFromSchema(payload.toolSchema || "{}");
+    const parsedOutputs = parseToolOutputNamesFromSchema(payload.outputScheme);
+    const normalizedOutputScheme = normalizeOutputSchemeString(
+        payload.outputScheme,
+    );
+    const inputPorts = parsedInputs.length + 1;
+    const outputPorts = parsedOutputs.length + 1;
+
+    const block: ScenarioSimpleBlockNode = {
         id: crypto.randomUUID(),
         kind: "tool",
         executionType: "tools",
@@ -110,14 +726,24 @@ const createInsertedBlock = (
         x: center.x,
         y: center.y,
         width: 300,
-        height: 96,
+        height: calcBlockHeight(inputPorts, outputPorts, 120),
         meta: {
             tool: {
                 toolName: payload.toolName || "tool",
                 toolSchema: payload.toolSchema || "{}",
-                input: [],
+                input: parsedInputs,
+                ...(normalizedOutputScheme
+                    ? {
+                          outputScheme: normalizedOutputScheme,
+                      }
+                    : {}),
             },
         },
+    };
+
+    return {
+        ...block,
+        portAnchors: buildBlockPortAnchors(block),
     };
 };
 
@@ -141,7 +767,7 @@ const normalizeExecutionType = (
         return rawExecutionType;
     }
 
-    if (kind === "manual-http" || kind === "manual-datetime") {
+    if (kind === "prompt" || kind === "condition" || kind === "variable") {
         return "manual";
     }
 
@@ -152,106 +778,166 @@ const normalizeExecutionType = (
     return "system";
 };
 
-const normalizeManualHttpMeta = (
+const normalizePromptMeta = (
     raw: Record<string, unknown>,
-): ScenarioManualHttpRequestMeta => ({
-    url: typeof raw.url === "string" ? raw.url : "",
-    method: typeof raw.method === "string" ? raw.method : "GET",
-    formatter: typeof raw.formatter === "string" ? raw.formatter : "",
-    ...(typeof raw.lastResponseCode === "number"
-        ? { lastResponseCode: raw.lastResponseCode }
-        : {}),
-    ...(typeof raw.lastResponseText === "string"
-        ? { lastResponseText: raw.lastResponseText }
-        : {}),
+): ScenarioPromptMeta => ({
+    instruction: typeof raw.instruction === "string" ? raw.instruction : "",
 });
 
-const normalizeManualDatetimeMeta = (
+const normalizeConditionMeta = (
     raw: Record<string, unknown>,
-): ScenarioManualDatetimeGetMeta => ({
-    mode:
-        raw.mode === "date" || raw.mode === "time" || raw.mode === "datetime"
-            ? raw.mode
-            : "datetime",
-    timezoneMode:
-        raw.timezoneMode === "manual" || raw.timezoneMode === "current"
-            ? raw.timezoneMode
-            : "current",
-    timezone:
-        typeof raw.timezone === "string" && raw.timezone.trim().length > 0
-            ? raw.timezone
-            : "UTC+0",
-});
+): ScenarioConditionMeta => {
+    const fields = normalizeConditionFields(raw.fields);
 
-const normalizeToolMeta = (raw: Record<string, unknown>): ScenarioToolMeta => ({
-    toolName: typeof raw.toolName === "string" ? raw.toolName : "tool",
-    toolSchema: typeof raw.toolSchema === "string" ? raw.toolSchema : "{}",
-    input: Array.isArray(raw.input) ? raw.input : [],
-});
+    return {
+        fields,
+        rules: normalizeConditionRules(raw.rules, fields),
+    };
+};
+
+const normalizeVariableMeta = (
+    raw: Record<string, unknown>,
+): ScenarioVariableMeta => {
+    const selectedVariables = Array.isArray(raw.selectedVariables)
+        ? raw.selectedVariables.filter(
+              (item): item is ScenarioVariableKey =>
+                  typeof item === "string" &&
+                  VARIABLE_KEYS.includes(item as ScenarioVariableKey),
+          )
+        : [];
+
+    return {
+        selectedVariables:
+            selectedVariables.length > 0
+                ? Array.from(new Set(selectedVariables))
+                : createDefaultVariableMeta().selectedVariables,
+    };
+};
+
+const normalizeToolMeta = (raw: Record<string, unknown>): ScenarioToolMeta => {
+    const toolSchema =
+        typeof raw.toolSchema === "string" ? raw.toolSchema : "{}";
+    const parsedFromSchema = parseToolInputFromSchema(toolSchema);
+    const parsedInput = Array.isArray(raw.input)
+        ? raw.input
+              .filter(
+                  (item): item is Record<string, unknown> =>
+                      Boolean(item) && typeof item === "object",
+              )
+              .map((item) => ({
+                  param: typeof item.param === "string" ? item.param : "",
+                  description:
+                      typeof item.description === "string"
+                          ? item.description
+                          : "",
+                  comment: typeof item.comment === "string" ? item.comment : "",
+                  ...(typeof item.defaultValue === "string"
+                      ? { defaultValue: item.defaultValue }
+                      : {}),
+              }))
+              .filter((item) => item.param.trim().length > 0)
+        : [];
+
+    const normalizedOutputScheme = normalizeOutputSchemeString(
+        raw.outputScheme,
+    );
+
+    return {
+        toolName: typeof raw.toolName === "string" ? raw.toolName : "tool",
+        toolSchema,
+        input: parsedInput.length > 0 ? parsedInput : parsedFromSchema,
+        ...(normalizedOutputScheme
+            ? { outputScheme: normalizedOutputScheme }
+            : {}),
+    };
+};
 
 const normalizeBlock = (
     raw: Partial<ScenarioSimpleBlockNode>,
-): ScenarioSimpleBlockNode => ({
-    id:
-        typeof raw.id === "string" && raw.id.trim().length > 0
-            ? raw.id
-            : crypto.randomUUID(),
-    kind:
+): ScenarioSimpleBlockNode => {
+    const kind =
         raw.kind === "end" ||
-        raw.kind === "manual-http" ||
-        raw.kind === "manual-datetime" ||
-        raw.kind === "tool"
+        raw.kind === "tool" ||
+        raw.kind === "prompt" ||
+        raw.kind === "condition" ||
+        raw.kind === "variable"
             ? raw.kind
-            : "start",
-    executionType: normalizeExecutionType(
-        raw.kind ?? "start",
-        raw.executionType,
-    ),
-    title:
-        typeof raw.title === "string" && raw.title.trim().length > 0
-            ? raw.title
-            : raw.kind === "end"
-              ? "Конечный"
-              : "Стартовый",
-    x: Number.isFinite(raw.x) ? Number(raw.x) : 0,
-    y: Number.isFinite(raw.y) ? Number(raw.y) : 0,
-    width: Number.isFinite(raw.width) ? Number(raw.width) : 240,
-    height: Number.isFinite(raw.height) ? Number(raw.height) : 96,
-    ...(raw.meta && typeof raw.meta === "object"
-        ? {
-              meta: {
-                  ...(toPlainObject(raw.meta).manualHttp &&
-                  typeof toPlainObject(raw.meta).manualHttp === "object"
-                      ? {
-                            manualHttp: normalizeManualHttpMeta(
-                                toPlainObject(
-                                    toPlainObject(raw.meta).manualHttp,
-                                ),
-                            ),
-                        }
-                      : {}),
-                  ...(toPlainObject(raw.meta).manualDatetime &&
-                  typeof toPlainObject(raw.meta).manualDatetime === "object"
-                      ? {
-                            manualDatetime: normalizeManualDatetimeMeta(
-                                toPlainObject(
-                                    toPlainObject(raw.meta).manualDatetime,
-                                ),
-                            ),
-                        }
-                      : {}),
-                  ...(toPlainObject(raw.meta).tool &&
-                  typeof toPlainObject(raw.meta).tool === "object"
-                      ? {
-                            tool: normalizeToolMeta(
-                                toPlainObject(toPlainObject(raw.meta).tool),
-                            ),
-                        }
-                      : {}),
-              },
-          }
-        : {}),
-});
+            : "start";
+
+    const rawMeta =
+        raw.meta && typeof raw.meta === "object" ? toPlainObject(raw.meta) : {};
+
+    rawMeta.manualDatetime && typeof rawMeta.manualDatetime === "object";
+    const hasTool = rawMeta.tool && typeof rawMeta.tool === "object";
+    const hasPrompt = rawMeta.prompt && typeof rawMeta.prompt === "object";
+    const hasCondition =
+        rawMeta.condition && typeof rawMeta.condition === "object";
+    const hasVariable =
+        rawMeta.variable && typeof rawMeta.variable === "object";
+
+    const normalizedMeta = {
+        ...(kind === "tool" || hasTool
+            ? {
+                  tool: normalizeToolMeta(
+                      hasTool ? toPlainObject(rawMeta.tool) : {},
+                  ),
+              }
+            : {}),
+        ...(kind === "prompt" || hasPrompt
+            ? {
+                  prompt: normalizePromptMeta(
+                      hasPrompt ? toPlainObject(rawMeta.prompt) : {},
+                  ),
+              }
+            : {}),
+        ...(kind === "condition" || hasCondition
+            ? {
+                  condition: normalizeConditionMeta(
+                      hasCondition ? toPlainObject(rawMeta.condition) : {},
+                  ),
+              }
+            : {}),
+        ...(kind === "variable" || hasVariable
+            ? {
+                  variable: normalizeVariableMeta(
+                      hasVariable ? toPlainObject(rawMeta.variable) : {},
+                  ),
+              }
+            : {}),
+    };
+
+    const normalizedBlock: ScenarioSimpleBlockNode = {
+        id:
+            typeof raw.id === "string" && raw.id.trim().length > 0
+                ? raw.id
+                : crypto.randomUUID(),
+        kind,
+        executionType: normalizeExecutionType(kind, raw.executionType),
+        title:
+            typeof raw.title === "string" && raw.title.trim().length > 0
+                ? raw.title
+                : kind === "end"
+                  ? "Конечный"
+                  : "Стартовый",
+        x: Number.isFinite(raw.x) ? Number(raw.x) : 0,
+        y: Number.isFinite(raw.y) ? Number(raw.y) : 0,
+        width: Number.isFinite(raw.width) ? Number(raw.width) : 240,
+        height: Number.isFinite(raw.height) ? Number(raw.height) : 96,
+        ...(Object.keys(normalizedMeta).length > 0
+            ? { meta: normalizedMeta }
+            : {}),
+    };
+
+    const fallbackAnchors = buildBlockPortAnchors(normalizedBlock);
+
+    return {
+        ...normalizedBlock,
+        portAnchors: resolveNormalizedPortAnchors(
+            raw.portAnchors,
+            fallbackAnchors,
+        ),
+    };
+};
 
 const normalizeConnection = (
     raw: Partial<ScenarioConnection>,
@@ -272,6 +958,13 @@ const normalizeConnection = (
                 : crypto.randomUUID(),
         fromBlockId: raw.fromBlockId,
         toBlockId: raw.toBlockId,
+        ...(typeof raw.fromPortName === "string" &&
+        raw.fromPortName.trim().length
+            ? { fromPortName: raw.fromPortName }
+            : {}),
+        ...(typeof raw.toPortName === "string" && raw.toPortName.trim().length
+            ? { toPortName: raw.toPortName }
+            : {}),
     };
 };
 
@@ -343,6 +1036,8 @@ export const useScenarioCanvas = () => {
         useState<ScenarioSceneViewport>(DEFAULT_VIEWPORT);
     const [isSaving, setIsSaving] = useState(false);
 
+    const blocksRef = useRef<ScenarioSimpleBlockNode[]>([]);
+
     const blocksById = useMemo(
         () => new Map(blocks.map((block) => [block.id, block])),
         [blocks],
@@ -363,8 +1058,17 @@ export const useScenarioCanvas = () => {
         setViewport(scene.viewport);
     }, [activeScenario?.content, activeScenario?.id]);
 
+    useEffect(() => {
+        blocksRef.current = blocks;
+    }, [blocks]);
+
     const createConnection = useCallback(
-        (fromBlockId: string, toBlockId: string) => {
+        (
+            fromBlockId: string,
+            toBlockId: string,
+            fromPortName?: string,
+            toPortName?: string,
+        ) => {
             if (!fromBlockId || !toBlockId || fromBlockId === toBlockId) {
                 return null;
             }
@@ -375,7 +1079,10 @@ export const useScenarioCanvas = () => {
                 const exists = prev.some(
                     (connection) =>
                         connection.fromBlockId === fromBlockId &&
-                        connection.toBlockId === toBlockId,
+                        connection.toBlockId === toBlockId &&
+                        (connection.fromPortName ?? "") ===
+                            (fromPortName ?? "") &&
+                        (connection.toPortName ?? "") === (toPortName ?? ""),
                 );
 
                 if (exists) {
@@ -386,6 +1093,8 @@ export const useScenarioCanvas = () => {
                     id: crypto.randomUUID(),
                     fromBlockId,
                     toBlockId,
+                    ...(fromPortName ? { fromPortName } : {}),
+                    ...(toPortName ? { toPortName } : {}),
                 };
 
                 return [...prev, created as ScenarioConnection];
@@ -397,13 +1106,22 @@ export const useScenarioCanvas = () => {
     );
 
     const completeConnection = useCallback(
-        (fromBlockId: string, toBlockId: string) => {
+        (
+            fromBlockId: string,
+            toBlockId: string,
+            fromPortName?: string,
+            toPortName?: string,
+        ) => {
             if (!fromBlockId || !toBlockId || fromBlockId === toBlockId) {
                 return false;
             }
 
-            const sourceBlock = blocksById.get(fromBlockId);
-            const targetBlock = blocksById.get(toBlockId);
+            const sourceBlock = blocksRef.current.find(
+                (block) => block.id === fromBlockId,
+            );
+            const targetBlock = blocksRef.current.find(
+                (block) => block.id === toBlockId,
+            );
 
             if (!sourceBlock || !targetBlock) {
                 return false;
@@ -416,10 +1134,35 @@ export const useScenarioCanvas = () => {
                 return false;
             }
 
-            createConnection(fromBlockId, toBlockId);
+            const semantic = getConnectionSemantic(sourceBlock, targetBlock, {
+                fromPortName,
+                toPortName,
+            });
+
+            if (semantic === "invalid") {
+                return false;
+            }
+
+            if (semantic === "data" && fromPortName && toPortName) {
+                /* Пока что WIP 
+                const sourceType = readSchemaPropertyType(
+                    sourceBlock.meta?.tool?.outputScheme,
+                    fromPortName,
+                );
+                const targetType = readSchemaPropertyType(
+                    targetBlock.meta?.tool?.toolSchema,
+                    toPortName,
+                );
+
+                if (sourceType && targetType && sourceType !== targetType) {
+                    return false;
+                }*/
+            }
+
+            createConnection(fromBlockId, toBlockId, fromPortName, toPortName);
             return true;
         },
-        [blocksById, createConnection],
+        [createConnection],
     );
 
     const deleteConnection = useCallback((connectionId: string) => {
@@ -468,56 +1211,104 @@ export const useScenarioCanvas = () => {
         [blocksById],
     );
 
-    const updateManualHttpMeta = useCallback(
-        (blockId: string, meta: ScenarioManualHttpRequestMeta) => {
-            setBlocks((prev) =>
-                prev.map((block) =>
-                    block.id === blockId && block.kind === "manual-http"
-                        ? {
-                              ...block,
-                              meta: {
-                                  ...block.meta,
-                                  manualHttp: meta,
-                              },
-                          }
-                        : block,
-                ),
-            );
-        },
-        [],
-    );
-
-    const updateManualDatetimeMeta = useCallback(
-        (blockId: string, meta: ScenarioManualDatetimeGetMeta) => {
-            setBlocks((prev) =>
-                prev.map((block) =>
-                    block.id === blockId && block.kind === "manual-datetime"
-                        ? {
-                              ...block,
-                              meta: {
-                                  ...block.meta,
-                                  manualDatetime: meta,
-                              },
-                          }
-                        : block,
-                ),
-            );
-        },
-        [],
-    );
-
     const updateToolMeta = useCallback(
         (blockId: string, meta: ScenarioToolMeta) => {
+            const normalizedMeta = normalizeToolMeta(toPlainObject(meta));
+
             setBlocks((prev) =>
                 prev.map((block) =>
                     block.id === blockId && block.kind === "tool"
+                        ? (() => {
+                              const nextBlock: ScenarioSimpleBlockNode = {
+                                  ...block,
+                                  meta: {
+                                      ...block.meta,
+                                      tool: normalizedMeta,
+                                  },
+                              };
+
+                              return {
+                                  ...nextBlock,
+                                  portAnchors: buildBlockPortAnchors(nextBlock),
+                              };
+                          })()
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
+
+    const updatePromptMeta = useCallback(
+        (blockId: string, meta: ScenarioPromptMeta) => {
+            const normalizedMeta = normalizePromptMeta(toPlainObject(meta));
+
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "prompt"
                         ? {
                               ...block,
                               meta: {
                                   ...block.meta,
-                                  tool: meta,
+                                  prompt: normalizedMeta,
                               },
                           }
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
+
+    const updateConditionMeta = useCallback(
+        (blockId: string, meta: ScenarioConditionMeta) => {
+            const normalizedMeta = normalizeConditionMeta(toPlainObject(meta));
+
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "condition"
+                        ? (() => {
+                              const nextBlock: ScenarioSimpleBlockNode = {
+                                  ...block,
+                                  meta: {
+                                      ...block.meta,
+                                      condition: normalizedMeta,
+                                  },
+                              };
+
+                              return {
+                                  ...nextBlock,
+                                  portAnchors: buildBlockPortAnchors(nextBlock),
+                              };
+                          })()
+                        : block,
+                ),
+            );
+        },
+        [],
+    );
+
+    const updateVariableMeta = useCallback(
+        (blockId: string, meta: ScenarioVariableMeta) => {
+            const normalizedMeta = normalizeVariableMeta(toPlainObject(meta));
+
+            setBlocks((prev) =>
+                prev.map((block) =>
+                    block.id === blockId && block.kind === "variable"
+                        ? (() => {
+                              const nextBlock: ScenarioSimpleBlockNode = {
+                                  ...block,
+                                  meta: {
+                                      ...block.meta,
+                                      variable: normalizedMeta,
+                                  },
+                              };
+
+                              return {
+                                  ...nextBlock,
+                                  portAnchors: buildBlockPortAnchors(nextBlock),
+                              };
+                          })()
                         : block,
                 ),
             );
@@ -587,9 +1378,10 @@ export const useScenarioCanvas = () => {
         createConnection,
         completeConnection,
         deleteConnection,
-        updateManualHttpMeta,
-        updateManualDatetimeMeta,
         updateToolMeta,
+        updatePromptMeta,
+        updateConditionMeta,
+        updateVariableMeta,
         saveScene,
     };
 };

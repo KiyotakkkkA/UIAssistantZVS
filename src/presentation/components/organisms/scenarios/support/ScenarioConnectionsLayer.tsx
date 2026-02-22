@@ -3,6 +3,7 @@ import type {
     ScenarioConnection,
     ScenarioSimpleBlockNode,
 } from "../../../../../types/Scenario";
+import { getConnectionSemantic } from "../../../../../utils/scenarioPorts";
 
 type Point = {
     x: number;
@@ -16,8 +17,9 @@ type ScenarioConnectionsLayerProps = {
     blocksById: Map<string, ScenarioSimpleBlockNode>;
     temporaryConnectionPath: string | null;
     buildConnectionPath: (from: Point, to: Point) => string;
-    getOutPoint: (block: ScenarioSimpleBlockNode) => Point;
+    getOutPoint: (block: ScenarioSimpleBlockNode, outputName?: string) => Point;
     getInPoint: (block: ScenarioSimpleBlockNode) => Point;
+    getInputPoint: (block: ScenarioSimpleBlockNode, inputName: string) => Point;
     onConnectionMouseDown: (
         event: MouseEvent<SVGPathElement>,
         connection: ScenarioConnection,
@@ -33,6 +35,7 @@ export function ScenarioConnectionsLayer({
     buildConnectionPath,
     getOutPoint,
     getInPoint,
+    getInputPoint,
     onConnectionMouseDown,
 }: ScenarioConnectionsLayerProps) {
     return (
@@ -66,9 +69,18 @@ export function ScenarioConnectionsLayer({
                 }
 
                 const pathD = buildConnectionPath(
-                    getOutPoint(sourceBlock),
-                    getInPoint(targetBlock),
+                    getOutPoint(sourceBlock, connection.fromPortName),
+                    connection.toPortName
+                        ? getInputPoint(targetBlock, connection.toPortName)
+                        : getInPoint(targetBlock),
                 );
+
+                const semantic = getConnectionSemantic(
+                    sourceBlock,
+                    targetBlock,
+                    connection,
+                );
+                const isDataLink = semantic === "data";
 
                 return (
                     <g key={connection.id}>
@@ -77,6 +89,7 @@ export function ScenarioConnectionsLayer({
                             fill="none"
                             stroke="rgba(160, 171, 206, 0.95)"
                             strokeWidth={2}
+                            strokeDasharray={isDataLink ? "6 4" : undefined}
                             markerEnd="url(#scenario-arrow)"
                         />
                         <path

@@ -41,6 +41,16 @@ export const communicationToolsPackage = () => {
                 },
                 required: ["message"],
             }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    success: { type: "boolean" },
+                    message: { type: "string" },
+                    error: { type: "string" },
+                    message_id: { type: "number" },
+                },
+                required: ["success", "message"],
+            },
             execute: async (args, context) => {
                 const { telegramBotToken, telegramId } = context;
 

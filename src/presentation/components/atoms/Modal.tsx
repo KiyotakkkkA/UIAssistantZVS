@@ -14,6 +14,7 @@ type ModalProps = PropsWithChildren<{
     onClose: () => void;
     footer?: ReactNode;
     className?: string;
+    closeOnOverlayClick?: boolean;
 }>;
 
 export function Modal({
@@ -23,6 +24,7 @@ export function Modal({
     footer,
     className = "",
     children,
+    closeOnOverlayClick = true,
 }: ModalProps) {
     useEffect(() => {
         if (!open) {
@@ -44,7 +46,7 @@ export function Modal({
     }
 
     const onOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && closeOnOverlayClick) {
             onClose();
         }
     };

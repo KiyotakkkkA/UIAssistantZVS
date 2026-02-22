@@ -66,17 +66,19 @@ const parseToolSchemaFields = (schema: string): ToolSchemaField[] => {
     }
 };
 
-interface ScenarioBlockSettingFormProps {
+interface ScenarioBlockSettingsFormProps {
     block: ScenarioSimpleBlockNode;
+    connectedInputNames?: Set<string>;
     onSave: (blockId: string, input: ScenarioBlockToolsParamsUsage[]) => void;
     onClose: () => void;
 }
 
-export function ScenarioBlockSettingForm({
+export function ScenarioBlockSettingsForm({
     block,
+    connectedInputNames,
     onSave,
     onClose,
-}: ScenarioBlockSettingFormProps) {
+}: ScenarioBlockSettingsFormProps) {
     const meta = (block.meta?.tool as ScenarioToolMeta | undefined) ?? {
         toolName: block.title,
         toolSchema: "{}",
@@ -176,6 +178,8 @@ export function ScenarioBlockSettingForm({
                             const hasDefault = item.defaultValue !== undefined;
                             const schemaDefaultValue =
                                 schemaDefaultsByParam.get(item.param);
+                            const isConnected =
+                                connectedInputNames?.has(item.param) ?? false;
 
                             return (
                                 <div
@@ -197,20 +201,26 @@ export function ScenarioBlockSettingForm({
                                         <p className="text-xs text-main-300">
                                             Комментарий
                                         </p>
-                                        <InputBig
-                                            value={item.comment}
-                                            onChange={(value) => {
-                                                updateToolInput(
-                                                    item.param,
-                                                    (prev) => ({
-                                                        ...prev,
-                                                        comment: value,
-                                                    }),
-                                                );
-                                            }}
-                                            placeholder="Комментарий к параметру"
-                                            className="h-20 rounded-lg border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
-                                        />
+                                        {isConnected ? (
+                                            <div className="rounded-lg border border-main-700/70 bg-main-800/60 px-3 py-2 text-xs font-semibold text-main-200">
+                                                СВЯЗАНО
+                                            </div>
+                                        ) : (
+                                            <InputBig
+                                                value={item.comment}
+                                                onChange={(value) => {
+                                                    updateToolInput(
+                                                        item.param,
+                                                        (prev) => ({
+                                                            ...prev,
+                                                            comment: value,
+                                                        }),
+                                                    );
+                                                }}
+                                                placeholder="Комментарий к параметру"
+                                                className="h-20 rounded-lg border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100"
+                                            />
+                                        )}
                                     </div>
 
                                     <div className="space-y-1">
@@ -220,6 +230,7 @@ export function ScenarioBlockSettingForm({
                                             </p>
                                             <InputCheckbox
                                                 checked={hasDefault}
+                                                disabled={isConnected}
                                                 onChange={(checked) => {
                                                     if (!checked) {
                                                         updateToolInput(
@@ -252,6 +263,7 @@ export function ScenarioBlockSettingForm({
                                         {hasDefault ? (
                                             <InputSmall
                                                 value={item.defaultValue || ""}
+                                                disabled={isConnected}
                                                 onChange={(event) => {
                                                     updateToolInput(
                                                         item.param,

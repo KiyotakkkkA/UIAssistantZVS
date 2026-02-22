@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
-import type { PointerEvent } from "react";
+import { memo, type PointerEvent } from "react";
 import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
+import { VARIABLE_CONTINUE_OUTPUT_PORT } from "../../../../../utils/scenarioVariables";
 
 type ScenarioSimpleBlockProps = {
     block: ScenarioSimpleBlockNode;
@@ -9,11 +10,11 @@ type ScenarioSimpleBlockProps = {
         event: PointerEvent<HTMLDivElement>,
         blockId: string,
     ) => void;
-    onStartConnection: (blockId: string) => void;
+    onStartConnection: (blockId: string, fromPortName?: string) => void;
     onCompleteConnection: (blockId: string) => void;
 };
 
-export function ScenarioSimpleBlock({
+export const ScenarioSimpleBlock = memo(function ScenarioSimpleBlock({
     block,
     isConnectSource,
     onPointerDown,
@@ -72,7 +73,7 @@ export function ScenarioSimpleBlock({
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
-                        onStartConnection(block.id);
+                        onStartConnection(block.id, VARIABLE_CONTINUE_OUTPUT_PORT);
                     }}
                     title="Выход"
                     aria-label="Выход"
@@ -80,4 +81,4 @@ export function ScenarioSimpleBlock({
             ) : null}
         </div>
     );
-}
+});

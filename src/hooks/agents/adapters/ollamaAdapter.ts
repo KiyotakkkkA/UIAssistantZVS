@@ -77,6 +77,7 @@ export const createOllamaAdapter = ({
             history,
             tools,
             maxToolCalls = 4,
+            format: requestFormat,
             executeTool,
             onToolCall,
             onToolResult,
@@ -104,7 +105,7 @@ export const createOllamaAdapter = ({
                     model,
                     messages,
                     tools,
-                    format,
+                    format: requestFormat ?? format,
                     signal,
                     onChunk: (chunk) => {
                         const contentChunk = chunk.message?.content || "";

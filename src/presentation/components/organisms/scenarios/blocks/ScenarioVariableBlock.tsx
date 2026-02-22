@@ -1,46 +1,51 @@
 import { Icon } from "@iconify/react";
-import { memo, type MouseEvent, type PointerEvent } from "react";
+import { memo, useMemo, type MouseEvent, type PointerEvent } from "react";
 import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
 import { Button } from "../../../atoms";
 import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,
+    getScenarioVariableTitle,
 } from "../../../../../utils/scenarioVariables";
-import {
-    getToolParamInputPorts,
-    getToolParamOutputPorts,
-} from "../../../../../utils/scenarioPorts";
 
-type ScenarioToolBlockProps = {
+type ScenarioVariableBlockProps = {
     block: ScenarioSimpleBlockNode;
     isConnectSource: boolean;
-    connectedInputNames: Set<string>;
     onPointerDown: (
         event: PointerEvent<HTMLDivElement>,
         blockId: string,
     ) => void;
     onStartConnection: (blockId: string, fromPortName?: string) => void;
     onCompleteConnection: (blockId: string, toPortName?: string) => void;
+    onContextMenu: (event: MouseEvent<HTMLDivElement>, blockId: string) => void;
     onOpenSettings: (blockId: string) => void;
     onRequestDelete: (blockId: string) => void;
-    onContextMenu: (event: MouseEvent<HTMLDivElement>, blockId: string) => void;
 };
 
-export const ScenarioToolBlock = memo(function ScenarioToolBlock({
+export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
     block,
     isConnectSource,
-    connectedInputNames,
     onPointerDown,
     onStartConnection,
     onCompleteConnection,
+    onContextMenu,
     onOpenSettings,
     onRequestDelete,
-    onContextMenu,
-}: ScenarioToolBlockProps) {
-    const paramInputs = getToolParamInputPorts(block);
-    const inputPorts = [START_BLOCK_INPUT_PORT, ...paramInputs];
-    const paramOutputs = getToolParamOutputPorts(block);
-    const outputPorts = [...paramOutputs, VARIABLE_CONTINUE_OUTPUT_PORT];
+}: ScenarioVariableBlockProps) {
+    const outputPorts = useMemo(() => {
+        const selected = block.meta?.variable?.selectedVariables ?? [];
+
+        return [
+            ...selected.map((item) => ({
+                portName: item,
+                label: getScenarioVariableTitle(item),
+            })),
+            {
+                portName: VARIABLE_CONTINUE_OUTPUT_PORT,
+                label: "ПРОДОЛЖИТЬ",
+            },
+        ];
+    }, [block.meta?.variable?.selectedVariables]);
 
     return (
         <div
@@ -55,15 +60,15 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
             onContextMenu={(event) => onContextMenu(event, block.id)}
         >
             <div className="flex h-full overflow-hidden rounded-xl">
-                <div className="flex w-12 items-center justify-center bg-blue-800/90 text-main-100">
-                    <Icon icon="mdi:robot-outline" width={20} height={20} />
+                <div className="flex w-12 items-center justify-center bg-cyan-800/90 text-main-100">
+                    <Icon icon="mdi:variable" width={20} height={20} />
                 </div>
                 <div className="min-w-0 flex-1 px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm font-semibold text-main-100">
                             {block.title}
                         </p>
-                        <div className="flex gap-2 items-center">
+                        <div className="flex items-center gap-2">
                             <Button
                                 type="button"
                                 className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
@@ -98,68 +103,37 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
                             </Button>
                         </div>
                     </div>
-                    <p className="mt-1 text-xs text-main-400">ИИ инструмент</p>
+                    <p className="mt-1 text-xs text-main-400">Переменные</p>
                 </div>
             </div>
 
-            {inputPorts.map((inputPort, index) => {
-                const topPercent =
-                    ((index + 1) / (inputPorts.length + 1)) * 100;
-                const isStartPort = inputPort === START_BLOCK_INPUT_PORT;
-                const toolInput = block.meta?.tool?.input?.find(
-                    (item) => item.param === inputPort,
-                );
-                const hasDefaultValue =
-                    toolInput?.defaultValue !== undefined &&
-                    toolInput?.defaultValue !== null;
-                const isConnected = connectedInputNames.has(inputPort);
-                const shouldMarkMissing =
-                    !isStartPort && !isConnected && !hasDefaultValue;
-                const label = isStartPort ? "СТАРТ" : inputPort;
+            <div
+                className="absolute flex items-center gap-2"
+                style={{ left: -8, top: "50%", transform: "translateY(-50%)" }}
+            >
+                <span className="absolute right-full mr-2 max-w-24 truncate text-[10px] text-main-300">
+                    СТАРТ
+                </span>
+                <button
+                    type="button"
+                    className="h-4 w-4 rounded-full border border-main-700/70 bg-main-100"
+                    onPointerDown={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        onCompleteConnection(block.id, START_BLOCK_INPUT_PORT);
+                    }}
+                    title="Вход от стартового блока"
+                    aria-label="Вход от стартового блока"
+                />
+            </div>
 
-                return (
-                    <div
-                        key={inputPort}
-                        className="absolute flex items-center gap-2"
-                        style={{
-                            left: -8,
-                            top: `${topPercent}%`,
-                            transform: "translateY(-50%)",
-                        }}
-                    >
-                        <div className="relative flex items-center">
-                            <span
-                                className="absolute max-w-24 truncate text-[10px] text-main-300 right-full mr-2"
-                                title={label}
-                            >
-                                {label}
-                            </span>
-                            <button
-                                type="button"
-                                className={`h-4 w-4 rounded-full border ${shouldMarkMissing ? "border-red-500 bg-red-500/80" : "border-main-700/70 bg-main-100"}`}
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    event.preventDefault();
-                                    onCompleteConnection(block.id, inputPort);
-                                }}
-                                title={`Вход: ${label}`}
-                                aria-label={`Вход: ${label}`}
-                            />
-                        </div>
-                    </div>
-                );
-            })}
-
-            {outputPorts.map((outputPort, index) => {
+            {outputPorts.map((output, index) => {
                 const topPercent =
                     ((index + 1) / (outputPorts.length + 1)) * 100;
-                const isContinuePort =
-                    outputPort === VARIABLE_CONTINUE_OUTPUT_PORT;
-                const outputLabel = isContinuePort ? "ПРОДОЛЖИТЬ" : outputPort;
 
                 return (
                     <div
-                        key={outputPort}
+                        key={output.portName}
                         className="absolute flex items-center gap-2"
                         style={{
                             right: -8,
@@ -173,16 +147,16 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
                             onPointerDown={(event) => {
                                 event.stopPropagation();
                                 event.preventDefault();
-                                onStartConnection(block.id, outputPort);
+                                onStartConnection(block.id, output.portName);
                             }}
-                            title={`Выход: ${outputLabel}`}
-                            aria-label={`Выход: ${outputLabel}`}
+                            title={`Выход: ${output.label}`}
+                            aria-label={`Выход: ${output.label}`}
                         />
                         <span
-                            className="absolute max-w-28 truncate text-[10px] text-main-300 left-full ml-2"
-                            title={outputLabel}
+                            className="absolute left-full ml-2 max-w-28 truncate text-[10px] text-main-300"
+                            title={output.label}
                         >
-                            {outputLabel}
+                            {output.label}
                         </span>
                     </div>
                 );

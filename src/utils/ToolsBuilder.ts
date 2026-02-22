@@ -4,6 +4,10 @@ export type ToolExecutionContext = {
     ollamaToken: string;
     telegramId: string;
     telegramBotToken: string;
+    scenarioRuntimeEnv?: {
+        current_date?: string;
+        project_directory?: string;
+    };
 };
 
 export type ToolExecutor = (
@@ -17,6 +21,7 @@ export type ToolDescriptor = {
     packageDescription: string;
     schema: OllamaToolDefinition;
     execute: ToolExecutor;
+    outputScheme?: Record<string, unknown>;
 };
 
 export type ToolPackageDescriptor = {
@@ -35,6 +40,7 @@ export class ToolsBuilder {
             description: string;
             parameters: OllamaToolDefinition["function"]["parameters"];
             execute: ToolExecutor;
+            outputScheme?: Record<string, unknown>;
         }) => ReturnType<ToolsBuilder["addPackage"]>;
         done: () => ToolsBuilder;
     } {
@@ -53,6 +59,7 @@ export class ToolsBuilder {
                 description: string;
                 parameters: OllamaToolDefinition["function"]["parameters"];
                 execute: ToolExecutor;
+                outputScheme?: Record<string, unknown>;
             }) => {
                 packageDescriptor.tools.push({
                     packageId: packageDescriptor.id,
@@ -67,6 +74,9 @@ export class ToolsBuilder {
                         },
                     },
                     execute: tool.execute,
+                    ...(tool.outputScheme
+                        ? { outputScheme: tool.outputScheme }
+                        : {}),
                 });
 
                 return chain;
