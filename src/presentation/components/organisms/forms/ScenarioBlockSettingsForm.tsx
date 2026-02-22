@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, InputBig, InputCheckbox, InputSmall } from "../../atoms";
+import {
+    Button,
+    Dropdown,
+    InputBig,
+    InputCheckbox,
+    InputSmall,
+} from "../../atoms";
 import { ShikiCodeBlock } from "../../molecules/render/ShikiCodeBlock";
 import type {
     ScenarioBlockToolsParamsUsage,
@@ -69,6 +75,10 @@ const parseToolSchemaFields = (schema: string): ToolSchemaField[] => {
 interface ScenarioBlockSettingsFormProps {
     block: ScenarioSimpleBlockNode;
     connectedInputNames?: Set<string>;
+    availableVariables?: Array<{
+        key: string;
+        label: string;
+    }>;
     onSave: (blockId: string, input: ScenarioBlockToolsParamsUsage[]) => void;
     onClose: () => void;
 }
@@ -76,6 +86,7 @@ interface ScenarioBlockSettingsFormProps {
 export function ScenarioBlockSettingsForm({
     block,
     connectedInputNames,
+    availableVariables = [],
     onSave,
     onClose,
 }: ScenarioBlockSettingsFormProps) {
@@ -148,6 +159,28 @@ export function ScenarioBlockSettingsForm({
             );
         },
         [],
+    );
+
+    const insertVariableToken = useCallback(
+        (param: string, variableKey: string) => {
+            const token = `{${variableKey}}`;
+
+            updateToolInput(param, (prev) => {
+                const current = prev.defaultValue ?? "";
+
+                if (current.includes(token)) {
+                    return prev;
+                }
+
+                const suffix = current ? `${current}${token}` : token;
+
+                return {
+                    ...prev,
+                    defaultValue: suffix,
+                };
+            });
+        },
+        [updateToolInput],
     );
 
     const handleSave = () => {
@@ -260,6 +293,48 @@ export function ScenarioBlockSettingsForm({
                                             />
                                         </div>
 
+                                        <div>
+                                            <Dropdown
+                                                options={availableVariables.map(
+                                                    (variable) => ({
+                                                        value: variable.key,
+                                                        label: variable.label,
+                                                        onClick: () =>
+                                                            insertVariableToken(
+                                                                item.param,
+                                                                variable.key,
+                                                            ),
+                                                    }),
+                                                )}
+                                                disabled={
+                                                    isConnected ||
+                                                    availableVariables.length ===
+                                                        0
+                                                }
+                                                menuPlacement="top"
+                                                closeOnSelect
+                                                matchTriggerWidth={false}
+                                                menuClassName="w-64"
+                                                renderTrigger={({
+                                                    toggleOpen,
+                                                    triggerRef,
+                                                    disabled,
+                                                    ariaProps,
+                                                }) => (
+                                                    <Button
+                                                        variant="secondary"
+                                                        ref={triggerRef}
+                                                        className="h-8 rounded-lg px-3 text-xs"
+                                                        disabled={disabled}
+                                                        onClick={toggleOpen}
+                                                        {...ariaProps}
+                                                    >
+                                                        Использовать переменную
+                                                    </Button>
+                                                )}
+                                            />
+                                        </div>
+
                                         {hasDefault ? (
                                             <InputSmall
                                                 value={item.defaultValue || ""}
@@ -276,6 +351,7 @@ export function ScenarioBlockSettingsForm({
                                                     );
                                                 }}
                                                 placeholder="Введите значение"
+                                                className="mt-2"
                                             />
                                         ) : null}
                                     </div>

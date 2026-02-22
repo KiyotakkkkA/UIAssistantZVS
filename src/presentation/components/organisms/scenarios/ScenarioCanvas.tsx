@@ -9,6 +9,7 @@ import type {
     ScenarioConnection,
     ScenarioSceneViewport,
     ScenarioSimpleBlockNode,
+    ScenarioVariableKey,
     ScenarioVariableMeta,
 } from "../../../../types/Scenario";
 import { ScenarioBlockSettingsForm } from "../forms/ScenarioBlockSettingsForm";
@@ -24,6 +25,7 @@ import { ScenarioVariableBlock } from "./blocks/ScenarioVariableBlock";
 import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,
+    getScenarioVariableTitle,
 } from "../../../../utils/scenarioVariables";
 import {
     getToolParamInputPorts,
@@ -121,7 +123,8 @@ const getAnchoredPoint = (
     direction: "inputs" | "outputs",
     portName?: string,
 ): Point | null => {
-    const key = portName && portName.trim().length > 0 ? portName : DEFAULT_PORT_KEY;
+    const key =
+        portName && portName.trim().length > 0 ? portName : DEFAULT_PORT_KEY;
     const anchor = block.portAnchors?.[direction]?.[key];
 
     if (!anchor) {
@@ -408,6 +411,21 @@ export function ScenarioCanvas({
     const activeSettingsBlock = settingsBlockId
         ? (blocksById.get(settingsBlockId) ?? null)
         : null;
+    const availableScenarioVariables = useMemo(() => {
+        const selected = blocks
+            .filter((block) => block.kind === "variable")
+            .flatMap((block) => block.meta?.variable?.selectedVariables ?? []);
+
+        const uniq = Array.from(
+            new Set<ScenarioVariableKey>(selected as ScenarioVariableKey[]),
+        );
+
+        return uniq.map((key) => ({
+            key,
+            label: getScenarioVariableTitle(key),
+        }));
+    }, [blocks]);
+
     const isToolModalOpen = activeSettingsBlock?.kind === "tool";
     const isPromptModalOpen = activeSettingsBlock?.kind === "prompt";
     const isConditionModalOpen = activeSettingsBlock?.kind === "condition";
@@ -1348,6 +1366,7 @@ export function ScenarioCanvas({
                                 activeSettingsBlock.id,
                             ) ?? EMPTY_CONNECTED_INPUTS
                         }
+                        availableVariables={availableScenarioVariables}
                         onSave={(blockId, input) => {
                             updateToolMeta(blockId, {
                                 toolName:

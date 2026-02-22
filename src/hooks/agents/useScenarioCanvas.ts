@@ -376,27 +376,6 @@ const resolveNormalizedPortAnchors = (
     };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const readSchemaPropertyType = (
-    rawSchema: string | undefined,
-    propertyName: string,
-): string | undefined => {
-    if (!rawSchema || !propertyName) {
-        return undefined;
-    }
-
-    try {
-        const parsed = JSON.parse(rawSchema) as {
-            properties?: Record<string, { type?: unknown }>;
-        };
-
-        const prop = parsed.properties?.[propertyName];
-        return typeof prop?.type === "string" ? prop.type : undefined;
-    } catch {
-        return undefined;
-    }
-};
-
 const createDefaultConditionFields = (): ScenarioConditionField[] => [
     {
         id: crypto.randomUUID(),
@@ -1141,22 +1120,6 @@ export const useScenarioCanvas = () => {
 
             if (semantic === "invalid") {
                 return false;
-            }
-
-            if (semantic === "data" && fromPortName && toPortName) {
-                /* Пока что WIP 
-                const sourceType = readSchemaPropertyType(
-                    sourceBlock.meta?.tool?.outputScheme,
-                    fromPortName,
-                );
-                const targetType = readSchemaPropertyType(
-                    targetBlock.meta?.tool?.toolSchema,
-                    toPortName,
-                );
-
-                if (sourceType && targetType && sourceType !== targetType) {
-                    return false;
-                }*/
             }
 
             createConnection(fromBlockId, toBlockId, fromPortName, toPortName);
