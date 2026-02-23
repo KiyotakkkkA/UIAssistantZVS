@@ -5,7 +5,7 @@ export type ElectronPaths = {
     resourcesPath: string;
     themesPath: string;
     filesPath: string;
-    profilePath: string;
+    metaPath: string;
     databasePath: string;
     defaultProjectsDirectory: string;
 };
@@ -18,7 +18,7 @@ export const createElectronPaths = (basePath: string): ElectronPaths => {
         resourcesPath,
         themesPath: path.join(resourcesPath, "themes"),
         filesPath: path.join(resourcesPath, "files"),
-        profilePath: path.join(resourcesPath, "profile.json"),
+        metaPath: path.join(resourcesPath, "meta.json"),
         databasePath: path.join(resourcesPath, "db.zvsdatabase"),
         defaultProjectsDirectory: path.join(resourcesPath, "projects"),
     };

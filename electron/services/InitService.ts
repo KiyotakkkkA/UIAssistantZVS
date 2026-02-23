@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { defaultProfile } from "../static/data";
 import { staticThemeEntries } from "../static/themes";
 import type { ElectronPaths } from "../paths";
 
@@ -8,14 +7,14 @@ export class InitService {
     private readonly resourcesPath: string;
     private readonly themesPath: string;
     private readonly filesPath: string;
-    private readonly profilePath: string;
+    private readonly metaPath: string;
     private readonly databasePath: string;
 
     constructor(paths: ElectronPaths) {
         this.resourcesPath = paths.resourcesPath;
         this.themesPath = paths.themesPath;
         this.filesPath = paths.filesPath;
-        this.profilePath = paths.profilePath;
+        this.metaPath = paths.metaPath;
         this.databasePath = paths.databasePath;
     }
 
@@ -24,7 +23,7 @@ export class InitService {
         this.ensureDirectory(this.themesPath);
         this.ensureDirectory(this.filesPath);
         this.ensureDatabase(this.databasePath);
-        this.ensureProfile();
+        this.ensureMeta();
         this.ensureThemes();
     }
 
@@ -40,11 +39,11 @@ export class InitService {
         }
     }
 
-    private ensureProfile(): void {
-        if (!fs.existsSync(this.profilePath)) {
+    private ensureMeta(): void {
+        if (!fs.existsSync(this.metaPath)) {
             fs.writeFileSync(
-                this.profilePath,
-                JSON.stringify(defaultProfile, null, 2),
+                this.metaPath,
+                JSON.stringify({ currentUserId: "" }, null, 2),
             );
         }
     }

@@ -3,39 +3,9 @@ import fs$1, { readFile } from "node:fs/promises";
 import { BrowserWindow, app, ipcMain, shell, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import fs from "node:fs";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import Database from "better-sqlite3";
 import { spawn } from "node:child_process";
-const defaultProfile = {
-  themePreference: "dark-main",
-  ollamaModel: "gpt-oss:20b",
-  ollamaToken: "",
-  telegramId: "",
-  telegramBotToken: "",
-  chatDriver: "ollama",
-  assistantName: "Чарли",
-  maxToolCallsPerResponse: 10,
-  userName: "Пользователь",
-  userPrompt: "",
-  userLanguage: "Русский",
-  activeDialogId: null,
-  activeProjectId: null,
-  activeScenarioId: null,
-  lastActiveTab: "dialogs"
-};
-const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
-const createDialogId = () => createPrefixedId("dialog");
-const createBaseDialog = (forProjectId = null) => {
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  return {
-    id: createDialogId(),
-    title: "Новый диалог",
-    messages: [],
-    forProjectId,
-    createdAt: now,
-    updatedAt: now
-  };
-};
 const baseDarkDracula = {
   id: "dark-dracula",
   name: "Dracula",
@@ -154,13 +124,13 @@ class InitService {
   resourcesPath;
   themesPath;
   filesPath;
-  profilePath;
+  metaPath;
   databasePath;
   constructor(paths) {
     this.resourcesPath = paths.resourcesPath;
     this.themesPath = paths.themesPath;
     this.filesPath = paths.filesPath;
-    this.profilePath = paths.profilePath;
+    this.metaPath = paths.metaPath;
     this.databasePath = paths.databasePath;
   }
   initialize() {
@@ -168,7 +138,7 @@ class InitService {
     this.ensureDirectory(this.themesPath);
     this.ensureDirectory(this.filesPath);
     this.ensureDatabase(this.databasePath);
-    this.ensureProfile();
+    this.ensureMeta();
     this.ensureThemes();
   }
   ensureDirectory(targetPath) {
@@ -181,11 +151,11 @@ class InitService {
       fs.writeFileSync(databasePath, "");
     }
   }
-  ensureProfile() {
-    if (!fs.existsSync(this.profilePath)) {
+  ensureMeta() {
+    if (!fs.existsSync(this.metaPath)) {
       fs.writeFileSync(
-        this.profilePath,
-        JSON.stringify(defaultProfile, null, 2)
+        this.metaPath,
+        JSON.stringify({ currentUserId: "" }, null, 2)
       );
     }
   }
@@ -201,6 +171,36 @@ class InitService {
     }
   }
 }
+const defaultProfile = {
+  themePreference: "dark-main",
+  ollamaModel: "gpt-oss:20b",
+  ollamaToken: "",
+  telegramId: "",
+  telegramBotToken: "",
+  chatDriver: "ollama",
+  assistantName: "Чарли",
+  maxToolCallsPerResponse: 10,
+  userName: "Пользователь",
+  userPrompt: "",
+  userLanguage: "Русский",
+  activeDialogId: null,
+  activeProjectId: null,
+  activeScenarioId: null,
+  lastActiveTab: "dialogs"
+};
+const createPrefixedId = (prefix) => `${prefix}_${randomUUID().replace(/-/g, "")}`;
+const createDialogId = () => createPrefixedId("dialog");
+const createBaseDialog = (forProjectId = null) => {
+  const now = (/* @__PURE__ */ new Date()).toISOString();
+  return {
+    id: createDialogId(),
+    title: "Новый диалог",
+    messages: [],
+    forProjectId,
+    createdAt: now,
+    updatedAt: now
+  };
+};
 const isChatDriver = (value) => {
   return value === "ollama" || value === "";
 };
@@ -242,16 +242,23 @@ const normalizeWorkspaceContext = (profile) => {
   };
 };
 class UserProfileService {
-  constructor(profilePath) {
-    this.profilePath = profilePath;
+  constructor(databaseService, metaService) {
+    this.databaseService = databaseService;
+    this.metaService = metaService;
+    this.currentUserId = this.ensureCurrentUserProfile();
+  }
+  currentUserId;
+  getCurrentUserId() {
+    return this.currentUserId;
   }
   getUserProfile() {
-    if (!fs.existsSync(this.profilePath)) {
+    const parsed = this.databaseService.getProfileRaw(
+      this.currentUserId
+    );
+    if (!parsed || typeof parsed !== "object") {
       return defaultProfile;
     }
     try {
-      const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
-      const parsed = JSON.parse(rawProfile);
       const normalized = {
         ...defaultProfile,
         ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
@@ -283,11 +290,26 @@ class UserProfileService {
       ...currentProfile,
       ...nextProfile
     });
-    fs.writeFileSync(
-      this.profilePath,
-      JSON.stringify(mergedProfile, null, 2)
+    this.databaseService.updateProfileRaw(
+      this.currentUserId,
+      mergedProfile
     );
     return mergedProfile;
+  }
+  ensureCurrentUserProfile() {
+    const currentUserIdFromMeta = this.metaService.getCurrentUserId();
+    if (currentUserIdFromMeta && this.databaseService.hasProfile(currentUserIdFromMeta)) {
+      return currentUserIdFromMeta;
+    }
+    const profileId = randomUUID();
+    const secretKey = randomBytes(32).toString("hex");
+    this.databaseService.createProfile(
+      profileId,
+      defaultProfile,
+      secretKey
+    );
+    this.metaService.setCurrentUserId(profileId);
+    return profileId;
   }
 }
 class ThemesService {
@@ -346,9 +368,10 @@ class ThemesService {
   }
 }
 class DialogsService {
-  constructor(databaseService, onActiveDialogContextUpdate) {
+  constructor(databaseService, onActiveDialogContextUpdate, createdBy) {
     this.databaseService = databaseService;
     this.onActiveDialogContextUpdate = onActiveDialogContextUpdate;
+    this.createdBy = createdBy;
   }
   getActiveDialog(activeDialogId) {
     const dialogs = this.readDialogs();
@@ -380,7 +403,19 @@ class DialogsService {
     return baseDialog;
   }
   getDialogsList() {
-    return this.readDialogs().filter((dialog2) => dialog2.forProjectId === null).map((dialog2) => this.toDialogListItem(dialog2));
+    const standaloneDialogs = this.readDialogs().filter(
+      (dialog2) => dialog2.forProjectId === null
+    );
+    if (standaloneDialogs.length === 0) {
+      const baseDialog = createBaseDialog();
+      this.writeDialog(baseDialog);
+      this.onActiveDialogContextUpdate({
+        activeDialogId: baseDialog.id,
+        activeProjectId: baseDialog.forProjectId
+      });
+      return [this.toDialogListItem(baseDialog)];
+    }
+    return standaloneDialogs.map((dialog2) => this.toDialogListItem(dialog2));
   }
   getDialogById(dialogId, activeDialogId) {
     const dialogs = this.readDialogs();
@@ -427,7 +462,7 @@ class DialogsService {
     return updatedDialog;
   }
   deleteDialog(dialogId) {
-    this.databaseService.deleteDialog(dialogId);
+    this.databaseService.deleteDialog(dialogId, this.createdBy);
     let dialogs = this.readDialogs();
     if (dialogs.length === 0) {
       const fallbackDialog2 = createBaseDialog();
@@ -500,7 +535,9 @@ class DialogsService {
   }
   readDialogs() {
     const dialogs = [];
-    for (const rawItem of this.databaseService.getDialogsRaw()) {
+    for (const rawItem of this.databaseService.getDialogsRaw(
+      this.createdBy
+    )) {
       const parsed = rawItem;
       if (!Array.isArray(parsed.messages)) {
         continue;
@@ -521,7 +558,7 @@ class DialogsService {
     return dialogs;
   }
   writeDialog(dialog2) {
-    this.databaseService.upsertDialogRaw(dialog2.id, dialog2);
+    this.databaseService.upsertDialogRaw(dialog2.id, dialog2, this.createdBy);
   }
   normalizeDialogId(id) {
     if (typeof id === "string" && id.startsWith("dialog_")) {
@@ -569,8 +606,9 @@ class DialogsService {
   }
 }
 class ProjectsService {
-  constructor(databaseService) {
+  constructor(databaseService, createdBy) {
     this.databaseService = databaseService;
+    this.createdBy = createdBy;
   }
   getProjectsList() {
     return this.readProjects().map(
@@ -605,7 +643,7 @@ class ProjectsService {
     if (!project) {
       return null;
     }
-    this.databaseService.deleteProject(project.id);
+    this.databaseService.deleteProject(project.id, this.createdBy);
     return project;
   }
   normalizeProjectId(id) {
@@ -656,7 +694,9 @@ class ProjectsService {
   }
   readProjects() {
     const projects = [];
-    for (const rawItem of this.databaseService.getProjectsRaw()) {
+    for (const rawItem of this.databaseService.getProjectsRaw(
+      this.createdBy
+    )) {
       const parsed = rawItem;
       const now = (/* @__PURE__ */ new Date()).toISOString();
       if (typeof parsed.name !== "string" || typeof parsed.description !== "string" || typeof parsed.dialogId !== "string") {
@@ -686,7 +726,11 @@ class ProjectsService {
     return projects;
   }
   writeProject(project) {
-    this.databaseService.upsertProjectRaw(project.id, project);
+    this.databaseService.upsertProjectRaw(
+      project.id,
+      project,
+      this.createdBy
+    );
   }
   toProjectListItem(project) {
     return {
@@ -703,8 +747,9 @@ class ProjectsService {
   }
 }
 class ScenariosService {
-  constructor(databaseService) {
+  constructor(databaseService, createdBy) {
     this.databaseService = databaseService;
+    this.createdBy = createdBy;
   }
   getScenariosList() {
     return this.readScenarios().map(
@@ -752,12 +797,14 @@ class ScenariosService {
     if (!scenario) {
       return null;
     }
-    this.databaseService.deleteScenario(scenario.id);
+    this.databaseService.deleteScenario(scenario.id, this.createdBy);
     return scenario;
   }
   readScenarios() {
     const scenarios = [];
-    for (const rawItem of this.databaseService.getScenariosRaw()) {
+    for (const rawItem of this.databaseService.getScenariosRaw(
+      this.createdBy
+    )) {
       const parsed = rawItem;
       const now = (/* @__PURE__ */ new Date()).toISOString();
       if (typeof parsed.name !== "string" || typeof parsed.description !== "string") {
@@ -780,7 +827,11 @@ class ScenariosService {
     return scenarios;
   }
   writeScenario(scenario) {
-    this.databaseService.upsertScenarioRaw(scenario.id, scenario);
+    this.databaseService.upsertScenarioRaw(
+      scenario.id,
+      scenario,
+      this.createdBy
+    );
   }
   normalizeScenarioId(id) {
     if (typeof id === "string" && id.startsWith("scenario_")) {
@@ -807,10 +858,51 @@ class ScenariosService {
     };
   }
 }
+const defaultMeta = {
+  currentUserId: ""
+};
+class MetaService {
+  constructor(metaPath) {
+    this.metaPath = metaPath;
+  }
+  getCurrentUserId() {
+    const parsed = this.readMeta();
+    const userId = typeof parsed.currentUserId === "string" ? parsed.currentUserId.trim() : "";
+    return userId || null;
+  }
+  setCurrentUserId(userId) {
+    const normalizedUserId = typeof userId === "string" ? userId.trim() : "";
+    fs.writeFileSync(
+      this.metaPath,
+      JSON.stringify(
+        {
+          currentUserId: normalizedUserId
+        },
+        null,
+        2
+      )
+    );
+  }
+  readMeta() {
+    if (!fs.existsSync(this.metaPath)) {
+      return defaultMeta;
+    }
+    try {
+      const raw = fs.readFileSync(this.metaPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      return {
+        currentUserId: typeof parsed.currentUserId === "string" ? parsed.currentUserId : ""
+      };
+    } catch {
+      return defaultMeta;
+    }
+  }
+}
 class FileStorageService {
-  constructor(filesPath, databaseService) {
+  constructor(filesPath, databaseService, createdBy) {
     this.filesPath = filesPath;
     this.databaseService = databaseService;
+    this.createdBy = createdBy;
   }
   saveFiles(files) {
     this.ensureStorage();
@@ -828,7 +920,7 @@ class FileStorageService {
         size: Number.isFinite(file.size) ? file.size : buffer.byteLength,
         savedAt: (/* @__PURE__ */ new Date()).toISOString()
       };
-      this.databaseService.upsertFile(fileId, entry);
+      this.databaseService.upsertFile(fileId, entry, this.createdBy);
       saved.push({
         id: fileId,
         ...entry
@@ -837,22 +929,25 @@ class FileStorageService {
     return saved;
   }
   getFilesByIds(fileIds) {
-    return this.databaseService.getFilesByIds(fileIds);
+    return this.databaseService.getFilesByIds(fileIds, this.createdBy);
   }
   getFileById(fileId) {
-    return this.databaseService.getFileById(fileId);
+    return this.databaseService.getFileById(fileId, this.createdBy);
   }
   deleteFilesByIds(fileIds) {
     if (!fileIds.length) {
       return;
     }
-    const files = this.databaseService.getFilesByIds(fileIds);
+    const files = this.databaseService.getFilesByIds(
+      fileIds,
+      this.createdBy
+    );
     for (const entry of files) {
       if (fs.existsSync(entry.path)) {
         fs.unlinkSync(entry.path);
       }
     }
-    this.databaseService.deleteFilesByIds(fileIds);
+    this.databaseService.deleteFilesByIds(fileIds, this.createdBy);
   }
   parseDataUrl(dataUrl) {
     if (typeof dataUrl !== "string") {
@@ -881,55 +976,89 @@ class DatabaseService {
     this.initializeSchema();
   }
   database;
-  upsertDialogRaw(dialogId, payload) {
+  createProfile(profileId, payload, secretKey) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    this.database.prepare(
+      `
+                INSERT INTO profiles (id, data, secret_key, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                `
+    ).run(profileId, JSON.stringify(payload), secretKey, now, now);
+  }
+  hasProfile(profileId) {
+    const row = this.database.prepare(`SELECT id FROM profiles WHERE id = ?`).get(profileId);
+    return Boolean(row?.id);
+  }
+  getProfileRaw(profileId) {
+    const row = this.database.prepare(`SELECT data FROM profiles WHERE id = ?`).get(profileId);
+    if (!row) {
+      return null;
+    }
+    return this.tryParseJson(row.data);
+  }
+  updateProfileRaw(profileId, payload) {
+    this.database.prepare(
+      `
+                UPDATE profiles
+                SET data = ?,
+                    updated_at = ?
+                WHERE id = ?
+                `
+    ).run(JSON.stringify(payload), (/* @__PURE__ */ new Date()).toISOString(), profileId);
+  }
+  upsertDialogRaw(dialogId, payload, createdBy) {
     const payloadRecord = payload && typeof payload === "object" ? payload : {};
     const updatedAt = typeof payloadRecord.updatedAt === "string" && payloadRecord.updatedAt ? payloadRecord.updatedAt : (/* @__PURE__ */ new Date()).toISOString();
     this.database.prepare(
       `
-                INSERT INTO dialogs (id, payload_json, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO dialogs (id, payload_json, updated_at, created_by)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    created_by = excluded.created_by
                 `
-    ).run(dialogId, JSON.stringify(payload), updatedAt);
+    ).run(dialogId, JSON.stringify(payload), updatedAt, createdBy);
   }
-  getDialogsRaw() {
+  getDialogsRaw(createdBy) {
     const rows = this.database.prepare(
       `SELECT payload_json
                  FROM dialogs
+                 WHERE created_by = ?
                  ORDER BY updated_at DESC`
-    ).all();
+    ).all(createdBy);
     return rows.map((row) => this.tryParseJson(row.payload_json)).filter((row) => row !== null);
   }
-  deleteDialog(dialogId) {
-    this.database.prepare(`DELETE FROM dialogs WHERE id = ?`).run(dialogId);
+  deleteDialog(dialogId, createdBy) {
+    this.database.prepare(`DELETE FROM dialogs WHERE id = ? AND created_by = ?`).run(dialogId, createdBy);
   }
-  upsertProjectRaw(projectId, payload) {
+  upsertProjectRaw(projectId, payload, createdBy) {
     const payloadRecord = payload && typeof payload === "object" ? payload : {};
     const updatedAt = typeof payloadRecord.updatedAt === "string" && payloadRecord.updatedAt ? payloadRecord.updatedAt : (/* @__PURE__ */ new Date()).toISOString();
     this.database.prepare(
       `
-                INSERT INTO projects (id, payload_json, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO projects (id, payload_json, updated_at, created_by)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    created_by = excluded.created_by
                 `
-    ).run(projectId, JSON.stringify(payload), updatedAt);
+    ).run(projectId, JSON.stringify(payload), updatedAt, createdBy);
   }
-  getProjectsRaw() {
+  getProjectsRaw(createdBy) {
     const rows = this.database.prepare(
       `SELECT payload_json
                  FROM projects
+                 WHERE created_by = ?
                  ORDER BY updated_at DESC`
-    ).all();
+    ).all(createdBy);
     return rows.map((row) => this.tryParseJson(row.payload_json)).filter((row) => row !== null);
   }
-  deleteProject(projectId) {
-    this.database.prepare(`DELETE FROM projects WHERE id = ?`).run(projectId);
+  deleteProject(projectId, createdBy) {
+    this.database.prepare(`DELETE FROM projects WHERE id = ? AND created_by = ?`).run(projectId, createdBy);
   }
-  upsertScenarioRaw(scenarioId, payload) {
+  upsertScenarioRaw(scenarioId, payload, createdBy) {
     const payloadRecord = payload && typeof payload === "object" ? payload : {};
     const cachedModelScenarioHash = typeof payloadRecord.cachedModelScenarioHash === "string" ? payloadRecord.cachedModelScenarioHash : typeof payloadRecord.cached_model_scenario_hash === "string" ? payloadRecord.cached_model_scenario_hash : null;
     const cachedModelScenario = typeof payloadRecord.cachedModelScenario === "string" ? payloadRecord.cachedModelScenario : typeof payloadRecord.cached_model_scenario === "string" ? payloadRecord.cached_model_scenario : null;
@@ -942,32 +1071,36 @@ class DatabaseService {
                     payload_json,
                     updated_at,
                     cached_model_scenario_hash,
-                    cached_model_scenario
+                    cached_model_scenario,
+                    created_by
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     payload_json = excluded.payload_json,
                     updated_at = excluded.updated_at,
                     cached_model_scenario_hash = excluded.cached_model_scenario_hash,
-                    cached_model_scenario = excluded.cached_model_scenario
+                    cached_model_scenario = excluded.cached_model_scenario,
+                    created_by = excluded.created_by
                 `
     ).run(
       scenarioId,
       JSON.stringify(payloadForStorage),
       updatedAt,
       cachedModelScenarioHash,
-      cachedModelScenario
+      cachedModelScenario,
+      createdBy
     );
   }
-  getScenariosRaw() {
+  getScenariosRaw(createdBy) {
     const rows = this.database.prepare(
       `SELECT
                     payload_json,
                     cached_model_scenario_hash,
                     cached_model_scenario
                  FROM scenarios
+                 WHERE created_by = ?
                  ORDER BY updated_at DESC`
-    ).all();
+    ).all(createdBy);
     return rows.map((row) => {
       const parsed = this.tryParseJson(row.payload_json);
       if (!parsed || typeof parsed !== "object") {
@@ -984,29 +1117,31 @@ class DatabaseService {
       };
     }).filter((row) => row !== null);
   }
-  deleteScenario(scenarioId) {
-    this.database.prepare(`DELETE FROM scenarios WHERE id = ?`).run(scenarioId);
+  deleteScenario(scenarioId, createdBy) {
+    this.database.prepare(`DELETE FROM scenarios WHERE id = ? AND created_by = ?`).run(scenarioId, createdBy);
   }
-  upsertFile(fileId, entry) {
+  upsertFile(fileId, entry, createdBy) {
     this.database.prepare(
       `
-                INSERT INTO files (id, path, original_name, size, saved_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO files (id, path, original_name, size, saved_at, created_by)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     path = excluded.path,
                     original_name = excluded.original_name,
                     size = excluded.size,
-                    saved_at = excluded.saved_at
+                    saved_at = excluded.saved_at,
+                    created_by = excluded.created_by
                 `
     ).run(
       fileId,
       entry.path,
       entry.originalName,
       entry.size,
-      entry.savedAt
+      entry.savedAt,
+      createdBy
     );
   }
-  getFilesByIds(fileIds) {
+  getFilesByIds(fileIds, createdBy) {
     if (!fileIds.length) {
       return [];
     }
@@ -1014,8 +1149,9 @@ class DatabaseService {
     const rows = this.database.prepare(
       `SELECT id, path, original_name, size, saved_at
                  FROM files
-                 WHERE id IN (${placeholders})`
-    ).all(...fileIds);
+                                 WHERE created_by = ?
+                                     AND id IN (${placeholders})`
+    ).all(createdBy, ...fileIds);
     const byId = new Map(
       rows.map((row) => [
         row.id,
@@ -1030,12 +1166,13 @@ class DatabaseService {
     );
     return fileIds.map((fileId) => byId.get(fileId)).filter((file) => Boolean(file));
   }
-  getFileById(fileId) {
+  getFileById(fileId, createdBy) {
     const row = this.database.prepare(
       `SELECT id, path, original_name, size, saved_at
                  FROM files
-                 WHERE id = ?`
-    ).get(fileId);
+                 WHERE id = ?
+                   AND created_by = ?`
+    ).get(fileId, createdBy);
     if (!row) {
       return null;
     }
@@ -1047,16 +1184,16 @@ class DatabaseService {
       savedAt: row.saved_at
     };
   }
-  deleteFilesByIds(fileIds) {
+  deleteFilesByIds(fileIds, createdBy) {
     if (!fileIds.length) {
       return;
     }
     const statement = this.database.prepare(
-      `DELETE FROM files WHERE id = ?`
+      `DELETE FROM files WHERE id = ? AND created_by = ?`
     );
     const transaction = this.database.transaction((ids) => {
       for (const fileId of ids) {
-        statement.run(fileId);
+        statement.run(fileId, createdBy);
       }
     });
     transaction(fileIds);
@@ -1102,16 +1239,28 @@ class DatabaseService {
   }
   initializeSchema() {
     this.database.exec(`
+            CREATE TABLE IF NOT EXISTS profiles (
+                id TEXT PRIMARY KEY,
+                data TEXT NOT NULL,
+                secret_key TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS dialogs (
                 id TEXT PRIMARY KEY,
                 payload_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 payload_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS scenarios (
@@ -1119,7 +1268,9 @@ class DatabaseService {
                 payload_json TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 cached_model_scenario_hash TEXT,
-                cached_model_scenario TEXT
+                cached_model_scenario TEXT,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS files (
@@ -1127,7 +1278,9 @@ class DatabaseService {
                 path TEXT NOT NULL,
                 original_name TEXT NOT NULL,
                 size INTEGER NOT NULL,
-                saved_at TEXT NOT NULL
+                saved_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS cache (
@@ -1138,9 +1291,13 @@ class DatabaseService {
                 data_json TEXT NOT NULL
             );
 
+            CREATE INDEX IF NOT EXISTS idx_dialogs_created_by ON dialogs(created_by);
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
             CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_scenarios_created_by ON scenarios(created_by);
             CREATE INDEX IF NOT EXISTS idx_scenarios_updated_at ON scenarios(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_files_created_by ON files(created_by);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
         `);
   }
@@ -1180,7 +1337,12 @@ class UserDataService {
   constructor(paths) {
     this.defaultProjectsDirectory = paths.defaultProjectsDirectory;
     this.databaseService = new DatabaseService(paths.databasePath);
-    this.userProfileService = new UserProfileService(paths.profilePath);
+    const metaService = new MetaService(paths.metaPath);
+    this.userProfileService = new UserProfileService(
+      this.databaseService,
+      metaService
+    );
+    const currentUserId = this.userProfileService.getCurrentUserId();
     this.themesService = new ThemesService(paths.themesPath);
     this.dialogsService = new DialogsService(
       this.databaseService,
@@ -1191,13 +1353,21 @@ class UserDataService {
           activeScenarioId: null,
           lastActiveTab: activeProjectId ? "projects" : "dialogs"
         });
-      }
+      },
+      currentUserId
     );
-    this.projectsService = new ProjectsService(this.databaseService);
-    this.scenariosService = new ScenariosService(this.databaseService);
+    this.projectsService = new ProjectsService(
+      this.databaseService,
+      currentUserId
+    );
+    this.scenariosService = new ScenariosService(
+      this.databaseService,
+      currentUserId
+    );
     this.fileStorageService = new FileStorageService(
       paths.filesPath,
-      this.databaseService
+      this.databaseService,
+      currentUserId
     );
     this.syncProjectDialogs();
   }
@@ -1895,7 +2065,7 @@ const createElectronPaths = (basePath) => {
     resourcesPath,
     themesPath: path.join(resourcesPath, "themes"),
     filesPath: path.join(resourcesPath, "files"),
-    profilePath: path.join(resourcesPath, "profile.json"),
+    metaPath: path.join(resourcesPath, "meta.json"),
     databasePath: path.join(resourcesPath, "db.zvsdatabase"),
     defaultProjectsDirectory: path.join(resourcesPath, "projects")
   };

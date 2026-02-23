@@ -17,6 +17,7 @@ export class DialogsService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly onActiveDialogContextUpdate: ActiveDialogContextUpdater,
+        private readonly createdBy: string,
     ) {}
 
     getActiveDialog(activeDialogId?: string): ChatDialog {
@@ -55,9 +56,22 @@ export class DialogsService {
     }
 
     getDialogsList(): ChatDialogListItem[] {
-        return this.readDialogs()
-            .filter((dialog) => dialog.forProjectId === null)
-            .map((dialog) => this.toDialogListItem(dialog));
+        const standaloneDialogs = this.readDialogs().filter(
+            (dialog) => dialog.forProjectId === null,
+        );
+
+        if (standaloneDialogs.length === 0) {
+            const baseDialog = createBaseDialog();
+            this.writeDialog(baseDialog);
+            this.onActiveDialogContextUpdate({
+                activeDialogId: baseDialog.id,
+                activeProjectId: baseDialog.forProjectId,
+            });
+
+            return [this.toDialogListItem(baseDialog)];
+        }
+
+        return standaloneDialogs.map((dialog) => this.toDialogListItem(dialog));
     }
 
     getDialogById(dialogId: string, activeDialogId?: string): ChatDialog {
@@ -119,7 +133,7 @@ export class DialogsService {
     }
 
     deleteDialog(dialogId: string): DeleteDialogResult {
-        this.databaseService.deleteDialog(dialogId);
+        this.databaseService.deleteDialog(dialogId, this.createdBy);
 
         let dialogs = this.readDialogs();
 
@@ -231,7 +245,9 @@ export class DialogsService {
     private readDialogs(): ChatDialog[] {
         const dialogs: ChatDialog[] = [];
 
-        for (const rawItem of this.databaseService.getDialogsRaw()) {
+        for (const rawItem of this.databaseService.getDialogsRaw(
+            this.createdBy,
+        )) {
             const parsed = rawItem as Partial<ChatDialog>;
 
             if (!Array.isArray(parsed.messages)) {
@@ -269,7 +285,7 @@ export class DialogsService {
     }
 
     private writeDialog(dialog: ChatDialog): void {
-        this.databaseService.upsertDialogRaw(dialog.id, dialog);
+        this.databaseService.upsertDialogRaw(dialog.id, dialog, this.createdBy);
     }
 
     private normalizeDialogId(id: unknown): string {

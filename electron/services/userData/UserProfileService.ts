@@ -1,10 +1,12 @@
-import fs from "node:fs";
+import { randomBytes, randomUUID } from "node:crypto";
 import { defaultProfile } from "../../static/data";
 import type {
     ChatDriver,
     UserProfile,
     WorkspaceTab,
 } from "../../../src/types/App";
+import { DatabaseService } from "../DatabaseService";
+import { MetaService } from "./MetaService";
 
 const isChatDriver = (value: unknown): value is ChatDriver => {
     return value === "ollama" || value === "";
@@ -59,17 +61,29 @@ const normalizeWorkspaceContext = (profile: UserProfile): UserProfile => {
 };
 
 export class UserProfileService {
-    constructor(private readonly profilePath: string) {}
+    private readonly currentUserId: string;
+
+    constructor(
+        private readonly databaseService: DatabaseService,
+        private readonly metaService: MetaService,
+    ) {
+        this.currentUserId = this.ensureCurrentUserProfile();
+    }
+
+    getCurrentUserId(): string {
+        return this.currentUserId;
+    }
 
     getUserProfile(): UserProfile {
-        if (!fs.existsSync(this.profilePath)) {
+        const parsed = this.databaseService.getProfileRaw(
+            this.currentUserId,
+        ) as Partial<UserProfile> | null;
+
+        if (!parsed || typeof parsed !== "object") {
             return defaultProfile;
         }
 
         try {
-            const rawProfile = fs.readFileSync(this.profilePath, "utf-8");
-            const parsed = JSON.parse(rawProfile) as Partial<UserProfile>;
-
             const normalized: UserProfile = {
                 ...defaultProfile,
                 ...(typeof parsed.themePreference === "string"
@@ -130,10 +144,33 @@ export class UserProfileService {
             ...nextProfile,
         });
 
-        fs.writeFileSync(
-            this.profilePath,
-            JSON.stringify(mergedProfile, null, 2),
+        this.databaseService.updateProfileRaw(
+            this.currentUserId,
+            mergedProfile,
         );
         return mergedProfile;
+    }
+
+    private ensureCurrentUserProfile(): string {
+        const currentUserIdFromMeta = this.metaService.getCurrentUserId();
+
+        if (
+            currentUserIdFromMeta &&
+            this.databaseService.hasProfile(currentUserIdFromMeta)
+        ) {
+            return currentUserIdFromMeta;
+        }
+
+        const profileId = randomUUID();
+        const secretKey = randomBytes(32).toString("hex");
+
+        this.databaseService.createProfile(
+            profileId,
+            defaultProfile,
+            secretKey,
+        );
+        this.metaService.setCurrentUserId(profileId);
+
+        return profileId;
     }
 }

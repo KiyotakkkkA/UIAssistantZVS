@@ -9,7 +9,10 @@ import { DatabaseService } from "../DatabaseService";
 import path from "node:path";
 
 export class ProjectsService {
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly databaseService: DatabaseService,
+        private readonly createdBy: string,
+    ) {}
 
     getProjectsList(): ProjectListItem[] {
         return this.readProjects().map((project) =>
@@ -55,7 +58,7 @@ export class ProjectsService {
             return null;
         }
 
-        this.databaseService.deleteProject(project.id);
+        this.databaseService.deleteProject(project.id, this.createdBy);
 
         return project;
     }
@@ -125,7 +128,9 @@ export class ProjectsService {
     private readProjects(): Project[] {
         const projects: Project[] = [];
 
-        for (const rawItem of this.databaseService.getProjectsRaw()) {
+        for (const rawItem of this.databaseService.getProjectsRaw(
+            this.createdBy,
+        )) {
             const parsed = rawItem as Partial<Project>;
             const now = new Date().toISOString();
 
@@ -177,7 +182,11 @@ export class ProjectsService {
     }
 
     private writeProject(project: Project): void {
-        this.databaseService.upsertProjectRaw(project.id, project);
+        this.databaseService.upsertProjectRaw(
+            project.id,
+            project,
+            this.createdBy,
+        );
     }
 
     private toProjectListItem(project: Project): ProjectListItem {

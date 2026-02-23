@@ -32,6 +32,7 @@ import { ThemesService } from "./userData/ThemesService";
 import { DialogsService } from "./userData/DialogsService";
 import { ProjectsService } from "./userData/ProjectsService";
 import { ScenariosService } from "./userData/ScenariosService";
+import { MetaService } from "./userData/MetaService";
 import { FileStorageService } from "./FileStorageService";
 import { DatabaseService } from "./DatabaseService";
 
@@ -49,8 +50,13 @@ export class UserDataService {
         this.defaultProjectsDirectory = paths.defaultProjectsDirectory;
 
         this.databaseService = new DatabaseService(paths.databasePath);
+        const metaService = new MetaService(paths.metaPath);
 
-        this.userProfileService = new UserProfileService(paths.profilePath);
+        this.userProfileService = new UserProfileService(
+            this.databaseService,
+            metaService,
+        );
+        const currentUserId = this.userProfileService.getCurrentUserId();
         this.themesService = new ThemesService(paths.themesPath);
         this.dialogsService = new DialogsService(
             this.databaseService,
@@ -62,12 +68,20 @@ export class UserDataService {
                     lastActiveTab: activeProjectId ? "projects" : "dialogs",
                 });
             },
+            currentUserId,
         );
-        this.projectsService = new ProjectsService(this.databaseService);
-        this.scenariosService = new ScenariosService(this.databaseService);
+        this.projectsService = new ProjectsService(
+            this.databaseService,
+            currentUserId,
+        );
+        this.scenariosService = new ScenariosService(
+            this.databaseService,
+            currentUserId,
+        );
         this.fileStorageService = new FileStorageService(
             paths.filesPath,
             this.databaseService,
+            currentUserId,
         );
 
         this.syncProjectDialogs();

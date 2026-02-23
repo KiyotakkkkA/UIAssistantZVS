@@ -8,7 +8,10 @@ import type {
 import { DatabaseService } from "../DatabaseService";
 
 export class ScenariosService {
-    constructor(private readonly databaseService: DatabaseService) {}
+    constructor(
+        private readonly databaseService: DatabaseService,
+        private readonly createdBy: string,
+    ) {}
 
     getScenariosList(): ScenarioListItem[] {
         return this.readScenarios().map((scenario) =>
@@ -75,14 +78,16 @@ export class ScenariosService {
             return null;
         }
 
-        this.databaseService.deleteScenario(scenario.id);
+        this.databaseService.deleteScenario(scenario.id, this.createdBy);
         return scenario;
     }
 
     private readScenarios(): Scenario[] {
         const scenarios: Scenario[] = [];
 
-        for (const rawItem of this.databaseService.getScenariosRaw()) {
+        for (const rawItem of this.databaseService.getScenariosRaw(
+            this.createdBy,
+        )) {
             const parsed = rawItem as Partial<Scenario>;
             const now = new Date().toISOString();
 
@@ -125,7 +130,11 @@ export class ScenariosService {
     }
 
     private writeScenario(scenario: Scenario): void {
-        this.databaseService.upsertScenarioRaw(scenario.id, scenario);
+        this.databaseService.upsertScenarioRaw(
+            scenario.id,
+            scenario,
+            this.createdBy,
+        );
     }
 
     private normalizeScenarioId(id: unknown): string {

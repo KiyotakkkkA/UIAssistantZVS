@@ -11,6 +11,7 @@ export class FileStorageService {
     constructor(
         private readonly filesPath: string,
         private readonly databaseService: DatabaseService,
+        private readonly createdBy: string,
     ) {}
 
     saveFiles(files: UploadedFileData[]): SavedFileRecord[] {
@@ -35,7 +36,7 @@ export class FileStorageService {
                 savedAt: new Date().toISOString(),
             };
 
-            this.databaseService.upsertFile(fileId, entry);
+            this.databaseService.upsertFile(fileId, entry, this.createdBy);
 
             saved.push({
                 id: fileId,
@@ -47,11 +48,11 @@ export class FileStorageService {
     }
 
     getFilesByIds(fileIds: string[]): SavedFileRecord[] {
-        return this.databaseService.getFilesByIds(fileIds);
+        return this.databaseService.getFilesByIds(fileIds, this.createdBy);
     }
 
     getFileById(fileId: string): SavedFileRecord | null {
-        return this.databaseService.getFileById(fileId);
+        return this.databaseService.getFileById(fileId, this.createdBy);
     }
 
     deleteFilesByIds(fileIds: string[]): void {
@@ -59,7 +60,10 @@ export class FileStorageService {
             return;
         }
 
-        const files = this.databaseService.getFilesByIds(fileIds);
+        const files = this.databaseService.getFilesByIds(
+            fileIds,
+            this.createdBy,
+        );
 
         for (const entry of files) {
             if (fs.existsSync(entry.path)) {
@@ -67,7 +71,7 @@ export class FileStorageService {
             }
         }
 
-        this.databaseService.deleteFilesByIds(fileIds);
+        this.databaseService.deleteFilesByIds(fileIds, this.createdBy);
     }
 
     private parseDataUrl(dataUrl: string): Buffer {
