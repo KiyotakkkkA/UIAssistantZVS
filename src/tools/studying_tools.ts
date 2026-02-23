@@ -1,5 +1,5 @@
 import Config from "../config/Config";
-import { fetchMireaScheduleByDate } from "./studying/studying_schedule_mirea_tool";
+import { fetchMireaScheduleByDate } from "./studying/studying_schedule_mirea";
 import { ToolsBuilder } from "../utils/ToolsBuilder";
 
 export const studyingToolsPackage = () => {

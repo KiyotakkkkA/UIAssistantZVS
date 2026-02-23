@@ -1,13 +1,8 @@
 import { ToolsBuilder } from "../utils/ToolsBuilder";
-
-/**
- * Escapes all MarkdownV2 special characters in a plain-text string.
- * Required characters: _ * [ ] ( ) ~ ` > # + - = | { } . !  \
- * Does NOT escape existing formatting — use only when the input is plain text.
- */
-function escapeMarkdownV2(text: string): string {
-    return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
-}
+import {
+    getUnreadTelegramMessagesViaProxy,
+    sendTelegramMessageViaProxy,
+} from "./communication/communication_telegram";
 
 export const communicationToolsPackage = () => {
     const builder = new ToolsBuilder();
@@ -16,7 +11,7 @@ export const communicationToolsPackage = () => {
         .addPackage({
             id: "communication-tools",
             title: "Мессенджеры",
-            description: "Инструменты для отправки сообщений пользователю",
+            description: "Инструменты для отправки и чтения сообщений пользователя",
         })
         .addTool({
             name: "send_telegram_msg",
@@ -78,68 +73,94 @@ export const communicationToolsPackage = () => {
                     };
                 }
 
-                // Auto-escape special chars when MarkdownV2 is requested
-                const message =
-                    parseMode === "MarkdownV2"
-                        ? escapeMarkdownV2(rawMessage)
-                        : rawMessage;
+                const message = rawMessage;
 
                 try {
-                    const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
-                    const payload = {
-                        chat_id: telegramId,
-                        text: message,
-                        parse_mode: parseMode,
-                    };
-
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(
-                        () => controller.abort(),
-                        10_000,
-                    );
-
-                    let response: Response;
-                    try {
-                        response = await fetch(url, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(payload),
-                            signal: controller.signal,
-                        });
-                    } finally {
-                        clearTimeout(timeoutId);
-                    }
-
-                    const data = (await response.json()) as {
-                        ok: boolean;
-                        description?: string;
-                        result?: { message_id?: number };
-                    };
-
-                    if (response.ok && data.ok) {
-                        return {
-                            success: true,
-                            message: "sent",
-                            message_id: data.result?.message_id,
-                        };
-                    }
-
+                    return await sendTelegramMessageViaProxy({
+                        telegramBotToken,
+                        telegramId,
+                        message,
+                        parseMode:
+                            parseMode === "HTML" ||
+                            parseMode === "MarkdownV2"
+                                ? parseMode
+                                : "Markdown",
+                    });
+                } catch (err: unknown) {
                     return {
                         success: false,
-                        error: data.description ?? "unknown",
-                        message: "failed",
+                        error: "unexpected_error",
+                        message:
+                            err instanceof Error ? err.message : String(err),
                     };
+                }
+            },
+        })
+        .addTool({
+            name: "get_telegram_unread_msgs",
+            description:
+                "Получает непрочитанные сообщения пользователя из Telegram через getUpdates. " +
+                "По умолчанию помечает полученные апдейты прочитанными (offset сохраняется).",
+            parameters: ToolsBuilder.objectSchema({
+                properties: {
+                    limit: ToolsBuilder.numberParam(
+                        "Сколько апдейтов читать за запрос (1..100). По умолчанию: 20.",
+                    ),
+                    mark_as_read: {
+                        type: "boolean",
+                        description:
+                            "Помечать ли полученные апдейты прочитанными. По умолчанию: true.",
+                    },
+                },
+            }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    success: { type: "boolean" },
+                    message: { type: "string" },
+                    error: { type: "string" },
+                    unread_count: { type: "number" },
+                    updates_count: { type: "number" },
+                    offset_used: { type: "number" },
+                    next_offset: { type: "number" },
+                    messages: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                        },
+                    },
+                },
+                required: ["success", "message"],
+            },
+            execute: async (args, context) => {
+                const { telegramBotToken, telegramId } = context;
+
+                if (!telegramBotToken || !telegramId) {
+                    return {
+                        success: false,
+                        error: "missing_config",
+                        message:
+                            "Telegram не настроен. Укажи Bot Token и ID пользователя в настройках.",
+                    };
+                }
+
+                const rawLimit = args.limit;
+                const rawMarkAsRead = args.mark_as_read;
+
+                try {
+                    return await getUnreadTelegramMessagesViaProxy({
+                        telegramBotToken,
+                        telegramId,
+                        limit:
+                            typeof rawLimit === "number"
+                                ? rawLimit
+                                : undefined,
+                        markAsRead:
+                            typeof rawMarkAsRead === "boolean"
+                                ? rawMarkAsRead
+                                : undefined,
+                    });
                 } catch (err: unknown) {
-                    if (
-                        err instanceof DOMException &&
-                        err.name === "AbortError"
-                    ) {
-                        return {
-                            success: false,
-                            error: "timeout",
-                            message: "request timeout",
-                        };
-                    }
                     return {
                         success: false,
                         error: "unexpected_error",
