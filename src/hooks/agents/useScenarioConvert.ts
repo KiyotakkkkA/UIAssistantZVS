@@ -506,18 +506,14 @@ export const useScenarioConvert = () => {
     const scenarioToFlow = useCallback(
         async (scenario: Scenario) => {
             const nextHash = buildScenarioSceneHash(scenario);
-            const cache =
-                (scenario.content?.scenarioFlowCache as
-                    | {
-                          hash?: unknown;
-                          flow?: unknown;
-                      }
-                    | undefined) ?? undefined;
-
             const cachedHash =
-                typeof cache?.hash === "string" ? cache.hash : "";
+                typeof scenario.cachedModelScenarioHash === "string"
+                    ? scenario.cachedModelScenarioHash
+                    : "";
             const cachedFlow =
-                typeof cache?.flow === "string" ? cache.flow : "";
+                typeof scenario.cachedModelScenario === "string"
+                    ? scenario.cachedModelScenario
+                    : "";
 
             if (cachedHash === nextHash && cachedFlow) {
                 return cachedFlow;
@@ -528,14 +524,8 @@ export const useScenarioConvert = () => {
             await updateScenario(scenario.id, {
                 name: scenario.name,
                 description: scenario.description,
-                content: {
-                    ...scenario.content,
-                    scenarioFlowCache: {
-                        hash: nextHash,
-                        flow: computedFlow,
-                        updatedAt: new Date().toISOString(),
-                    },
-                },
+                cachedModelScenarioHash: nextHash,
+                cachedModelScenario: computedFlow,
             });
 
             return computedFlow;

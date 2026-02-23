@@ -44,7 +44,7 @@ export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
                 portName: VARIABLE_CONTINUE_OUTPUT_PORT,
                 label: "ПРОДОЛЖИТЬ",
             },
-        ];
+        ]; 
     }, [block.meta?.variable?.selectedVariables]);
 
     return (

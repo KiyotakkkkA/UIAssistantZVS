@@ -112,6 +112,21 @@ export class DatabaseService {
             payload && typeof payload === "object"
                 ? (payload as Record<string, unknown>)
                 : {};
+        const cachedModelScenarioHash =
+            typeof payloadRecord.cachedModelScenarioHash === "string"
+                ? payloadRecord.cachedModelScenarioHash
+                : typeof payloadRecord.cached_model_scenario_hash === "string"
+                  ? payloadRecord.cached_model_scenario_hash
+                  : null;
+        const cachedModelScenario =
+            typeof payloadRecord.cachedModelScenario === "string"
+                ? payloadRecord.cachedModelScenario
+                : typeof payloadRecord.cached_model_scenario === "string"
+                  ? payloadRecord.cached_model_scenario
+                  : null;
+
+        const payloadForStorage = this.sanitizeScenarioPayload(payloadRecord);
+
         const updatedAt =
             typeof payloadRecord.updatedAt === "string" &&
             payloadRecord.updatedAt
@@ -121,27 +136,69 @@ export class DatabaseService {
         this.database
             .prepare(
                 `
-                INSERT INTO scenarios (id, payload_json, updated_at)
-                VALUES (?, ?, ?)
+                INSERT INTO scenarios (
+                    id,
+                    payload_json,
+                    updated_at,
+                    cached_model_scenario_hash,
+                    cached_model_scenario
+                )
+                VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     payload_json = excluded.payload_json,
-                    updated_at = excluded.updated_at
+                    updated_at = excluded.updated_at,
+                    cached_model_scenario_hash = excluded.cached_model_scenario_hash,
+                    cached_model_scenario = excluded.cached_model_scenario
                 `,
             )
-            .run(scenarioId, JSON.stringify(payload), updatedAt);
+            .run(
+                scenarioId,
+                JSON.stringify(payloadForStorage),
+                updatedAt,
+                cachedModelScenarioHash,
+                cachedModelScenario,
+            );
     }
 
     getScenariosRaw(): unknown[] {
         const rows = this.database
             .prepare(
-                `SELECT payload_json
+                `SELECT
+                    payload_json,
+                    cached_model_scenario_hash,
+                    cached_model_scenario
                  FROM scenarios
                  ORDER BY updated_at DESC`,
             )
-            .all() as Array<{ payload_json: string }>;
+            .all() as Array<{
+            payload_json: string;
+            cached_model_scenario_hash: string | null;
+            cached_model_scenario: string | null;
+        }>;
 
         return rows
-            .map((row) => this.tryParseJson(row.payload_json))
+            .map((row) => {
+                const parsed = this.tryParseJson(row.payload_json);
+
+                if (!parsed || typeof parsed !== "object") {
+                    return null;
+                }
+
+                return {
+                    ...(parsed as Record<string, unknown>),
+                    ...(typeof row.cached_model_scenario_hash === "string"
+                        ? {
+                              cachedModelScenarioHash:
+                                  row.cached_model_scenario_hash,
+                          }
+                        : {}),
+                    ...(typeof row.cached_model_scenario === "string"
+                        ? {
+                              cachedModelScenario: row.cached_model_scenario,
+                          }
+                        : {}),
+                };
+            })
             .filter((row) => row !== null);
     }
 
@@ -331,7 +388,9 @@ export class DatabaseService {
             CREATE TABLE IF NOT EXISTS scenarios (
                 id TEXT PRIMARY KEY,
                 payload_json TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                cached_model_scenario_hash TEXT,
+                cached_model_scenario TEXT
             );
 
             CREATE TABLE IF NOT EXISTS files (
@@ -355,6 +414,32 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_scenarios_updated_at ON scenarios(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
         `);
+    }
+
+    private sanitizeScenarioPayload(
+        payloadRecord: Record<string, unknown>,
+    ): Record<string, unknown> {
+        const content =
+            payloadRecord.content &&
+            typeof payloadRecord.content === "object" &&
+            !Array.isArray(payloadRecord.content)
+                ? ({
+                      ...(payloadRecord.content as Record<string, unknown>),
+                  } as Record<string, unknown>)
+                : undefined;
+
+        if (content && "scenarioFlowCache" in content) {
+            delete content.scenarioFlowCache;
+        }
+
+        return {
+            ...payloadRecord,
+            ...(content ? { content } : {}),
+            cachedModelScenarioHash: undefined,
+            cachedModelScenario: undefined,
+            cached_model_scenario_hash: undefined,
+            cached_model_scenario: undefined,
+        };
     }
 
     private tryParseJson(raw: string): unknown | null {

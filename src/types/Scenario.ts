@@ -3,6 +3,8 @@ export type Scenario = {
     name: string;
     description: string;
     content: Record<string, unknown>;
+    cachedModelScenarioHash?: string;
+    cachedModelScenario?: string;
     createdAt: string;
     updatedAt: string;
 };
@@ -150,6 +152,8 @@ export type UpdateScenarioPayload = {
     name: string;
     description: string;
     content?: Record<string, unknown>;
+    cachedModelScenarioHash?: string;
+    cachedModelScenario?: string;
 };
 
 export type DeleteScenarioResult = {

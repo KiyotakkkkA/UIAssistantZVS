@@ -1,21 +1,154 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate, useParams } from "react-router-dom";
-import { useToasts } from "../../../hooks";
+import { useFileDownload, useFileUpload, useToasts } from "../../../hooks";
 import { useScenario } from "../../../hooks/agents";
-import { Loader, TreeView } from "../../components/atoms";
+import { Button, Loader, TreeView } from "../../components/atoms";
 import {
     ScenarioCanvas,
     type ScenarioCanvasInsertRequest,
 } from "../../components/organisms/scenarios";
 import { toolsStore } from "../../../stores/toolsStore";
+import { Icon } from "@iconify/react";
+import type { Scenario } from "../../../types/Scenario";
+
+type ImportedScenarioPayload = {
+    name?: unknown;
+    description?: unknown;
+    content?: unknown;
+};
+
+const tryParseImportedScenario = (
+    rawText: string,
+): ImportedScenarioPayload | null => {
+    try {
+        const parsed = JSON.parse(rawText) as unknown;
+
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return null;
+        }
+
+        return parsed as ImportedScenarioPayload;
+    } catch {
+        return null;
+    }
+};
 
 export const ScenarioPage = observer(function ScenarioPage() {
     const { scenarioId = "" } = useParams();
     const navigate = useNavigate();
     const toasts = useToasts();
-    const { activeScenario, switchScenario } = useScenario();
+    const { activeScenario, switchScenario, updateScenario } = useScenario();
+    const { isUploading, pickFiles } = useFileUpload();
     const [isLoading, setIsLoading] = useState(true);
+    const scenarioExportJson = useMemo(() => {
+        if (!activeScenario) {
+            return "";
+        }
+
+        const exportPayload: Record<string, unknown> = {
+            name: activeScenario.name,
+            description: activeScenario.description,
+            content: activeScenario.content,
+        };
+
+        return JSON.stringify(exportPayload, null, 2);
+    }, [activeScenario]);
+
+    const downloadScenarioJson = useFileDownload(
+        scenarioExportJson,
+        `${(activeScenario?.name || "scenario").replace(/[\\/:*?"<>|]/g, "_")}.json`,
+    );
+
+    const handleExportScenario = useCallback(() => {
+        if (!activeScenario) {
+            toasts.warning({
+                title: "Сценарий не найден",
+                description: "Нечего экспортировать.",
+            });
+            return;
+        }
+
+        downloadScenarioJson();
+    }, [activeScenario, downloadScenarioJson, toasts]);
+
+    const handleImportScenario = useCallback(async () => {
+        if (!activeScenario) {
+            toasts.warning({
+                title: "Сценарий не найден",
+                description: "Сначала откройте сценарий для импорта.",
+            });
+            return;
+        }
+
+        const files = await pickFiles({
+            accept: ["application/json", ".json"],
+            multiple: false,
+        });
+
+        const file = files[0];
+        if (!file) {
+            return;
+        }
+
+        try {
+            const rawText = await fetch(file.dataUrl).then((response) =>
+                response.text(),
+            );
+            const imported = tryParseImportedScenario(rawText);
+
+            if (!imported) {
+                toasts.warning({
+                    title: "Некорректный JSON",
+                    description:
+                        "Файл импорта должен содержать объект сценария.",
+                });
+                return;
+            }
+
+            const importedName =
+                typeof imported.name === "string" &&
+                imported.name.trim().length > 0
+                    ? imported.name.trim()
+                    : activeScenario.name;
+            const importedDescription =
+                typeof imported.description === "string"
+                    ? imported.description
+                    : activeScenario.description;
+            const importedContent =
+                imported.content &&
+                typeof imported.content === "object" &&
+                !Array.isArray(imported.content)
+                    ? (imported.content as Scenario["content"])
+                    : activeScenario.content;
+
+            const updated = await updateScenario(activeScenario.id, {
+                name: importedName,
+                description: importedDescription,
+                content: importedContent,
+            });
+
+            if (!updated) {
+                toasts.danger({
+                    title: "Ошибка импорта",
+                    description:
+                        "Не удалось применить импортированный сценарий.",
+                });
+                return;
+            }
+
+            toasts.success({
+                title: "Импорт завершён",
+                description: "Сценарий успешно обновлён из JSON.",
+            });
+        } catch {
+            toasts.danger({
+                title: "Ошибка импорта",
+                description: "Не удалось прочитать выбранный файл.",
+            });
+        }
+    }, [activeScenario, pickFiles, toasts, updateScenario]);
+
     const [insertRequest, setInsertRequest] =
         useState<ScenarioCanvasInsertRequest | null>(null);
 
@@ -71,14 +204,40 @@ export const ScenarioPage = observer(function ScenarioPage() {
 
     return (
         <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col gap-3 rounded-3xl bg-main-900/70 p-4 backdrop-blur-md">
-            <div className="rounded-2xl bg-main-900/60 p-4">
-                <h1 className="text-lg font-semibold text-main-100">
-                    {activeScenario?.name || "Сценарий"}
-                </h1>
-                <p className="mt-2 text-sm text-main-300">
-                    {activeScenario?.description?.trim() ||
-                        "Описание сценария пока не задано."}
-                </p>
+            <div className="flex justify-between items-start">
+                <div className="rounded-2xl bg-main-900/60 p-4">
+                    <h1 className="text-lg font-semibold text-main-100">
+                        {activeScenario?.name || "Сценарий"}
+                    </h1>
+                    <p className="mt-2 text-sm text-main-300">
+                        {activeScenario?.description?.trim() ||
+                            "Описание сценария пока не задано."}
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    <Button
+                        className="gap-2 p-2"
+                        variant="primary"
+                        shape="rounded-lg"
+                        onClick={handleExportScenario}
+                        disabled={!activeScenario}
+                    >
+                        <Icon icon="mdi:download" width={16} height={16} />
+                        Экспорт в JSON
+                    </Button>
+                    <Button
+                        className="gap-2 p-2"
+                        variant="secondary"
+                        shape="rounded-lg"
+                        onClick={() => {
+                            void handleImportScenario();
+                        }}
+                        disabled={!activeScenario || isUploading}
+                    >
+                        <Icon icon="mdi:upload" width={16} height={16} />
+                        Импорт из JSON
+                    </Button>
+                </div>
             </div>
             <div className="relative flex min-h-0 flex-1 gap-4">
                 <aside className="w-80">

@@ -28,6 +28,8 @@ export class ScenariosService {
             name: payload.name.trim() || "Новый сценарий",
             description: payload.description.trim(),
             content: this.normalizeContent(payload.content),
+            cachedModelScenarioHash: "",
+            cachedModelScenario: "",
             createdAt: now,
             updatedAt: now,
         };
@@ -51,6 +53,14 @@ export class ScenariosService {
             name: payload.name.trim() || current.name,
             description: payload.description.trim(),
             content: this.normalizeContent(payload.content ?? current.content),
+            cachedModelScenarioHash:
+                typeof payload.cachedModelScenarioHash === "string"
+                    ? payload.cachedModelScenarioHash
+                    : (current.cachedModelScenarioHash ?? ""),
+            cachedModelScenario:
+                typeof payload.cachedModelScenario === "string"
+                    ? payload.cachedModelScenario
+                    : (current.cachedModelScenario ?? ""),
             updatedAt: new Date().toISOString(),
         };
 
@@ -88,6 +98,14 @@ export class ScenariosService {
                 name: parsed.name.trim() || "Новый сценарий",
                 description: parsed.description,
                 content: this.normalizeContent(parsed.content),
+                cachedModelScenarioHash:
+                    typeof parsed.cachedModelScenarioHash === "string"
+                        ? parsed.cachedModelScenarioHash
+                        : "",
+                cachedModelScenario:
+                    typeof parsed.cachedModelScenario === "string"
+                        ? parsed.cachedModelScenario
+                        : "",
                 createdAt:
                     typeof parsed.createdAt === "string" && parsed.createdAt
                         ? parsed.createdAt
