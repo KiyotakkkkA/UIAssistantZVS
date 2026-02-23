@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
 import { CommandExecService } from "./services/CommandExecService";
+import { BrowserService } from "./services/BrowserService";
 import { createElectronPaths } from "./paths";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
@@ -47,6 +48,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null;
 let userDataService: UserDataService;
 let commandExecService: CommandExecService;
+let browserService: BrowserService;
 
 const mimeByExtension: Record<string, string> = {
     ".png": "image/png",
@@ -163,6 +165,7 @@ app.whenReady()
         initDirectoriesService.initialize();
         userDataService = new UserDataService(appPaths);
         commandExecService = new CommandExecService();
+        browserService = new BrowserService();
 
         ipcMain.handle("app:get-boot-data", () =>
             userDataService.getBootData(),
@@ -463,6 +466,32 @@ app.whenReady()
             "app:exec-shell-command",
             (_event, command: string, cwd?: string) =>
                 commandExecService.execute(command, cwd),
+        );
+        ipcMain.handle(
+            "app:browser-open-url",
+            (_event, url: string, timeoutMs?: number) =>
+                browserService.openUrl(url, timeoutMs),
+        );
+        ipcMain.handle(
+            "app:browser-get-page-snapshot",
+            (_event, maxElements?: number) =>
+                browserService.getPageSnapshot(maxElements),
+        );
+        ipcMain.handle(
+            "app:browser-interact-with",
+            (
+                _event,
+                params: {
+                    action: "click" | "type";
+                    selector: string;
+                    text?: string;
+                    submit?: boolean;
+                    waitForNavigationMs?: number;
+                },
+            ) => browserService.interactWith(params),
+        );
+        ipcMain.handle("app:browser-close-session", () =>
+            browserService.closeSession(),
         );
         ipcMain.handle(
             "app:pick-files",

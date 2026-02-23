@@ -120,6 +120,81 @@ export type AppApiShellNamespace = {
     ) => Promise<ExecShellCommandResult>;
 };
 
+export type BrowserRedirect = {
+    from: string;
+    to: string;
+};
+
+export type BrowserNavigateResult = {
+    success: boolean;
+    requestedUrl: string;
+    finalUrl: string;
+    title: string;
+    redirected: boolean;
+    redirects: BrowserRedirect[];
+    statusCode: number | null;
+    loadTimeMs: number;
+    error?: string;
+};
+
+export type BrowserSnapshotElement = {
+    id: string;
+    tag: string;
+    role: string;
+    text: string;
+    href: string;
+    type: string;
+    placeholder: string;
+    selector: string;
+};
+
+export type BrowserPageSnapshot = {
+    url: string;
+    title: string;
+    headings: string[];
+    elements: BrowserSnapshotElement[];
+    textPreview: string;
+    capturedAt: string;
+};
+
+export type BrowserInteractAction = "click" | "type";
+
+export type BrowserInteractParams = {
+    action: BrowserInteractAction;
+    selector: string;
+    text?: string;
+    submit?: boolean;
+    waitForNavigationMs?: number;
+};
+
+export type BrowserInteractResult = {
+    success: boolean;
+    action: BrowserInteractAction;
+    selector: string;
+    elementTag?: string;
+    url: string;
+    title: string;
+    waitedMs: number;
+    error?: string;
+};
+
+export type BrowserCloseResult = {
+    success: boolean;
+    hadSession: boolean;
+};
+
+export type AppApiBrowserNamespace = {
+    openUrl: (
+        url: string,
+        timeoutMs?: number,
+    ) => Promise<BrowserNavigateResult>;
+    getPageSnapshot: (maxElements?: number) => Promise<BrowserPageSnapshot>;
+    interactWith: (
+        params: BrowserInteractParams,
+    ) => Promise<BrowserInteractResult>;
+    closeSession: () => Promise<BrowserCloseResult>;
+};
+
 export type AppApiUploadNamespace = {
     pickFiles: (options?: {
         accept?: string[];
@@ -221,6 +296,7 @@ export type AppApi = {
     profile: AppApiProfileNamespace;
     dialogs: AppApiDialogsNamespace;
     shell: AppApiShellNamespace;
+    browser: AppApiBrowserNamespace;
     upload: AppApiUploadNamespace;
     files: AppApiFilesNamespace;
     projects: AppApiProjectsNamespace;

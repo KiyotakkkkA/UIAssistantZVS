@@ -41,7 +41,7 @@ export function Accordeon({
                             {title}
                         </p>
                         {subtitle ? (
-                            <p className="mt-1 text-[11px] text-main-400">
+                            <p className="mt-1 text-[11px] text-main-400 text-left">
                                 {subtitle}
                             </p>
                         ) : null}

@@ -1,8 +1,7 @@
-import { postOllamaJson } from "../../../services/api";
+import { postOllamaStream } from "../../../services/api";
 import type {
     ChatMessage,
     OllamaChatChunk,
-    OllamaChatResponse,
     OllamaMessage,
     StreamChatParams,
 } from "../../../types/Chat";
@@ -24,31 +23,21 @@ const streamChatOllama = async ({
         throw new DOMException("Request was aborted", "AbortError");
     }
 
-    const response = await postOllamaJson<OllamaChatResponse>("chat", {
-        model,
-        messages,
-        stream: false,
-        think: true,
-        ...(tools && tools.length > 0 ? { tools } : {}),
-        ...(format ? { format } : {}),
-    });
-
-    if (signal?.aborted) {
-        throw new DOMException("Request was aborted", "AbortError");
-    }
-
-    onChunk?.({
-        model: response.model,
-        created_at: response.created_at,
-        message: response.message,
-        done: false,
-    } satisfies OllamaChatChunk);
-
-    onChunk?.({
-        model: response.model,
-        created_at: response.created_at,
-        done: true,
-    } satisfies OllamaChatChunk);
+    await postOllamaStream<OllamaChatChunk>(
+        "chat",
+        {
+            model,
+            messages,
+            stream: true,
+            think: true,
+            ...(tools && tools.length > 0 ? { tools } : {}),
+            ...(format ? { format } : {}),
+        },
+        {
+            signal,
+            onChunk: onChunk ?? (() => {}),
+        },
+    );
 };
 
 const toOllamaMessages = (messages: ChatMessage[]): OllamaMessage[] =>

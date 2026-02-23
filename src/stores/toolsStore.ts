@@ -1,6 +1,7 @@
 import { makeAutoObservable } from "mobx";
 import {
     baseToolsPackage,
+    browserToolsPackage,
     communicationToolsPackage,
     filesystemToolsPackage,
     studyingToolsPackage,
@@ -21,6 +22,7 @@ class ToolsStore {
     constructor() {
         this.packages = [
             ...baseToolsPackage(),
+            ...browserToolsPackage(),
             ...communicationToolsPackage(),
             ...filesystemToolsPackage(),
             ...studyingToolsPackage(),

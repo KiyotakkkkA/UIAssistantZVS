@@ -82,6 +82,15 @@ const appApi: AppApi = {
         execShellCommand: (command: string, cwd?: string) =>
             ipcRenderer.invoke("app:exec-shell-command", command, cwd),
     },
+    browser: {
+        openUrl: (url: string, timeoutMs?: number) =>
+            ipcRenderer.invoke("app:browser-open-url", url, timeoutMs),
+        getPageSnapshot: (maxElements?: number) =>
+            ipcRenderer.invoke("app:browser-get-page-snapshot", maxElements),
+        interactWith: (params) =>
+            ipcRenderer.invoke("app:browser-interact-with", params),
+        closeSession: () => ipcRenderer.invoke("app:browser-close-session"),
+    },
     upload: {
         pickFiles: (options?: { accept?: string[]; multiple?: boolean }) =>
             ipcRenderer.invoke("app:pick-files", options),

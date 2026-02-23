@@ -54,6 +54,12 @@ const appApi = {
   shell: {
     execShellCommand: (command, cwd) => electron.ipcRenderer.invoke("app:exec-shell-command", command, cwd)
   },
+  browser: {
+    openUrl: (url, timeoutMs) => electron.ipcRenderer.invoke("app:browser-open-url", url, timeoutMs),
+    getPageSnapshot: (maxElements) => electron.ipcRenderer.invoke("app:browser-get-page-snapshot", maxElements),
+    interactWith: (params) => electron.ipcRenderer.invoke("app:browser-interact-with", params),
+    closeSession: () => electron.ipcRenderer.invoke("app:browser-close-session")
+  },
   upload: {
     pickFiles: (options) => electron.ipcRenderer.invoke("app:pick-files", options),
     pickPath: (options) => electron.ipcRenderer.invoke("app:pick-path", options)
