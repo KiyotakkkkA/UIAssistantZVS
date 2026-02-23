@@ -104,7 +104,7 @@ export const ScenarioPromptBlock = memo(function ScenarioPromptBlock({
                 </span>
                 <button
                     type="button"
-                    className="h-4 w-4 rounded-full border border-main-700/70 bg-main-100"
+                    className="h-4 w-4 rounded-full border border-main-700/70 bg-green-300"
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
@@ -121,7 +121,7 @@ export const ScenarioPromptBlock = memo(function ScenarioPromptBlock({
             >
                 <button
                     type="button"
-                    className={`h-4 w-4 rounded-full border border-main-700/70 ${isConnectSource ? "bg-main-300" : "bg-main-100"}`}
+                    className="h-4 w-4 rounded-full border border-main-700/70 bg-green-300"
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();

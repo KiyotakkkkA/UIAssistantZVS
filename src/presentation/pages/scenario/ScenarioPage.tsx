@@ -3,7 +3,7 @@ import { observer } from "mobx-react-lite";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFileDownload, useFileUpload, useToasts } from "../../../hooks";
 import { useScenario } from "../../../hooks/agents";
-import { Button, Loader, TreeView } from "../../components/atoms";
+import { Button, InputSmall, Loader, TreeView } from "../../components/atoms";
 import {
     ScenarioCanvas,
     type ScenarioCanvasInsertRequest,
@@ -151,15 +151,86 @@ export const ScenarioPage = observer(function ScenarioPage() {
 
     const [insertRequest, setInsertRequest] =
         useState<ScenarioCanvasInsertRequest | null>(null);
+    const [toolsQuery, setToolsQuery] = useState("");
 
-    const requestInsert = (
-        payload: Omit<ScenarioCanvasInsertRequest, "token">,
-    ) => {
-        setInsertRequest({
-            ...payload,
-            token: Date.now(),
+    const requestInsert = useCallback(
+        (payload: Omit<ScenarioCanvasInsertRequest, "token">) => {
+            setInsertRequest({
+                ...payload,
+                token: Date.now(),
+            });
+        },
+        [],
+    );
+
+    const normalizedToolsQuery = toolsQuery.trim().toLowerCase();
+
+    const filteredToolPackages = useMemo(() => {
+        if (!normalizedToolsQuery) {
+            return toolsStore.packages;
+        }
+
+        const categoryMatch = "ии инструменты".includes(normalizedToolsQuery);
+
+        if (categoryMatch) {
+            return toolsStore.packages;
+        }
+
+        return toolsStore.getFilteredPackages(toolsQuery);
+    }, [normalizedToolsQuery, toolsQuery]);
+
+    const baseStructures = useMemo(
+        () => [
+            {
+                key: "variable",
+                label: "Переменная",
+                description: "Вёычисляемые переменные сценария",
+                onClick: () => {
+                    requestInsert({ kind: "variable" });
+                },
+            },
+            {
+                key: "prompt",
+                label: "Инструкция",
+                description: "Блок инструкции",
+                onClick: () => {
+                    requestInsert({ kind: "prompt" });
+                },
+            },
+            {
+                key: "condition",
+                label: "Условие",
+                description: "Условие с ветками Да/Нет",
+                onClick: () => {
+                    requestInsert({ kind: "condition" });
+                },
+            },
+        ],
+        [requestInsert],
+    );
+
+    const filteredBaseStructures = useMemo(() => {
+        if (!normalizedToolsQuery) {
+            return baseStructures;
+        }
+
+        const categoryMatch = "базовые структуры".includes(
+            normalizedToolsQuery,
+        );
+        if (categoryMatch) {
+            return baseStructures;
+        }
+
+        return baseStructures.filter((item) => {
+            const haystack = `${item.label} ${item.description}`.toLowerCase();
+            return haystack.includes(normalizedToolsQuery);
         });
-    };
+    }, [baseStructures, normalizedToolsQuery]);
+
+    const showNoResults =
+        normalizedToolsQuery.length > 0 &&
+        filteredToolPackages.length === 0 &&
+        filteredBaseStructures.length === 0;
 
     useEffect(() => {
         if (!scenarioId) {
@@ -242,79 +313,91 @@ export const ScenarioPage = observer(function ScenarioPage() {
             <div className="relative flex min-h-0 flex-1 gap-4">
                 <aside className="w-80">
                     <TreeView className="h-full overflow-y-auto">
-                        <TreeView.Catalog title="ИИ инструменты" defaultOpen>
-                            {toolsStore.packages.map((pkg) => (
-                                <TreeView.Catalog
-                                    key={pkg.id}
-                                    title={pkg.title}
-                                    defaultOpen
-                                >
-                                    {pkg.tools.map((tool) => (
-                                        <TreeView.Element
-                                            key={tool.schema.function.name}
-                                            label={tool.schema.function.name}
-                                            description={
-                                                tool.schema.function.description
-                                            }
-                                            onClick={() => {
-                                                requestInsert({
-                                                    kind: "tool",
-                                                    toolName:
-                                                        tool.schema.function
-                                                            .name,
-                                                    toolSchema: JSON.stringify(
-                                                        tool.schema.function
-                                                            .parameters,
-                                                        null,
-                                                        2,
-                                                    ),
-                                                    ...(tool.outputScheme
-                                                        ? {
-                                                              outputScheme:
-                                                                  JSON.stringify(
-                                                                      tool.outputScheme,
-                                                                      null,
-                                                                      2,
-                                                                  ),
-                                                          }
-                                                        : {}),
-                                                });
-                                            }}
-                                        />
-                                    ))}
-                                </TreeView.Catalog>
-                            ))}
-                        </TreeView.Catalog>
+                        <div className="pb-3">
+                            <InputSmall
+                                value={toolsQuery}
+                                onChange={(event) =>
+                                    setToolsQuery(event.target.value)
+                                }
+                                placeholder="Поиск..."
+                            />
+                        </div>
 
-                        <TreeView.Catalog title="Базовые структуры" defaultOpen>
-                            <TreeView.Element
-                                label="Переменная"
-                                description="Вёычисляемые переменные сценария"
-                                onClick={() => {
-                                    requestInsert({
-                                        kind: "variable",
-                                    });
-                                }}
-                            />
-                            <TreeView.Element
-                                label="Инструкция"
-                                description="Блок инструкции"
-                                onClick={() => {
-                                    requestInsert({
-                                        kind: "prompt",
-                                    });
-                                }}
-                            />
-                            <TreeView.Element
-                                label="Условие"
-                                description="Условие с ветками Да/Нет"
-                                onClick={() => {
-                                    requestInsert({
-                                        kind: "condition",
-                                    });
-                                }}
-                            />
-                        </TreeView.Catalog>
+                        {showNoResults ? (
+                            <div className="rounded-xl border border-main-700/70 bg-main-900/45 p-3 text-xs text-main-400">
+                                Ничего не найдено по вашему запросу.
+                            </div>
+                        ) : null}
+
+                        {filteredToolPackages.length > 0 ? (
+                            <TreeView.Catalog
+                                title="ИИ инструменты"
+                                defaultOpen
+                            >
+                                {filteredToolPackages.map((pkg) => (
+                                    <TreeView.Catalog
+                                        key={pkg.id}
+                                        title={pkg.title}
+                                        defaultOpen
+                                    >
+                                        {pkg.tools.map((tool) => (
+                                            <TreeView.Element
+                                                key={tool.schema.function.name}
+                                                label={
+                                                    tool.schema.function.name
+                                                }
+                                                description={
+                                                    tool.schema.function
+                                                        .description
+                                                }
+                                                onClick={() => {
+                                                    requestInsert({
+                                                        kind: "tool",
+                                                        toolName:
+                                                            tool.schema.function
+                                                                .name,
+                                                        toolSchema:
+                                                            JSON.stringify(
+                                                                tool.schema
+                                                                    .function
+                                                                    .parameters,
+                                                                null,
+                                                                2,
+                                                            ),
+                                                        ...(tool.outputScheme
+                                                            ? {
+                                                                  outputScheme:
+                                                                      JSON.stringify(
+                                                                          tool.outputScheme,
+                                                                          null,
+                                                                          2,
+                                                                      ),
+                                                              }
+                                                            : {}),
+                                                    });
+                                                }}
+                                            />
+                                        ))}
+                                    </TreeView.Catalog>
+                                ))}
+                            </TreeView.Catalog>
+                        ) : null}
+
+                        {filteredBaseStructures.length > 0 ? (
+                            <TreeView.Catalog
+                                title="Базовые структуры"
+                                defaultOpen
+                            >
+                                {filteredBaseStructures.map((item) => (
+                                    <TreeView.Element
+                                        key={item.key}
+                                        label={item.label}
+                                        description={item.description}
+                                        onClick={item.onClick}
+                                    />
+                                ))}
+                            </TreeView.Catalog>
+                        ) : null}
                     </TreeView>
                 </aside>
                 <ScenarioCanvas

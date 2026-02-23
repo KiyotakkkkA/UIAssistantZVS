@@ -44,7 +44,7 @@ export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
                 portName: VARIABLE_CONTINUE_OUTPUT_PORT,
                 label: "ПРОДОЛЖИТЬ",
             },
-        ]; 
+        ];
     }, [block.meta?.variable?.selectedVariables]);
 
     return (
@@ -116,7 +116,7 @@ export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
                 </span>
                 <button
                     type="button"
-                    className="h-4 w-4 rounded-full border border-main-700/70 bg-main-100"
+                    className="h-4 w-4 rounded-full border border-main-700/70 bg-green-300"
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
@@ -130,6 +130,8 @@ export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
             {outputPorts.map((output, index) => {
                 const topPercent =
                     ((index + 1) / (outputPorts.length + 1)) * 100;
+                const isContinuePort =
+                    output.portName === VARIABLE_CONTINUE_OUTPUT_PORT;
 
                 return (
                     <div
@@ -143,7 +145,13 @@ export const ScenarioVariableBlock = memo(function ScenarioVariableBlock({
                     >
                         <button
                             type="button"
-                            className={`h-4 w-4 rounded-full border border-main-700/70 ${isConnectSource ? "bg-main-300" : "bg-main-100"}`}
+                            className={`h-4 w-4 rounded-full border border-main-700/70 ${
+                                isContinuePort
+                                    ? "bg-green-300"
+                                    : isConnectSource
+                                      ? "bg-main-300"
+                                      : "bg-main-100"
+                            }`}
                             onPointerDown={(event) => {
                                 event.stopPropagation();
                                 event.preventDefault();

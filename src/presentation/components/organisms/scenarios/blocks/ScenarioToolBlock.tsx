@@ -136,7 +136,13 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
                             </span>
                             <button
                                 type="button"
-                                className={`h-4 w-4 rounded-full border ${shouldMarkMissing ? "border-red-500 bg-red-500/80" : "border-main-700/70 bg-main-100"}`}
+                                className={`h-4 w-4 rounded-full border ${
+                                    isStartPort
+                                        ? "border-main-700/70 bg-green-300"
+                                        : shouldMarkMissing
+                                          ? "border-red-500 bg-red-500/80"
+                                          : "border-main-700/70 bg-main-100"
+                                }`}
                                 onPointerDown={(event) => {
                                     event.stopPropagation();
                                     event.preventDefault();
@@ -169,7 +175,13 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
                     >
                         <button
                             type="button"
-                            className={`h-4 w-4 rounded-full border border-main-700/70 ${isConnectSource ? "bg-main-300" : "bg-main-100"}`}
+                            className={`h-4 w-4 rounded-full border border-main-700/70 ${
+                                isContinuePort
+                                    ? "bg-green-300"
+                                    : isConnectSource
+                                      ? "bg-main-300"
+                                      : "bg-main-100"
+                            }`}
                             onPointerDown={(event) => {
                                 event.stopPropagation();
                                 event.preventDefault();

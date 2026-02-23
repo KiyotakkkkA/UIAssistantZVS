@@ -55,7 +55,7 @@ export const ScenarioSimpleBlock = memo(function ScenarioSimpleBlock({
             {!isStart ? (
                 <button
                     type="button"
-                    className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-main-700/70 bg-main-100"
+                    className="absolute -left-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-main-700/70 bg-green-300"
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
@@ -69,11 +69,14 @@ export const ScenarioSimpleBlock = memo(function ScenarioSimpleBlock({
             {isStart ? (
                 <button
                     type="button"
-                    className={`absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-main-700/70 ${isConnectSource ? "bg-main-300" : "bg-main-100"}`}
+                    className="absolute -right-2 top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border border-main-700/70 bg-green-300"
                     onPointerDown={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
-                        onStartConnection(block.id, VARIABLE_CONTINUE_OUTPUT_PORT);
+                        onStartConnection(
+                            block.id,
+                            VARIABLE_CONTINUE_OUTPUT_PORT,
+                        );
                     }}
                     title="Выход"
                     aria-label="Выход"

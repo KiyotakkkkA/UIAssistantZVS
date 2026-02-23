@@ -58,6 +58,16 @@ export function ScenarioConnectionsLayer({
                         fill="rgba(160, 171, 206, 0.95)"
                     />
                 </marker>
+                <marker
+                    id="scenario-arrow-control"
+                    markerWidth="10"
+                    markerHeight="8"
+                    refX="9"
+                    refY="4"
+                    orient="auto"
+                >
+                    <path d="M0,0 L10,4 L0,8 Z" fill="rgb(134 239 172)" />
+                </marker>
             </defs>
 
             {connections.map((connection) => {
@@ -81,16 +91,25 @@ export function ScenarioConnectionsLayer({
                     connection,
                 );
                 const isDataLink = semantic === "data";
+                const isControlLink = semantic === "control";
 
                 return (
                     <g key={connection.id}>
                         <path
                             d={pathD}
                             fill="none"
-                            stroke="rgba(160, 171, 206, 0.95)"
+                            stroke={
+                                isControlLink
+                                    ? "rgb(134 239 172)"
+                                    : "rgba(160, 171, 206, 0.95)"
+                            }
                             strokeWidth={2}
                             strokeDasharray={isDataLink ? "6 4" : undefined}
-                            markerEnd="url(#scenario-arrow)"
+                            markerEnd={
+                                isControlLink
+                                    ? "url(#scenario-arrow-control)"
+                                    : "url(#scenario-arrow)"
+                            }
                         />
                         <path
                             d={pathD}
