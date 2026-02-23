@@ -1,7 +1,5 @@
-import { Icon } from "@iconify/react";
 import { memo, type MouseEvent, type PointerEvent } from "react";
 import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
-import { Button } from "../../../atoms";
 import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,
@@ -10,6 +8,7 @@ import {
     getToolParamInputPorts,
     getToolParamOutputPorts,
 } from "../../../../../utils/scenarioPorts";
+import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioToolBlockProps = {
     block: ScenarioSimpleBlockNode;
@@ -43,65 +42,17 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
     const outputPorts = [...paramOutputs, VARIABLE_CONTINUE_OUTPUT_PORT];
 
     return (
-        <div
-            className={`absolute select-none rounded-xl border border-main-700/70 bg-main-900/95 shadow-sm ${isConnectSource ? "ring-2 ring-main-300/70" : ""}`}
-            style={{
-                width: block.width,
-                height: block.height,
-                transform: `translate(${block.x}px, ${block.y}px)`,
-                transformOrigin: "top left",
-            }}
-            onPointerDown={(event) => onPointerDown(event, block.id)}
-            onContextMenu={(event) => onContextMenu(event, block.id)}
+        <ScenarioBlockFrame
+            block={block}
+            isConnectSource={isConnectSource}
+            icon="mdi:robot-outline"
+            iconBgClassName="bg-blue-800/90"
+            subtitle="ИИ инструмент"
+            onPointerDown={onPointerDown}
+            onContextMenu={onContextMenu}
+            onOpenSettings={onOpenSettings}
+            onRequestDelete={onRequestDelete}
         >
-            <div className="flex h-full overflow-hidden rounded-xl">
-                <div className="flex w-12 items-center justify-center bg-blue-800/90 text-main-100">
-                    <Icon icon="mdi:robot-outline" width={20} height={20} />
-                </div>
-                <div className="min-w-0 flex-1 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-main-100">
-                            {block.title}
-                        </p>
-                        <div className="flex gap-2 items-center">
-                            <Button
-                                type="button"
-                                className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    event.preventDefault();
-                                    onOpenSettings(block.id);
-                                }}
-                                title="Настройки"
-                            >
-                                <Icon
-                                    icon="mdi:cog-outline"
-                                    width={14}
-                                    height={14}
-                                />
-                            </Button>
-                            <Button
-                                type="button"
-                                className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    event.preventDefault();
-                                    onRequestDelete(block.id);
-                                }}
-                                title="Удалить"
-                            >
-                                <Icon
-                                    icon="mdi:trash-can-outline"
-                                    width={14}
-                                    height={14}
-                                />
-                            </Button>
-                        </div>
-                    </div>
-                    <p className="mt-1 text-xs text-main-400">ИИ инструмент</p>
-                </div>
-            </div>
-
             {inputPorts.map((inputPort, index) => {
                 const topPercent =
                     ((index + 1) / (inputPorts.length + 1)) * 100;
@@ -199,6 +150,6 @@ export const ScenarioToolBlock = memo(function ScenarioToolBlock({
                     </div>
                 );
             })}
-        </div>
+        </ScenarioBlockFrame>
     );
 });

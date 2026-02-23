@@ -1,10 +1,10 @@
-import { Icon } from "@iconify/react";
 import { memo, type MouseEvent, type PointerEvent } from "react";
 import type {
     ScenarioConditionField,
     ScenarioSimpleBlockNode,
 } from "../../../../../types/Scenario";
-import { Button } from "../../../atoms";
+import { START_BLOCK_INPUT_PORT } from "../../../../../utils/scenarioVariables";
+import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioConditionBlockProps = {
     block: ScenarioSimpleBlockNode;
@@ -20,8 +20,6 @@ type ScenarioConditionBlockProps = {
     onOpenSettings: (blockId: string) => void;
     onRequestDelete: (blockId: string) => void;
 };
-
-const START_BLOCK_INPUT_PORT = "__start__";
 
 const getConditionFields = (
     block: ScenarioSimpleBlockNode,
@@ -49,65 +47,17 @@ export const ScenarioConditionBlock = memo(function ScenarioConditionBlock({
     const fields = getConditionFields(block);
 
     return (
-        <div
-            className={`absolute select-none rounded-xl border border-main-700/70 bg-main-900/95 shadow-sm ${isConnectSource ? "ring-2 ring-main-300/70" : ""}`}
-            style={{
-                width: block.width,
-                height: block.height,
-                transform: `translate(${block.x}px, ${block.y}px)`,
-                transformOrigin: "top left",
-            }}
-            onPointerDown={(event) => onPointerDown(event, block.id)}
-            onContextMenu={(event) => onContextMenu(event, block.id)}
+        <ScenarioBlockFrame
+            block={block}
+            isConnectSource={isConnectSource}
+            icon="mdi:source-branch"
+            iconBgClassName="bg-amber-700/90"
+            subtitle="Условие"
+            onPointerDown={onPointerDown}
+            onContextMenu={onContextMenu}
+            onOpenSettings={onOpenSettings}
+            onRequestDelete={onRequestDelete}
         >
-            <div className="flex h-full overflow-hidden rounded-xl">
-                <div className="flex w-12 items-center justify-center bg-amber-700/90 text-main-100">
-                    <Icon icon="mdi:source-branch" width={20} height={20} />
-                </div>
-                <div className="min-w-0 flex-1 px-3 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-main-100">
-                            {block.title}
-                        </p>
-                        <div className="flex gap-2 items-center">
-                            <Button
-                                type="button"
-                                className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    event.preventDefault();
-                                    onOpenSettings(block.id);
-                                }}
-                                title="Настройки"
-                            >
-                                <Icon
-                                    icon="mdi:cog-outline"
-                                    width={14}
-                                    height={14}
-                                />
-                            </Button>
-                            <Button
-                                type="button"
-                                className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
-                                onPointerDown={(event) => {
-                                    event.stopPropagation();
-                                    event.preventDefault();
-                                    onRequestDelete(block.id);
-                                }}
-                                title="Удалить"
-                            >
-                                <Icon
-                                    icon="mdi:trash-can-outline"
-                                    width={14}
-                                    height={14}
-                                />
-                            </Button>
-                        </div>
-                    </div>
-                    <p className="mt-1 text-xs text-main-400">Условие</p>
-                </div>
-            </div>
-
             {fields.map((field, index) => {
                 const topPercent =
                     (0.24 + ((index + 1) / (fields.length + 1)) * 0.68) * 100;
@@ -223,6 +173,6 @@ export const ScenarioConditionBlock = memo(function ScenarioConditionBlock({
                     В любом случае
                 </span>
             </div>
-        </div>
+        </ScenarioBlockFrame>
     );
 });
