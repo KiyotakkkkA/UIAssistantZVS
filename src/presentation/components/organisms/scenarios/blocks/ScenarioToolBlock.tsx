@@ -3,11 +3,11 @@ import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
 import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,
-} from "../../../../../utils/scenarioVariables";
+} from "../../../../../utils/scenario/scenarioVariables";
 import {
     getToolParamInputPorts,
     getToolParamOutputPorts,
-} from "../../../../../utils/scenarioPorts";
+} from "../../../../../utils/scenario/scenarioPorts";
 import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioToolBlockProps = {

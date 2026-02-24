@@ -1,6 +1,9 @@
 import type { StreamChatParams } from "../../../types/Chat";
 import type { ChatProviderAdapter } from "../../../types/AIRequests";
-import { streamChatOllama, toOllamaMessages } from "../../../utils/ollamaChat";
+import {
+    streamChatOllama,
+    toOllamaMessages,
+} from "../../../utils/chat/ollamaChat";
 
 type CreateOllamaAdapterParams = {
     model: string;

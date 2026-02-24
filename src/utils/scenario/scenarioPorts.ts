@@ -1,7 +1,7 @@
 import type {
     ScenarioConnection,
     ScenarioSimpleBlockNode,
-} from "../types/Scenario";
+} from "../../types/Scenario";
 import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,

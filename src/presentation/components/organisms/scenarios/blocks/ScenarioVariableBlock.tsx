@@ -4,7 +4,7 @@ import {
     START_BLOCK_INPUT_PORT,
     VARIABLE_CONTINUE_OUTPUT_PORT,
     getScenarioVariableTitle,
-} from "../../../../../utils/scenarioVariables";
+} from "../../../../../utils/scenario/scenarioVariables";
 import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioVariableBlockProps = {

@@ -5,7 +5,7 @@ import { useToasts } from "../../../hooks";
 import { useScenario, useScenarioConvert } from "../../../hooks/agents";
 import { useFileUpload } from "../../../hooks/files";
 import type { UploadedFileData } from "../../../types/ElectronApi";
-import { encodeScenarioLaunchPayload } from "../../../utils/scenarioLaunchEnvelope";
+import { encodeScenarioLaunchPayload } from "../../../utils/scenario/scenarioLaunchEnvelope";
 import { Button, Dropdown, InputBig, Modal } from "../atoms";
 import { RequiredToolsPickForm } from "../organisms/forms";
 

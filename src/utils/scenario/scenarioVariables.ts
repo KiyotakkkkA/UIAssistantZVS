@@ -1,5 +1,5 @@
-import type { WorkspaceTab } from "../types/App";
-import type { ScenarioVariableKey } from "../types/Scenario";
+import type { WorkspaceTab } from "../../types/App";
+import type { ScenarioVariableKey } from "../../types/Scenario";
 
 type ScenarioVariableDefinition = {
     key: ScenarioVariableKey;
@@ -8,7 +8,7 @@ type ScenarioVariableDefinition = {
 };
 
 export const START_BLOCK_INPUT_PORT = "__start__";
-export const VARIABLE_CONTINUE_OUTPUT_PORT = "continue";
+export const VARIABLE_CONTINUE_OUTPUT_PORT = "__continue__";
 
 export const SCENARIO_VARIABLE_DEFINITIONS: ScenarioVariableDefinition[] = [
     {

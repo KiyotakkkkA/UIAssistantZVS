@@ -22,7 +22,7 @@ import { ScenarioToolBlock } from "./blocks/ScenarioToolBlock";
 import { ScenarioPromptBlock } from "./blocks/ScenarioPromptBlock";
 import { ScenarioConditionBlock } from "./blocks/ScenarioConditionBlock";
 import { ScenarioVariableBlock } from "./blocks/ScenarioVariableBlock";
-import { getScenarioVariableTitle } from "../../../../utils/scenarioVariables";
+import { getScenarioVariableTitle } from "../../../../utils/scenario/scenarioVariables";
 import {
     buildConnectionPath,
     clamp,
@@ -33,7 +33,7 @@ import {
     getOutPoint,
     toScenePoint,
     type Point,
-} from "../../../../utils/scenarioCanvasFuncs";
+} from "../../../../utils/scenario/scenarioCanvasFuncs";
 
 type DragState = {
     blockId: string;

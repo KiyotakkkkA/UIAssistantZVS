@@ -1,6 +1,6 @@
 import { memo, type PointerEvent } from "react";
 import type { ScenarioSimpleBlockNode } from "../../../../../types/Scenario";
-import { VARIABLE_CONTINUE_OUTPUT_PORT } from "../../../../../utils/scenarioVariables";
+import { VARIABLE_CONTINUE_OUTPUT_PORT } from "../../../../../utils/scenario/scenarioVariables";
 import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioSimpleBlockProps = {

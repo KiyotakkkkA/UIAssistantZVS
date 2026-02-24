@@ -1,10 +1,10 @@
-import { postOllamaStream } from "../services/api";
+import { postOllamaStream } from "../../services/api";
 import type {
     ChatMessage,
     OllamaChatChunk,
     OllamaMessage,
     StreamChatParams,
-} from "../types/Chat";
+} from "../../types/Chat";
 
 export const streamChatOllama = async ({
     model,

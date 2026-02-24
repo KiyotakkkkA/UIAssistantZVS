@@ -3,7 +3,7 @@ import type {
     ScenarioConditionField,
     ScenarioSimpleBlockNode,
 } from "../../../../../types/Scenario";
-import { START_BLOCK_INPUT_PORT } from "../../../../../utils/scenarioVariables";
+import { START_BLOCK_INPUT_PORT } from "../../../../../utils/scenario/scenarioVariables";
 import { ScenarioBlockFrame } from "./ScenarioBlockFrame";
 
 type ScenarioConditionBlockProps = {

@@ -3,7 +3,7 @@ import type { Scenario } from "../../types/Scenario";
 import {
     buildScenarioSceneHash,
     formatScenarioFlow,
-} from "../../utils/scenarioFlow";
+} from "../../utils/scenario/scenarioFlow";
 import { useScenario } from "./useScenario";
 
 export const useScenarioConvert = () => {

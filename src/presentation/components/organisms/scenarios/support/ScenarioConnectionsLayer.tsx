@@ -3,7 +3,7 @@ import type {
     ScenarioConnection,
     ScenarioSimpleBlockNode,
 } from "../../../../../types/Scenario";
-import { getConnectionSemantic } from "../../../../../utils/scenarioPorts";
+import { getConnectionSemantic } from "../../../../../utils/scenario/scenarioPorts";
 
 type Point = {
     x: number;

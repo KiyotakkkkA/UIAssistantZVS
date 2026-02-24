@@ -2,7 +2,7 @@ import type {
     AssistantStage,
     ChatMessage,
     OllamaResponseFormat,
-} from "../types/Chat";
+} from "../../types/Chat";
 
 export const getTimeStamp = () =>
     new Date().toLocaleTimeString("ru-RU", {

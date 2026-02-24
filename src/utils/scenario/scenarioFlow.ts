@@ -5,7 +5,7 @@ import type {
     ScenarioSimpleBlockNode,
     ScenarioToolMeta,
     ScenarioVariableKey,
-} from "../types/Scenario";
+} from "../../types/Scenario";
 import { getConnectionSemantic } from "./scenarioPorts";
 import { toScene } from "./scenarioCanvasScene";
 
@@ -279,14 +279,14 @@ export const formatScenarioFlow = (scenario: Scenario) => {
         })
         .join("\n");
 
+    const blocksById = new Map(scene.blocks.map((block) => [block.id, block]));
+    const markovTransitionLines: string[] = [];
+    let modelFormatSchema: string | undefined;
+
     const linksText = scene.connections
         .map((connection, index) => {
-            const sourceBlock = scene.blocks.find(
-                (block) => block.id === connection.fromBlockId,
-            );
-            const targetBlock = scene.blocks.find(
-                (block) => block.id === connection.toBlockId,
-            );
+            const sourceBlock = blocksById.get(connection.fromBlockId);
+            const targetBlock = blocksById.get(connection.toBlockId);
 
             const semantic =
                 sourceBlock && targetBlock
@@ -303,55 +303,30 @@ export const formatScenarioFlow = (scenario: Scenario) => {
                       ? "control"
                       : "invalid";
 
+            if (
+                !modelFormatSchema &&
+                targetBlock?.kind === "end" &&
+                sourceBlock?.kind === "tool"
+            ) {
+                modelFormatSchema = sourceBlock.meta?.tool?.outputScheme;
+            }
+
+            if (semantic === "control" && sourceBlock && targetBlock) {
+                const edgeLabel =
+                    sourceBlock.kind === "condition" && connection.fromPortName
+                        ? connection.fromPortName
+                        : "__continue__";
+
+                markovTransitionLines.push(
+                    `  ${index + 1}. ${sourceBlock.id} --${edgeLabel}--> ${targetBlock.id}`,
+                );
+            }
+
             return `  ${index + 1}. ${connection.fromBlockId}${connection.fromPortName ? `:${connection.fromPortName}` : ""} -> ${connection.toBlockId}${connection.toPortName ? `:${connection.toPortName}` : ""} [${semanticText}]`;
         })
         .join("\n");
 
-    const markovTransitionsText = scene.connections
-        .map((connection, index) => {
-            const sourceBlock = scene.blocks.find(
-                (block) => block.id === connection.fromBlockId,
-            );
-            const targetBlock = scene.blocks.find(
-                (block) => block.id === connection.toBlockId,
-            );
-
-            if (!sourceBlock || !targetBlock) {
-                return null;
-            }
-
-            const semantic = getConnectionSemantic(
-                sourceBlock,
-                targetBlock,
-                connection,
-            );
-
-            if (semantic !== "control") {
-                return null;
-            }
-
-            const edgeLabel =
-                sourceBlock.kind === "condition" && connection.fromPortName
-                    ? connection.fromPortName
-                    : "continue";
-
-            return `  ${index + 1}. ${sourceBlock.id} --${edgeLabel}--> ${targetBlock.id}`;
-        })
-        .filter((item): item is string => Boolean(item))
-        .join("\n");
-
-    const endIncoming = scene.connections.filter((connection) => {
-        const target = scene.blocks.find(
-            (block) => block.id === connection.toBlockId,
-        );
-        return target?.kind === "end";
-    });
-
-    const modelFormatSchema = endIncoming
-        .map((connection) =>
-            scene.blocks.find((block) => block.id === connection.fromBlockId),
-        )
-        .find((block) => block?.kind === "tool")?.meta?.tool?.outputScheme;
+    const markovTransitionsText = markovTransitionLines.join("\n");
 
     const parsedModelFormatSchema = tryParseJsonSchema(modelFormatSchema);
     const modelFormatHint = parsedModelFormatSchema

@@ -11,16 +11,15 @@ import { chatsStore } from "../../stores/chatsStore";
 import { toolsStore } from "../../stores/toolsStore";
 import { projectsStore } from "../../stores/projectsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
-import { parseScenarioLaunchPayload } from "../../utils/scenarioLaunchEnvelope";
+import { parseScenarioLaunchPayload } from "../../utils/scenario/scenarioLaunchEnvelope";
 import {
-    appendAssistantStageChunk,
     buildScenarioRuntimeEnvText,
     createMessageId,
     getCommandRequestMeta,
     getScenarioFormatHint,
     getTimeStamp,
-    splitTextChunk,
-} from "../../utils/chatStream";
+} from "../../utils/chat/chatStream";
+import { createChatChunkQueueManager } from "../../utils/chat/chatChunkQueue";
 import {
     getSystemPrompt,
     getUserPrompt,
@@ -237,133 +236,10 @@ export function useChat() {
                 ...historyForStorage,
                 ...requestConstraintMessages,
             ];
-            const chunkQueue: Array<{
-                stage: Extract<AssistantStage, "thinking" | "answer">;
-                chunkText: string;
-            }> = [];
-            let queueDrainResolver: (() => void) | null = null;
-            let flushFrameId: number | null = null;
-            const flushChunkLimitPerFrame = 6;
-
-            const resolveQueueDrain = () => {
-                if (chunkQueue.length !== 0 || flushFrameId !== null) {
-                    return;
-                }
-
-                if (queueDrainResolver) {
-                    const resolve = queueDrainResolver;
-                    queueDrainResolver = null;
-                    resolve();
-                }
-            };
-
-            const flushChunkQueue = () => {
-                flushFrameId = null;
-
-                if (chunkQueue.length === 0) {
-                    resolveQueueDrain();
-                    return;
-                }
-
-                const frameBatch = chunkQueue.splice(
-                    0,
-                    flushChunkLimitPerFrame,
-                );
-
-                updateMessages((prev) =>
-                    frameBatch.reduce(
-                        (accumulator, item) =>
-                            appendAssistantStageChunk(
-                                accumulator,
-                                userMessage.id,
-                                item.stage,
-                                item.chunkText,
-                            ),
-                        prev,
-                    ),
-                );
-
-                if (chunkQueue.length > 0) {
-                    flushFrameId =
-                        window.requestAnimationFrame(flushChunkQueue);
-                    return;
-                }
-
-                resolveQueueDrain();
-            };
-
-            const flushChunkQueueImmediate = () => {
-                if (flushFrameId !== null) {
-                    window.cancelAnimationFrame(flushFrameId);
-                    flushFrameId = null;
-                }
-
-                if (chunkQueue.length === 0) {
-                    resolveQueueDrain();
-                    return;
-                }
-
-                const immediateBatch = chunkQueue.splice(0, chunkQueue.length);
-
-                updateMessages((prev) =>
-                    immediateBatch.reduce(
-                        (accumulator, item) =>
-                            appendAssistantStageChunk(
-                                accumulator,
-                                userMessage.id,
-                                item.stage,
-                                item.chunkText,
-                            ),
-                        prev,
-                    ),
-                );
-
-                resolveQueueDrain();
-            };
-
-            const scheduleChunkFlush = () => {
-                if (flushFrameId !== null) {
-                    return;
-                }
-
-                flushFrameId = window.requestAnimationFrame(flushChunkQueue);
-            };
-
-            const enqueueStageChunk = (
-                stage: Extract<AssistantStage, "thinking" | "answer">,
-                chunkText: string,
-            ) => {
-                if (!chunkText) {
-                    return;
-                }
-
-                splitTextChunk(chunkText).forEach((chunkPart) => {
-                    chunkQueue.push({ stage, chunkText: chunkPart });
-                });
-
-                scheduleChunkFlush();
-            };
-
-            const waitForChunkQueueDrain = async () => {
-                if (chunkQueue.length === 0 && flushFrameId === null) {
-                    return;
-                }
-
-                await new Promise<void>((resolve) => {
-                    queueDrainResolver = resolve;
-                });
-            };
-
-            const resetChunkQueue = () => {
-                chunkQueue.length = 0;
-
-                if (flushFrameId !== null) {
-                    window.cancelAnimationFrame(flushFrameId);
-                    flushFrameId = null;
-                }
-
-                resolveQueueDrain();
-            };
+            const chunkQueueManager = createChatChunkQueueManager({
+                answeringAt: userMessage.id,
+                updateMessages,
+            });
 
             const setStreamStage = (stage: AssistantStage) => {
                 setActiveStage((previous) =>
@@ -484,7 +360,7 @@ export function useChat() {
                         });
                     },
                     onToolCall: ({ callId, toolName, args }) => {
-                        flushChunkQueueImmediate();
+                        chunkQueueManager.flushImmediate();
                         setStreamStage("tool");
                         markFirstActivity();
                         const messageId = createMessageId();
@@ -521,7 +397,7 @@ export function useChat() {
                         ]);
                     },
                     onToolResult: ({ callId, toolName, args, result }) => {
-                        flushChunkQueueImmediate();
+                        chunkQueueManager.flushImmediate();
                         setStreamStage("tool");
                         const messageId = toolTraceMessageIds.get(callId);
 
@@ -584,7 +460,7 @@ export function useChat() {
 
                         setStreamStage("thinking");
                         markFirstActivity();
-                        enqueueStageChunk("thinking", chunkText);
+                        chunkQueueManager.enqueue("thinking", chunkText);
                     },
                     signal: abortController.signal,
                     onChunk: (chunkText, done) => {
@@ -598,11 +474,11 @@ export function useChat() {
                         setStreamStage("answer");
                         markFirstActivity();
 
-                        enqueueStageChunk("answer", chunkText);
+                        chunkQueueManager.enqueue("answer", chunkText);
                     },
                 });
 
-                await waitForChunkQueueDrain();
+                await chunkQueueManager.waitForDrain();
 
                 const snapshot: ChatDialog = {
                     ...currentDialog,
@@ -619,12 +495,12 @@ export function useChat() {
                     error instanceof Error &&
                     error.name === "AbortError"
                 ) {
-                    resetChunkQueue();
+                    chunkQueueManager.reset();
                     commitMessages(requestBaseHistory);
                     return;
                 }
 
-                await waitForChunkQueueDrain();
+                await chunkQueueManager.waitForDrain();
 
                 const errorMessage =
                     error instanceof Error
@@ -656,7 +532,7 @@ export function useChat() {
                     return [...prev.slice(0, -1), updatedLastMessage];
                 });
             } finally {
-                resetChunkQueue();
+                chunkQueueManager.reset();
                 abortControllerRef.current = null;
                 cancellationRequestedRef.current = false;
                 setIsAwaitingFirstChunk(false);

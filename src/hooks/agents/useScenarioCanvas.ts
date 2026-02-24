@@ -10,7 +10,7 @@ import type {
     ScenarioToolMeta,
     ScenarioVariableMeta,
 } from "../../types/Scenario";
-import { getConnectionSemantic } from "../../utils/scenarioPorts";
+import { getConnectionSemantic } from "../../utils/scenario/scenarioPorts";
 import {
     DEFAULT_VIEWPORT,
     type Point,
@@ -29,7 +29,7 @@ import {
     normalizeViewport,
     toPlainObject,
     toScene,
-} from "../../utils/scenarioCanvasScene";
+} from "../../utils/scenario/scenarioCanvasScene";
 
 export type { Point, ScenarioCanvasInsertPayload };
 

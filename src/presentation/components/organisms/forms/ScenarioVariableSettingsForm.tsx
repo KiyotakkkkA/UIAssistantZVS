@@ -3,7 +3,7 @@ import type {
     ScenarioVariableKey,
     ScenarioVariableMeta,
 } from "../../../../types/Scenario";
-import { SCENARIO_VARIABLE_DEFINITIONS } from "../../../../utils/scenarioVariables";
+import { SCENARIO_VARIABLE_DEFINITIONS } from "../../../../utils/scenario/scenarioVariables";
 
 type ScenarioVariableSettingsFormProps = {
     value: ScenarioVariableMeta;
