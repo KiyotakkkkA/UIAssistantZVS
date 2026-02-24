@@ -96,6 +96,24 @@ const appApi = {
   llm: {
     streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload)
   },
+  voice: {
+    startMistralRealtimeTranscription: (payload) => electron.ipcRenderer.invoke("app:voice-transcription-start", payload),
+    pushRealtimeTranscriptionChunk: (sessionId, chunk) => electron.ipcRenderer.invoke(
+      "app:voice-transcription-push-chunk",
+      sessionId,
+      chunk
+    ),
+    stopRealtimeTranscription: (sessionId) => electron.ipcRenderer.invoke("app:voice-transcription-stop", sessionId),
+    onRealtimeTranscriptionEvent: (listener) => {
+      const handler = (_event, payload) => {
+        listener(payload);
+      };
+      electron.ipcRenderer.on("app:voice-transcription-event", handler);
+      return () => {
+        electron.ipcRenderer.off("app:voice-transcription-event", handler);
+      };
+    }
+  },
   fs: {
     listDirectory: (cwd) => electron.ipcRenderer.invoke("app:fs-list-directory", cwd),
     createFile: (cwd, filename, content) => electron.ipcRenderer.invoke("app:fs-create-file", cwd, filename, content),

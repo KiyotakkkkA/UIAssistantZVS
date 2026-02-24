@@ -104,10 +104,11 @@ export function ChatHeader({
             </header>
 
             <Modal
+                closeOnOverlayClick={false}
                 open={isSettingsOpen}
                 onClose={() => setIsSettingsOpen(false)}
                 title="Настройки"
-                className="max-w-6xl min-h-144"
+                className="h-[90vh] max-w-[min(1440px,98vw)]"
                 footer={
                     <Button
                         variant="primary"
@@ -131,6 +132,7 @@ export function ChatHeader({
             </Modal>
 
             <Modal
+                closeOnOverlayClick={false}
                 open={isToolsOpen}
                 onClose={() => setIsToolsOpen(false)}
                 title="Пакеты инструментов"

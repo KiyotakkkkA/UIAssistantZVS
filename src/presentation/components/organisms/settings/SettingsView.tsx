@@ -147,9 +147,9 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
         );
 
         return (
-            <div className="grid min-h-120 gap-6 md:grid-cols-[260px_1fr]">
-                <aside className="md:sticky md:top-0 md:self-start">
-                    <nav className="max-h-120 space-y-2 overflow-y-auto border-r border-main-700/80 pr-3">
+            <div className="grid h-full min-h-[68vh] gap-6 md:grid-cols-[300px_1fr]">
+                <aside className="min-h-0 md:border-r md:border-main-700/80 md:pr-3">
+                    <nav className="space-y-2 md:h-full md:overflow-y-auto md:pr-2">
                         {settingsRoutes.map((route) => {
                             const isActive = route.key === activeRoute;
 
@@ -159,7 +159,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                                     type="button"
                                     onClick={() => setActiveRoute(route.key)}
                                     aria-current={isActive ? "page" : undefined}
-                                    className={`w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition-colors cursor-pointer ${
+                                    className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
                                         isActive
                                             ? "bg-main-700/60 text-main-100"
                                             : "text-main-300 hover:bg-main-800/60 hover:text-main-100"
@@ -173,7 +173,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                                         />
                                         {route.title}
                                     </span>
-                                    <span className="mt-1 block text-[11px] font-normal leading-4 text-main-400">
+                                    <span className="mt-1 block text-xs font-normal leading-4 text-main-400">
                                         {route.description}
                                     </span>
                                 </button>
@@ -182,7 +182,7 @@ export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
                     </nav>
                 </aside>
 
-                <section className="min-h-0 max-h-120 overflow-y-auto overflow-x-hidden pr-1">
+                <section className="min-h-0 overflow-y-auto overflow-x-hidden pr-1 md:pr-2">
                     {renderedPanel[activeRoute]}
                 </section>
             </div>

@@ -10,6 +10,7 @@ import {
     ScenarioItem,
 } from "../../molecules/cards/workspace";
 import { Icon } from "@iconify/react";
+import { PrettyBR } from "../../atoms/PrettyBR";
 
 export const ChatSidebar = observer(function ChatSidebar() {
     const navigate = useNavigate();
@@ -386,19 +387,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
                 />
             </div>
 
-            <div className="mb-3 flex items-center gap-3 px-1">
-                <div className="h-px flex-1 bg-main-600/70" />
-                <Icon
-                    icon="mdi:chat"
-                    width={16}
-                    height={16}
-                    className="text-main-400"
-                />
-                <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
-                    Диалоги
-                </p>
-                <div className="h-px flex-1 bg-main-600/70" />
-            </div>
+            <PrettyBR icon="mdi:chat" label="Диалоги" />
 
             <div className="flex-1 space-y-2 overflow-y-auto pr-1">
                 {dialogs.map((conversation) => (
@@ -416,19 +405,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
                     />
                 ))}
 
-                <div className="my-3 flex items-center gap-3 px-1">
-                    <div className="h-px flex-1 bg-main-600/70" />
-                    <Icon
-                        icon="mdi:folder"
-                        width={16}
-                        height={16}
-                        className="text-main-400"
-                    />
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
-                        Проекты
-                    </p>
-                    <div className="h-px flex-1 bg-main-600/70" />
-                </div>
+                <PrettyBR icon="mdi:folder" label="Проекты" />
 
                 {projects.length > 0 ? (
                     projects.map((project) => (
@@ -452,19 +429,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
                     </div>
                 )}
 
-                <div className="my-3 flex items-center gap-3 px-1">
-                    <div className="h-px flex-1 bg-main-600/70" />
-                    <Icon
-                        icon="mdi:script"
-                        width={16}
-                        height={16}
-                        className="text-main-400"
-                    />
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-main-400">
-                        Сценарии
-                    </p>
-                    <div className="h-px flex-1 bg-main-600/70" />
-                </div>
+                <PrettyBR icon="mdi:script" label="Сценарии" />
 
                 {scenarios.length > 0 ? (
                     scenarios.map((scenario) => (

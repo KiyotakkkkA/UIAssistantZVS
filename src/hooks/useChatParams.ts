@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useObserver } from "mobx-react-lite";
 import { userProfileStore } from "../stores/userProfileStore";
-import type { ChatDriver } from "../types/App";
+import type { ChatDriver, VoiceRecognitionDriver } from "../types/App";
 
 export const useChatParams = () => {
     const setChatDriver = useCallback(async (driver: ChatDriver) => {
@@ -15,6 +15,25 @@ export const useChatParams = () => {
     const setOllamaToken = useCallback(async (value: string) => {
         await userProfileStore.updateUserProfile({ ollamaToken: value });
     }, []);
+
+    const setMistralVoiceRecModel = useCallback(async (value: string) => {
+        await userProfileStore.updateUserProfile({
+            mistralVoiceRecModel: value,
+        });
+    }, []);
+
+    const setMistralToken = useCallback(async (value: string) => {
+        await userProfileStore.updateUserProfile({ mistralToken: value });
+    }, []);
+
+    const setVoiceRecognitionDriver = useCallback(
+        async (driver: VoiceRecognitionDriver) => {
+            await userProfileStore.updateUserProfile({
+                voiceRecognitionDriver: driver,
+            });
+        },
+        [],
+    );
 
     const setTelegramId = useCallback(async (value: string) => {
         await userProfileStore.updateUserProfile({ telegramId: value });
@@ -39,6 +58,10 @@ export const useChatParams = () => {
         chatDriver: userProfileStore.userProfile.chatDriver,
         ollamaModel: userProfileStore.userProfile.ollamaModel,
         ollamaToken: userProfileStore.userProfile.ollamaToken,
+        mistralVoiceRecModel: userProfileStore.userProfile.mistralVoiceRecModel,
+        mistralToken: userProfileStore.userProfile.mistralToken,
+        voiceRecognitionDriver:
+            userProfileStore.userProfile.voiceRecognitionDriver,
         telegramId: userProfileStore.userProfile.telegramId,
         telegramBotToken: userProfileStore.userProfile.telegramBotToken,
         assistantName: userProfileStore.userProfile.assistantName,
@@ -47,6 +70,9 @@ export const useChatParams = () => {
         setChatDriver,
         setOllamaModel,
         setOllamaToken,
+        setMistralVoiceRecModel,
+        setMistralToken,
+        setVoiceRecognitionDriver,
         setTelegramId,
         setTelegramBotToken,
         setAssistantName,

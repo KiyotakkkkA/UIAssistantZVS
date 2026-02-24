@@ -117,11 +117,11 @@ export function SettingsChatOllamaModelPickCard({
 
             <div className="mt-3 flex justify-between items-center">
                 <Link
-                    to={`https://ollama.com/library/${modelIdWithoutColon}`}
+                    to={`https://ollama.com/models/${modelIdWithoutColon}`}
                     target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-main-400 hover:text-main-200 hover:underline transition-colors"
+                    className="rounded-md p-2 text-white bg-indigo-700 hover:bg-indigo-800 transition-colors flex items-center gap-1 text-xs"
                 >
+                    <Icon icon="mdi:open-in-new" width={18} height={18} />
                     Подробнее
                 </Link>
                 <Button

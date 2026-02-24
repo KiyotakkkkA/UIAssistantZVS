@@ -3,6 +3,8 @@ import { Button, InputCheckbox, InputSmall, Modal } from "../../atoms";
 import { Icon } from "@iconify/react";
 import { useChatParams } from "../../../../hooks";
 import { SettingsChatOllamaModelsPickForm } from "../forms";
+import { PrettyBR } from "../../atoms/PrettyBR";
+import { Link } from "react-router-dom";
 
 export const SettingsChatPanel = () => {
     const [isModelsPickOpen, setIsModelsPickOpen] = useState(false);
@@ -11,6 +13,9 @@ export const SettingsChatPanel = () => {
         chatDriver,
         ollamaModel,
         ollamaToken,
+        mistralVoiceRecModel,
+        mistralToken,
+        voiceRecognitionDriver,
         telegramId,
         telegramBotToken,
         assistantName,
@@ -18,6 +23,9 @@ export const SettingsChatPanel = () => {
         setChatDriver,
         setOllamaModel,
         setOllamaToken,
+        setMistralVoiceRecModel,
+        setMistralToken,
+        setVoiceRecognitionDriver,
         setTelegramId,
         setTelegramBotToken,
         setAssistantName,
@@ -25,8 +33,8 @@ export const SettingsChatPanel = () => {
     } = useChatParams();
 
     return (
-        <div className="space-y-5">
-            <div className="rounded-2xl bg-main-900/40 p-4">
+        <div className="gap-5">
+            <div className="rounded-2xl bg-main-900/40 p-5">
                 <div className="flex gap-2 items-center">
                     <Icon
                         icon="mdi:robot"
@@ -77,7 +85,86 @@ export const SettingsChatPanel = () => {
                 </div>
             </div>
 
-            <div className="rounded-2xl bg-main-900/40 p-4">
+            <PrettyBR icon="mdi:chip" label="ИИ Сервисы" size={20} />
+
+            <div className="rounded-2xl bg-main-900/40 p-5">
+                <div className="flex gap-2 items-center">
+                    <Icon
+                        icon="mdi:alpha-m-circle-outline"
+                        width={20}
+                        height={20}
+                        className="text-main-300"
+                    />
+                    <h4 className="text-sm font-semibold text-main-100">
+                        Интеграция с Mistral
+                    </h4>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <div>
+                            <p className="text-sm font-medium text-main-200">
+                                Использовать для распознавания голоса
+                            </p>
+                            <p className="text-xs text-main-400">Mistral</p>
+                        </div>
+
+                        <InputCheckbox
+                            checked={voiceRecognitionDriver === "mistral"}
+                            onChange={(checked) => {
+                                void setVoiceRecognitionDriver(
+                                    checked ? "mistral" : "",
+                                );
+                            }}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-main-200">
+                            Модель распознавания голоса
+                        </p>
+                        <InputSmall
+                            value={mistralVoiceRecModel}
+                            onChange={(event) =>
+                                void setMistralVoiceRecModel(event.target.value)
+                            }
+                            placeholder="voxtral-mini-transcribe-realtime-2602"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <p className="text-sm font-medium text-main-200">
+                            Token
+                        </p>
+                        <div className="flex items-center gap-2 w-full">
+                            <div className="flex-1">
+                                <InputSmall
+                                    value={mistralToken}
+                                    onChange={(event) =>
+                                        void setMistralToken(event.target.value)
+                                    }
+                                    placeholder="MISTRAL_API_KEY"
+                                    type="password"
+                                    className="w-full"
+                                />
+                            </div>
+                            <Link
+                                to="https://console.mistral.ai/build/audio/realtime?workspace_dialog=apiKeys"
+                                target="_blank"
+                                className="rounded-md p-2 text-white bg-indigo-700 hover:bg-indigo-800 transition-colors"
+                            >
+                                <Icon
+                                    icon="mdi:open-in-new"
+                                    width={18}
+                                    height={18}
+                                />
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="rounded-2xl bg-main-900/40 p-5">
                 <div className="flex gap-2 items-center">
                     <Icon
                         icon="mdi:chip"
@@ -94,7 +181,7 @@ export const SettingsChatPanel = () => {
                     <div className="flex items-center justify-between gap-4">
                         <div>
                             <p className="text-sm font-medium text-main-200">
-                                Провайдер
+                                Использовать для общения
                             </p>
                             <p className="text-xs text-main-400">Ollama</p>
                         </div>
@@ -135,19 +222,36 @@ export const SettingsChatPanel = () => {
                         <p className="text-sm font-medium text-main-200">
                             Token
                         </p>
-                        <InputSmall
-                            value={ollamaToken}
-                            onChange={(event) =>
-                                setOllamaToken(event.target.value)
-                            }
-                            placeholder="Bearer token"
-                            type="password"
-                        />
+                        <div className="flex items-center gap-2 w-full">
+                            <div className="flex-1">
+                                <InputSmall
+                                    value={ollamaToken}
+                                    onChange={(event) =>
+                                        setOllamaToken(event.target.value)
+                                    }
+                                    placeholder="Bearer token"
+                                    type="password"
+                                />
+                            </div>
+                            <Link
+                                to="https://ollama.com/settings/keys"
+                                target="_blank"
+                                className="rounded-md p-2 text-white bg-indigo-700 hover:bg-indigo-800 transition-colors"
+                            >
+                                <Icon
+                                    icon="mdi:open-in-new"
+                                    width={18}
+                                    height={18}
+                                />
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div className="rounded-2xl bg-main-900/40 p-4">
+            <PrettyBR icon="mdi:link-variant" label="Прочие интеграции" />
+
+            <div className="rounded-2xl bg-main-900/40 p-5">
                 <div className="flex gap-2 items-center">
                     <Icon
                         icon="mdi:telegram"
@@ -178,14 +282,31 @@ export const SettingsChatPanel = () => {
                         <p className="text-sm font-medium text-main-200">
                             Bot token
                         </p>
-                        <InputSmall
-                            value={telegramBotToken}
-                            onChange={(event) =>
-                                void setTelegramBotToken(event.target.value)
-                            }
-                            placeholder="123456789:AA..."
-                            type="password"
-                        />
+                        <div className="flex items-center gap-2 w-full">
+                            <div className="flex-1">
+                                <InputSmall
+                                    value={telegramBotToken}
+                                    onChange={(event) =>
+                                        void setTelegramBotToken(
+                                            event.target.value,
+                                        )
+                                    }
+                                    placeholder="123456789:AA..."
+                                    type="password"
+                                />
+                            </div>
+                            <Link
+                                to="https://t.me/BotFather"
+                                target="_blank"
+                                className="rounded-md p-2 text-white bg-indigo-700 hover:bg-indigo-800 transition-colors"
+                            >
+                                <Icon
+                                    icon="mdi:open-in-new"
+                                    width={18}
+                                    height={18}
+                                />
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>

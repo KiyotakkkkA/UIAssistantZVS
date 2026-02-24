@@ -3,12 +3,17 @@ import { defaultProfile } from "../../static/data";
 import type {
     ChatDriver,
     UserProfile,
+    VoiceRecognitionDriver,
     WorkspaceTab,
 } from "../../../src/types/App";
 import { DatabaseService } from "../DatabaseService";
 import { MetaService } from "./MetaService";
 
 const CHAT_DRIVERS = new Set<ChatDriver>(["ollama", ""]);
+const VOICE_RECOGNITION_DRIVERS = new Set<VoiceRecognitionDriver>([
+    "mistral",
+    "",
+]);
 const WORKSPACE_TABS = new Set<WorkspaceTab>([
     "dialogs",
     "projects",
@@ -22,6 +27,15 @@ const isChatDriver = (value: unknown): value is ChatDriver => {
 const isWorkspaceTab = (value: unknown): value is WorkspaceTab => {
     return (
         typeof value === "string" && WORKSPACE_TABS.has(value as WorkspaceTab)
+    );
+};
+
+const isVoiceRecognitionDriver = (
+    value: unknown,
+): value is VoiceRecognitionDriver => {
+    return (
+        typeof value === "string" &&
+        VOICE_RECOGNITION_DRIVERS.has(value as VoiceRecognitionDriver)
     );
 };
 
@@ -104,6 +118,15 @@ export class UserProfileService {
                     : {}),
                 ...(typeof parsed.ollamaToken === "string"
                     ? { ollamaToken: parsed.ollamaToken }
+                    : {}),
+                ...(typeof parsed.mistralVoiceRecModel === "string"
+                    ? { mistralVoiceRecModel: parsed.mistralVoiceRecModel }
+                    : {}),
+                ...(typeof parsed.mistralToken === "string"
+                    ? { mistralToken: parsed.mistralToken }
+                    : {}),
+                ...(isVoiceRecognitionDriver(parsed.voiceRecognitionDriver)
+                    ? { voiceRecognitionDriver: parsed.voiceRecognitionDriver }
                     : {}),
                 ...(typeof parsed.telegramId === "string"
                     ? { telegramId: parsed.telegramId }

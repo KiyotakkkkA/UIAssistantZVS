@@ -3,6 +3,7 @@ import type { UserProfile } from "../types/App";
 
 const DEFAULT_THEME_ID = "dark-main";
 const DEFAULT_OLLAMA_MODEL = "gpt-oss:20b";
+const DEFAULT_MISTRAL_VOICE_REC_MODEL = "";
 
 class UserProfileStore {
     isReady = false;
@@ -10,6 +11,9 @@ class UserProfileStore {
         themePreference: DEFAULT_THEME_ID,
         ollamaModel: DEFAULT_OLLAMA_MODEL,
         ollamaToken: "",
+        mistralVoiceRecModel: DEFAULT_MISTRAL_VOICE_REC_MODEL,
+        mistralToken: "",
+        voiceRecognitionDriver: "",
         telegramId: "",
         telegramBotToken: "",
         chatDriver: "ollama",

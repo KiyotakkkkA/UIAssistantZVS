@@ -262,6 +262,42 @@ export type AppApiLlmNamespace = {
     ) => Promise<OllamaChatChunk[]>;
 };
 
+export type StartMistralRealtimeTranscriptionPayload = {
+    apiKey: string;
+    model: string;
+    sampleRate: number;
+};
+
+export type VoiceTranscriptionEvent =
+    | {
+          sessionId: string;
+          type: "transcription.text.delta";
+          text: string;
+      }
+    | {
+          sessionId: string;
+          type: "transcription.done";
+      }
+    | {
+          sessionId: string;
+          type: "error";
+          message: string;
+      };
+
+export type AppApiVoiceNamespace = {
+    startMistralRealtimeTranscription: (
+        payload: StartMistralRealtimeTranscriptionPayload,
+    ) => Promise<{ sessionId: string }>;
+    pushRealtimeTranscriptionChunk: (
+        sessionId: string,
+        chunk: Uint8Array,
+    ) => Promise<void>;
+    stopRealtimeTranscription: (sessionId: string) => Promise<void>;
+    onRealtimeTranscriptionEvent: (
+        listener: (event: VoiceTranscriptionEvent) => void,
+    ) => () => void;
+};
+
 export type FsDirectoryEntry = {
     name: string;
     type: "file" | "directory";
@@ -322,5 +358,6 @@ export type AppApi = {
     cache: AppApiCacheNamespace;
     network: AppApiNetworkNamespace;
     llm: AppApiLlmNamespace;
+    voice: AppApiVoiceNamespace;
     fs: AppApiFsNamespace;
 };

@@ -9,6 +9,7 @@ import { UserDataService } from "./services/UserDataService";
 import { CommandExecService } from "./services/CommandExecService";
 import { BrowserService } from "./services/BrowserService";
 import { OllamaService } from "./services/OllamaService";
+import { MistralRealtimeTranscriptionService } from "./services/MistralRealtimeTranscriptionService";
 import { createElectronPaths } from "./paths";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
@@ -16,6 +17,7 @@ import type {
     AppCacheEntry,
     ProxyHttpRequestPayload,
     SaveImageFromSourcePayload,
+    StartMistralRealtimeTranscriptionPayload,
     StreamOllamaChatPayload,
     UploadedFileData,
 } from "../src/types/ElectronApi";
@@ -52,6 +54,7 @@ let userDataService: UserDataService;
 let commandExecService: CommandExecService;
 let browserService: BrowserService;
 let ollamaService: OllamaService;
+let mistralRealtimeTranscriptionService: MistralRealtimeTranscriptionService;
 
 const mimeByExtension: Record<string, string> = {
     ".png": "image/png",
@@ -149,6 +152,7 @@ function createWindow() {
 
 app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
+        void mistralRealtimeTranscriptionService?.stopAll();
         app.quit();
         win = null;
     }
@@ -170,6 +174,13 @@ app.whenReady()
         commandExecService = new CommandExecService();
         browserService = new BrowserService();
         ollamaService = new OllamaService();
+        mistralRealtimeTranscriptionService =
+            new MistralRealtimeTranscriptionService((eventPayload) => {
+                win?.webContents.send(
+                    "app:voice-transcription-event",
+                    eventPayload,
+                );
+            });
 
         ipcMain.handle("app:get-boot-data", () =>
             userDataService.getBootData(),
@@ -340,6 +351,34 @@ app.whenReady()
                         bodyText: "",
                     };
                 }
+            },
+        );
+        ipcMain.handle(
+            "app:voice-transcription-start",
+            async (
+                _event,
+                payload: StartMistralRealtimeTranscriptionPayload,
+            ) => {
+                return mistralRealtimeTranscriptionService.startSession(
+                    payload,
+                );
+            },
+        );
+        ipcMain.handle(
+            "app:voice-transcription-push-chunk",
+            async (_event, sessionId: string, chunk: Uint8Array) => {
+                await mistralRealtimeTranscriptionService.pushChunk(
+                    sessionId,
+                    chunk,
+                );
+            },
+        );
+        ipcMain.handle(
+            "app:voice-transcription-stop",
+            async (_event, sessionId: string) => {
+                await mistralRealtimeTranscriptionService.stopSession(
+                    sessionId,
+                );
             },
         );
         ipcMain.handle(

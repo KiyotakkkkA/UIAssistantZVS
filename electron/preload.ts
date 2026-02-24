@@ -145,6 +145,29 @@ const appApi: AppApi = {
         streamOllamaChat: (payload) =>
             ipcRenderer.invoke("app:ollama-stream-chat", payload),
     },
+    voice: {
+        startMistralRealtimeTranscription: (payload) =>
+            ipcRenderer.invoke("app:voice-transcription-start", payload),
+        pushRealtimeTranscriptionChunk: (sessionId, chunk) =>
+            ipcRenderer.invoke(
+                "app:voice-transcription-push-chunk",
+                sessionId,
+                chunk,
+            ),
+        stopRealtimeTranscription: (sessionId) =>
+            ipcRenderer.invoke("app:voice-transcription-stop", sessionId),
+        onRealtimeTranscriptionEvent: (listener) => {
+            const handler = (_event: unknown, payload: unknown) => {
+                listener(payload as Parameters<typeof listener>[0]);
+            };
+
+            ipcRenderer.on("app:voice-transcription-event", handler);
+
+            return () => {
+                ipcRenderer.off("app:voice-transcription-event", handler);
+            };
+        },
+    },
     fs: {
         listDirectory: (cwd: string) =>
             ipcRenderer.invoke("app:fs-list-directory", cwd),
