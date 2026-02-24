@@ -34,6 +34,7 @@ export const createOllamaAdapter = ({
 
             while (shouldContinue) {
                 let roundContent = "";
+                let roundThinking = "";
                 const roundToolCalls: {
                     type?: "function";
                     function: {
@@ -54,6 +55,7 @@ export const createOllamaAdapter = ({
                         const thinkingChunk = chunk.message?.thinking || "";
 
                         if (thinkingChunk) {
+                            roundThinking += thinkingChunk;
                             onThinkingChunk?.(thinkingChunk, false);
                         }
 
@@ -84,6 +86,7 @@ export const createOllamaAdapter = ({
 
                 messages.push({
                     role: "assistant",
+                    thinking: roundThinking,
                     content: roundContent,
                     tool_calls: roundToolCalls,
                 });

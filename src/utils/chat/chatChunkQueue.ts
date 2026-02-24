@@ -1,7 +1,7 @@
 import type { AssistantStage, ChatMessage } from "../../types/Chat";
 import { appendAssistantStageChunk, splitTextChunk } from "./chatStream";
 
-type QueueStage = Extract<AssistantStage, "thinking" | "answer">;
+type QueueStage = Extract<AssistantStage, "thinking" | "answering">;
 
 type ChatChunkQueueManagerParams = {
     answeringAt: string;

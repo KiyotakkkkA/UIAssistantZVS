@@ -58,6 +58,8 @@ export function ToolBubbleCard({
                         ? `ПОДТВЕРЖДЕНИЕ ${payload.toolName || "unknown"}`
                         : `Инструмент: ${payload.toolName || "unknown"}`
                 }
+                variant="tool"
+                compact
                 titleIcon={
                     <span className="flex items-center gap-1.5">
                         <Icon icon="mdi:tools" width={14} height={14} />

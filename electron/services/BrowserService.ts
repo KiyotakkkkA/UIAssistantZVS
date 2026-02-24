@@ -55,6 +55,9 @@ export type BrowserCloseResult = {
     hadSession: boolean;
 };
 
+const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
+const BROWSER_ACTIONS = new Set<BrowserInteractAction>(["click", "type"]);
+
 export class BrowserService {
     private browserWindow: BrowserWindow | null = null;
 
@@ -111,7 +114,7 @@ export class BrowserService {
         }
 
         const protocol = parsed.protocol.toLowerCase();
-        if (protocol !== "http:" && protocol !== "https:") {
+        if (!SUPPORTED_PROTOCOLS.has(protocol)) {
             throw new Error("Поддерживаются только http и https URL");
         }
 
@@ -438,7 +441,7 @@ export class BrowserService {
               )
             : 400;
 
-        if (action !== "click" && action !== "type") {
+        if (!BROWSER_ACTIONS.has(action as BrowserInteractAction)) {
             throw new Error("Поддерживаются только действия click и type");
         }
 

@@ -8,6 +8,7 @@ import { InitService } from "./services/InitService";
 import { UserDataService } from "./services/UserDataService";
 import { CommandExecService } from "./services/CommandExecService";
 import { BrowserService } from "./services/BrowserService";
+import { OllamaService } from "./services/OllamaService";
 import { createElectronPaths } from "./paths";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
@@ -15,6 +16,7 @@ import type {
     AppCacheEntry,
     ProxyHttpRequestPayload,
     SaveImageFromSourcePayload,
+    StreamOllamaChatPayload,
     UploadedFileData,
 } from "../src/types/ElectronApi";
 import type { CreateProjectPayload } from "../src/types/Project";
@@ -49,6 +51,7 @@ let win: BrowserWindow | null;
 let userDataService: UserDataService;
 let commandExecService: CommandExecService;
 let browserService: BrowserService;
+let ollamaService: OllamaService;
 
 const mimeByExtension: Record<string, string> = {
     ".png": "image/png",
@@ -166,6 +169,7 @@ app.whenReady()
         userDataService = new UserDataService(appPaths);
         commandExecService = new CommandExecService();
         browserService = new BrowserService();
+        ollamaService = new OllamaService();
 
         ipcMain.handle("app:get-boot-data", () =>
             userDataService.getBootData(),
@@ -267,6 +271,16 @@ app.whenReady()
                 userDataService.setCacheEntry(key, entry);
             },
         );
+        ipcMain.handle(
+            "app:ollama-stream-chat",
+            async (_event, payload: StreamOllamaChatPayload) => {
+                const token =
+                    userDataService.getBootData().userProfile.ollamaToken;
+
+                return ollamaService.streamChat(payload, token);
+            },
+        );
+
         ipcMain.handle(
             "app:proxy-http-request",
             async (_event, payload: ProxyHttpRequestPayload) => {

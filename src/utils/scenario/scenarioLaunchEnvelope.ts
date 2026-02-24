@@ -5,6 +5,11 @@ export type ScenarioLaunchPayload = {
 };
 
 const SCENARIO_LAUNCH_PREFIX = "__SCENARIO_LAUNCH__::";
+const REQUIRED_SCENARIO_FIELDS: Array<keyof ScenarioLaunchPayload> = [
+    "scenarioName",
+    "displayMessage",
+    "scenarioFlow",
+];
 
 export const encodeScenarioLaunchPayload = (
     payload: ScenarioLaunchPayload,
@@ -24,19 +29,26 @@ export const parseScenarioLaunchPayload = (
     try {
         const parsed = JSON.parse(json) as Partial<ScenarioLaunchPayload>;
 
-        if (
-            !parsed ||
-            typeof parsed.scenarioName !== "string" ||
-            typeof parsed.displayMessage !== "string" ||
-            typeof parsed.scenarioFlow !== "string"
-        ) {
+        if (!parsed) {
             return null;
         }
 
+        const hasAllRequiredFields = REQUIRED_SCENARIO_FIELDS.every(
+            (field) => typeof parsed[field] === "string",
+        );
+
+        if (!hasAllRequiredFields) {
+            return null;
+        }
+
+        const scenarioName = parsed.scenarioName as string;
+        const displayMessage = parsed.displayMessage as string;
+        const scenarioFlow = parsed.scenarioFlow as string;
+
         return {
-            scenarioName: parsed.scenarioName,
-            displayMessage: parsed.displayMessage,
-            scenarioFlow: parsed.scenarioFlow,
+            scenarioName,
+            displayMessage,
+            scenarioFlow,
         };
     } catch {
         return null;

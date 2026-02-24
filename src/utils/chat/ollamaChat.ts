@@ -1,7 +1,6 @@
-import { postOllamaStream } from "../../services/api";
+import { streamOllamaChat } from "../../services/api";
 import type {
     ChatMessage,
-    OllamaChatChunk,
     OllamaMessage,
     StreamChatParams,
 } from "../../types/Chat";
@@ -18,12 +17,10 @@ export const streamChatOllama = async ({
         throw new DOMException("Request was aborted", "AbortError");
     }
 
-    await postOllamaStream<OllamaChatChunk>(
-        "chat",
+    await streamOllamaChat(
         {
             model,
             messages,
-            stream: true,
             think: true,
             ...(tools && tools.length > 0 ? { tools } : {}),
             ...(format ? { format } : {}),
@@ -38,11 +35,16 @@ export const streamChatOllama = async ({
 export const toOllamaMessages = (messages: ChatMessage[]): OllamaMessage[] =>
     messages
         .filter((message) => {
+            const stage = message.assistantStage as
+                | "thinking"
+                | "planning"
+                | "questioning"
+                | "tools_calling"
+                | "answering"
+                | undefined;
+
             if (message.author === "assistant") {
-                return (
-                    message.assistantStage === "answer" ||
-                    !message.assistantStage
-                );
+                return stage === "answering" || !stage;
             }
 
             return message.author === "system" || message.author === "user";

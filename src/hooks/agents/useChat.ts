@@ -26,6 +26,15 @@ import {
     getProjectPrompt,
 } from "../../prompts/base";
 
+const TOOL_STAGE_BY_NAME: Record<string, AssistantStage> = {
+    planning_tool: "planning",
+    qa_tool: "questioning",
+};
+
+const resolveToolStage = (toolName: string): AssistantStage => {
+    return TOOL_STAGE_BY_NAME[toolName] || "tools_calling";
+};
+
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
     const { userProfile } = useUserProfile();
@@ -258,7 +267,7 @@ export function useChat() {
             const toolTraceMessageIds = new Map<string, string>();
             const isCurrentAnswerMessage = (message: ChatMessage) =>
                 message.author === "assistant" &&
-                message.assistantStage === "answer" &&
+                message.assistantStage === "answering" &&
                 message.answeringAt === userMessage.id;
 
             let hasFirstChunk = false;
@@ -361,7 +370,8 @@ export function useChat() {
                     },
                     onToolCall: ({ callId, toolName, args }) => {
                         chunkQueueManager.flushImmediate();
-                        setStreamStage("tool");
+                        const toolStage = resolveToolStage(toolName);
+                        setStreamStage(toolStage);
                         markFirstActivity();
                         const messageId = createMessageId();
                         toolTraceMessageIds.set(callId, messageId);
@@ -375,7 +385,7 @@ export function useChat() {
                             {
                                 id: messageId,
                                 author: "assistant",
-                                assistantStage: "tool",
+                                assistantStage: toolStage,
                                 answeringAt: userMessage.id,
                                 toolTrace: {
                                     callId,
@@ -398,7 +408,8 @@ export function useChat() {
                     },
                     onToolResult: ({ callId, toolName, args, result }) => {
                         chunkQueueManager.flushImmediate();
-                        setStreamStage("tool");
+                        const toolStage = resolveToolStage(toolName);
+                        setStreamStage(toolStage);
                         const messageId = toolTraceMessageIds.get(callId);
 
                         updateMessages((prev) => {
@@ -408,7 +419,7 @@ export function useChat() {
                                     {
                                         id: createMessageId(),
                                         author: "assistant",
-                                        assistantStage: "tool",
+                                        assistantStage: toolStage,
                                         answeringAt: userMessage.id,
                                         toolTrace: {
                                             callId,
@@ -433,6 +444,7 @@ export function useChat() {
                                 message.id === messageId
                                     ? {
                                           ...message,
+                                          assistantStage: toolStage,
                                           toolTrace: {
                                               callId,
                                               toolName,
@@ -471,10 +483,10 @@ export function useChat() {
                             return;
                         }
 
-                        setStreamStage("answer");
+                        setStreamStage("answering");
                         markFirstActivity();
 
-                        chunkQueueManager.enqueue("answer", chunkText);
+                        chunkQueueManager.enqueue("answering", chunkText);
                     },
                 });
 
@@ -516,7 +528,7 @@ export function useChat() {
                             {
                                 id: createMessageId(),
                                 author: "assistant",
-                                assistantStage: "answer",
+                                assistantStage: "answering",
                                 answeringAt: userMessage.id,
                                 content: `Ошибка: ${errorMessage}`,
                                 timestamp: getTimeStamp(),

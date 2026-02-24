@@ -21,6 +21,14 @@ import {
 } from "./scenarioCanvasSceneShared";
 import { buildBlockPortAnchors } from "./scenarioCanvasScenePorts";
 
+const NORMALIZABLE_BLOCK_KINDS = new Set([
+    "end",
+    "tool",
+    "prompt",
+    "condition",
+    "variable",
+]);
+
 export const toPlainObject = (value: unknown): Record<string, unknown> => {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return {};
@@ -104,14 +112,9 @@ export const normalizeToolMeta = (
 export const normalizeBlock = (
     raw: Partial<ScenarioSimpleBlockNode>,
 ): ScenarioSimpleBlockNode => {
-    const kind =
-        raw.kind === "end" ||
-        raw.kind === "tool" ||
-        raw.kind === "prompt" ||
-        raw.kind === "condition" ||
-        raw.kind === "variable"
-            ? raw.kind
-            : "start";
+    const kind = NORMALIZABLE_BLOCK_KINDS.has(raw.kind || "")
+        ? (raw.kind as "end" | "tool" | "prompt" | "condition" | "variable")
+        : "start";
 
     const rawMeta =
         raw.meta && typeof raw.meta === "object" ? toPlainObject(raw.meta) : {};

@@ -371,23 +371,24 @@ export const normalizeExecutionType = (
     kind: ScenarioSimpleBlockNode["kind"],
     rawExecutionType: unknown,
 ): ScenarioBlockExecutionType => {
+    const ALLOWED_EXECUTION_TYPES = new Set(["manual", "tools", "system"]);
+    const DEFAULT_BY_KIND: Partial<
+        Record<ScenarioSimpleBlockNode["kind"], ScenarioBlockExecutionType>
+    > = {
+        prompt: "manual",
+        condition: "manual",
+        variable: "manual",
+        tool: "tools",
+    };
+
     if (
-        rawExecutionType === "manual" ||
-        rawExecutionType === "tools" ||
-        rawExecutionType === "system"
+        typeof rawExecutionType === "string" &&
+        ALLOWED_EXECUTION_TYPES.has(rawExecutionType)
     ) {
-        return rawExecutionType;
+        return rawExecutionType as ScenarioBlockExecutionType;
     }
 
-    if (kind === "prompt" || kind === "condition" || kind === "variable") {
-        return "manual";
-    }
-
-    if (kind === "tool") {
-        return "tools";
-    }
-
-    return "system";
+    return DEFAULT_BY_KIND[kind] || "system";
 };
 
 export const resolveNormalizedPortAnchors = (

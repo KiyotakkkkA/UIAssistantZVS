@@ -13,6 +13,9 @@ import {
     toPortKey,
 } from "./scenarioCanvasSceneShared";
 
+const SINGLE_CONTINUE_OUTPUT_KINDS = new Set(["start", "prompt"]);
+const SINGLE_CONTROL_INPUT_KINDS = new Set(["prompt", "variable"]);
+
 export const hasInputPort = (kind: ScenarioBlockKind) => kind !== "start";
 export const hasOutputPort = (kind: ScenarioBlockKind) => kind !== "end";
 
@@ -25,7 +28,7 @@ const getBlockInputPortNames = (block: ScenarioSimpleBlockNode): string[] => {
         return [];
     }
 
-    if (block.kind === "prompt" || block.kind === "variable") {
+    if (SINGLE_CONTROL_INPUT_KINDS.has(block.kind)) {
         return [START_BLOCK_INPUT_PORT];
     }
 
@@ -69,7 +72,7 @@ const getBlockOutputPortNames = (block: ScenarioSimpleBlockNode): string[] => {
         ];
     }
 
-    if (block.kind === "start" || block.kind === "prompt") {
+    if (SINGLE_CONTINUE_OUTPUT_KINDS.has(block.kind)) {
         return [VARIABLE_CONTINUE_OUTPUT_PORT];
     }
 
@@ -106,7 +109,7 @@ export const buildBlockPortAnchors = (
         };
     }
 
-    if (block.kind === "prompt" || block.kind === "variable") {
+    if (SINGLE_CONTROL_INPUT_KINDS.has(block.kind)) {
         inputAnchors[START_BLOCK_INPUT_PORT] = {
             x: -10,
             y: block.height / 2,

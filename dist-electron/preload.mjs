@@ -93,6 +93,9 @@ const appApi = {
   network: {
     proxyHttpRequest: (payload) => electron.ipcRenderer.invoke("app:proxy-http-request", payload)
   },
+  llm: {
+    streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload)
+  },
   fs: {
     listDirectory: (cwd) => electron.ipcRenderer.invoke("app:fs-list-directory", cwd),
     createFile: (cwd, filename, content) => electron.ipcRenderer.invoke("app:fs-create-file", cwd, filename, content),

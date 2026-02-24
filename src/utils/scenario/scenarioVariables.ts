@@ -24,11 +24,12 @@ export const SCENARIO_VARIABLE_DEFINITIONS: ScenarioVariableDefinition[] = [
     },
 ];
 
+const SCENARIO_VARIABLE_TITLES = new Map<ScenarioVariableKey, string>(
+    SCENARIO_VARIABLE_DEFINITIONS.map((item) => [item.key, item.title]),
+);
+
 export const getScenarioVariableTitle = (key: ScenarioVariableKey): string => {
-    const found = SCENARIO_VARIABLE_DEFINITIONS.find(
-        (item) => item.key === key,
-    );
-    return found?.title || key;
+    return SCENARIO_VARIABLE_TITLES.get(key) || key;
 };
 
 type ResolveScenarioVariablesArgs = {
@@ -52,31 +53,51 @@ export const resolveScenarioVariables = ({
     const values: Partial<Record<ScenarioVariableKey, string>> = {};
     const warnings: string[] = [];
 
-    selectedVariables.forEach((variableKey) => {
-        if (variableKey === "current_date") {
-            values.current_date = now.toLocaleString("ru-RU", {
+    const resolveByKey: Record<
+        ScenarioVariableKey,
+        (args: {
+            activeProjectDirectoryPath: string | null;
+            lastActiveTab: WorkspaceTab;
+            now: Date;
+            values: Partial<Record<ScenarioVariableKey, string>>;
+            warnings: string[];
+        }) => void
+    > = {
+        current_date: ({ now: nowValue, values: targetValues }) => {
+            targetValues.current_date = nowValue.toLocaleString("ru-RU", {
                 day: "2-digit",
                 month: "2-digit",
                 year: "numeric",
                 hour: "2-digit",
                 minute: "2-digit",
             });
-            return;
-        }
-
-        if (variableKey === "project_directory") {
-            if (
-                lastActiveTab !== "projects" ||
-                !activeProjectDirectoryPath?.trim()
-            ) {
-                warnings.push(
+        },
+        project_directory: ({
+            lastActiveTab: activeTab,
+            activeProjectDirectoryPath: directoryPath,
+            values: targetValues,
+            warnings: targetWarnings,
+        }) => {
+            if (activeTab !== "projects" || !directoryPath?.trim()) {
+                targetWarnings.push(
                     "Переменная project_directory недоступна: откройте вкладку Проекты и выберите активный проект.",
                 );
                 return;
             }
 
-            values.project_directory = activeProjectDirectoryPath;
-        }
+            targetValues.project_directory = directoryPath;
+        },
+    };
+
+    selectedVariables.forEach((variableKey) => {
+        const resolver = resolveByKey[variableKey];
+        resolver({
+            activeProjectDirectoryPath,
+            lastActiveTab,
+            now,
+            values,
+            warnings,
+        });
     });
 
     return {

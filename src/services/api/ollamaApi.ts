@@ -1,6 +1,16 @@
 import { Config } from "../../config";
 import { userProfileStore } from "../../stores/userProfileStore";
-import type { ProxyHttpRequestPayload } from "../../types/ElectronApi";
+import type {
+    OllamaChatChunk,
+    OllamaMessage,
+    OllamaResponseFormat,
+    OllamaRole,
+    OllamaToolDefinition,
+} from "../../types/Chat";
+import type {
+    ProxyHttpRequestPayload,
+    StreamOllamaChatPayload,
+} from "../../types/ElectronApi";
 
 export type OllamaCatalogModelDetails = {
     parent_model: string;
@@ -28,6 +38,12 @@ type StreamRequestOptions<TChunk> = {
     signal?: AbortSignal;
     onChunk: (chunk: TChunk) => void;
 };
+
+const createAbortError = () =>
+    new DOMException("Request was aborted", "AbortError");
+
+const toSerializable = <T>(value: T): T =>
+    JSON.parse(JSON.stringify(value)) as T;
 
 const proxyHttpRequest = async ({
     url,
@@ -68,179 +84,87 @@ const proxyHttpRequest = async ({
     return raw;
 };
 
-export const createOllamaRequest = (endpoint: string) => {
+const createOllamaAuthHeaders = () => {
     const ollamaToken = userProfileStore.userProfile.ollamaToken.trim();
-    const normalizedEndpoint = endpoint.replace(/^\/+/, "");
 
     return {
-        url: `${Config.OLLAMA_BASE_URL}/${normalizedEndpoint}`,
-        init: {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                ...(ollamaToken && {
-                    Authorization: `Bearer ${ollamaToken}`,
-                }),
-            },
-        } satisfies RequestInit,
+        "Content-Type": "application/json",
+        ...(ollamaToken
+            ? {
+                  Authorization: `Bearer ${ollamaToken}`,
+              }
+            : {}),
     };
+};
+
+export const streamOllamaChat = async (
+    payload: {
+        model: string;
+        messages: OllamaMessage[];
+        tools?: OllamaToolDefinition[];
+        format?: OllamaResponseFormat;
+        think?: boolean;
+    },
+    options: StreamRequestOptions<OllamaChatChunk>,
+): Promise<void> => {
+    const { signal, onChunk } = options;
+
+    if (signal?.aborted) {
+        throw createAbortError();
+    }
+
+    const llmApi = window.appApi?.llm;
+
+    if (!llmApi?.streamOllamaChat) {
+        throw new Error("LLM API is not available in current environment");
+    }
+
+    const requestPayload: StreamOllamaChatPayload = {
+        model: payload.model,
+        messages: toSerializable(payload.messages ?? []),
+        ...(payload.tools ? { tools: toSerializable(payload.tools) } : {}),
+        ...(payload.format ? { format: toSerializable(payload.format) } : {}),
+        ...(payload.think !== undefined ? { think: payload.think } : {}),
+    };
+
+    const chunks = await llmApi.streamOllamaChat(requestPayload);
+
+    for (const part of chunks) {
+        if (signal?.aborted) {
+            throw createAbortError();
+        }
+
+        onChunk({
+            model: part.model,
+            created_at: part.created_at,
+            message: {
+                role: part.message?.role as OllamaRole,
+                content: part.message?.content,
+                thinking: part.message?.thinking,
+                tool_calls: part.message?.tool_calls,
+            },
+            done: part.done,
+        });
+
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+    }
 };
 
 export const postOllamaJson = async <TResponse = unknown>(
     endpoint: string,
     payload: Record<string, unknown>,
 ): Promise<TResponse> => {
-    const request = createOllamaRequest(endpoint);
-
+    const normalizedEndpoint = endpoint.replace(/^\/+/, "");
     const raw = await proxyHttpRequest({
-        url: request.url,
+        url: `${Config.OLLAMA_BASE_URL}/api/${normalizedEndpoint}`,
         method: "POST",
-        headers: request.init.headers as Record<string, string>,
+        headers: createOllamaAuthHeaders(),
         bodyText: JSON.stringify(payload),
     });
 
     return raw ? (JSON.parse(raw) as TResponse) : ({} as TResponse);
-};
-
-const parseStreamJsonLine = <TChunk>(line: string): TChunk | null => {
-    const trimmed = line.trim();
-    if (!trimmed) {
-        return null;
-    }
-
-    const rawPayload = trimmed.startsWith("data:")
-        ? trimmed.slice(5).trim()
-        : trimmed;
-
-    if (!rawPayload || rawPayload === "[DONE]") {
-        return null;
-    }
-
-    return JSON.parse(rawPayload) as TChunk;
-};
-
-const emitChunksFromRaw = <TChunk>(
-    raw: string,
-    onChunk: (chunk: TChunk) => void,
-) => {
-    const lines = raw.split(/\r?\n/);
-
-    for (const line of lines) {
-        const parsed = parseStreamJsonLine<TChunk>(line);
-        if (parsed) {
-            onChunk(parsed);
-        }
-    }
-};
-
-const emitChunksFromRawProgressive = async <TChunk>(
-    raw: string,
-    onChunk: (chunk: TChunk) => void,
-    signal?: AbortSignal,
-) => {
-    const lines = raw.split(/\r?\n/);
-    let emitted = 0;
-
-    for (const line of lines) {
-        if (signal?.aborted) {
-            throw new DOMException("Request was aborted", "AbortError");
-        }
-
-        const parsed = parseStreamJsonLine<TChunk>(line);
-        if (!parsed) {
-            continue;
-        }
-
-        onChunk(parsed);
-        emitted += 1;
-
-        if (emitted % 8 === 0) {
-            await new Promise<void>((resolve) => {
-                setTimeout(resolve, 0);
-            });
-        }
-    }
-};
-
-export const postOllamaStream = async <TChunk = unknown>(
-    endpoint: string,
-    payload: Record<string, unknown>,
-    options: StreamRequestOptions<TChunk>,
-): Promise<void> => {
-    const { signal, onChunk } = options;
-    const request = createOllamaRequest(endpoint);
-    const headers = request.init.headers as Record<string, string>;
-    const bodyText = JSON.stringify(payload);
-
-    if (signal?.aborted) {
-        throw new DOMException("Request was aborted", "AbortError");
-    }
-
-    const api = window.appApi;
-    if (api?.network?.proxyHttpRequest) {
-        const raw = await proxyHttpRequest({
-            url: request.url,
-            method: "POST",
-            headers,
-            bodyText,
-        });
-
-        if (signal?.aborted) {
-            throw new DOMException("Request was aborted", "AbortError");
-        }
-
-        await emitChunksFromRawProgressive(raw, onChunk, signal);
-        return;
-    }
-
-    const response = await fetch(request.url, {
-        method: "POST",
-        headers,
-        body: bodyText,
-        signal,
-    });
-
-    if (!response.ok) {
-        const rawError = await response.text();
-        throw new Error(
-            rawError || `Request failed with status ${response.status}`,
-        );
-    }
-
-    if (!response.body) {
-        const raw = await response.text();
-        emitChunksFromRaw(raw, onChunk);
-        return;
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    let done = false;
-    while (!done) {
-        const readResult = await reader.read();
-        done = readResult.done;
-        const value = readResult.value;
-        if (value) {
-            buffer += decoder.decode(value, { stream: !done });
-            const lines = buffer.split(/\r?\n/);
-            buffer = lines.pop() ?? "";
-
-            for (const line of lines) {
-                const parsed = parseStreamJsonLine<TChunk>(line);
-                if (parsed) {
-                    onChunk(parsed);
-                }
-            }
-        }
-    }
-
-    const tail = `${buffer}${decoder.decode()}`;
-    const parsedTail = parseStreamJsonLine<TChunk>(tail);
-    if (parsedTail) {
-        onChunk(parsedTail);
-    }
 };
 
 export const getOllamaModelsCatalog = async (): Promise<

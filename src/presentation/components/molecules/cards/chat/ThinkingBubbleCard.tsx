@@ -15,6 +15,8 @@ export function ThinkingBubbleCard({
             <Accordeon
                 title="Размышления"
                 subtitle="Размышления ассистента в процессе генерации ответа"
+                variant="thinking"
+                compact
                 titleIcon={
                     <span className="flex items-center gap-1.5">
                         <Icon

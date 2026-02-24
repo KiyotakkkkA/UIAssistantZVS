@@ -7,6 +7,10 @@ import type { ThemeData, ThemeListItem } from "../../../src/types/App";
 export class ThemesService {
     constructor(private readonly themesPath: string) {}
 
+    private createThemeMap(themes: ThemeData[]): Map<string, ThemeData> {
+        return new Map(themes.map((theme) => [theme.id, theme]));
+    }
+
     getThemesList(): ThemeListItem[] {
         const themes = this.readThemes();
 
@@ -22,7 +26,8 @@ export class ThemesService {
 
     getThemeData(themeId: string): ThemeData {
         const themes = this.readThemes();
-        const preferredTheme = themes.find((theme) => theme.id === themeId);
+        const themeMap = this.createThemeMap(themes);
+        const preferredTheme = themeMap.get(themeId);
 
         if (preferredTheme) {
             return preferredTheme;
@@ -38,7 +43,8 @@ export class ThemesService {
 
     resolveThemePalette(themeId: string): Record<string, string> {
         const themes = this.readThemes();
-        const preferredTheme = themes.find((theme) => theme.id === themeId);
+        const themeMap = this.createThemeMap(themes);
+        const preferredTheme = themeMap.get(themeId);
 
         if (preferredTheme) {
             return preferredTheme.palette;

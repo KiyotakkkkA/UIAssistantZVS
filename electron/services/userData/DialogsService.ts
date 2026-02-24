@@ -13,6 +13,16 @@ type ActiveDialogContextUpdater = (payload: {
     activeProjectId: string | null;
 }) => void;
 
+const ASSISTANT_MESSAGE_AUTHORS = new Set(["assistant", "user", "system"]);
+const ASSISTANT_STAGES = new Set([
+    "thinking",
+    "planning",
+    "questioning",
+    "tools_calling",
+    "answering",
+]);
+const TOOL_STAGES = new Set(["planning", "questioning", "tools_calling"]);
+
 export class DialogsService {
     constructor(
         private readonly databaseService: DatabaseService,
@@ -335,31 +345,29 @@ export class DialogsService {
     private normalizeMessage(message: ChatMessage): ChatMessage {
         const rawAuthor = (message as { author?: string }).author;
 
-        const role =
-            rawAuthor === "assistant" ||
-            rawAuthor === "user" ||
-            rawAuthor === "system"
-                ? rawAuthor
-                : "assistant";
+        const role = ASSISTANT_MESSAGE_AUTHORS.has(rawAuthor || "")
+            ? (rawAuthor as "assistant" | "user" | "system")
+            : "assistant";
 
-        const migratedStage =
-            rawAuthor === "tool"
-                ? "tool"
-                : rawAuthor === "thinking"
-                  ? "thinking"
-                  : undefined;
+        const rawAssistantStage = (message as { assistantStage?: string })
+            .assistantStage;
 
         const assistantStage =
             role === "assistant"
-                ? message.assistantStage === "tool" ||
-                  message.assistantStage === "thinking" ||
-                  message.assistantStage === "answer"
-                    ? message.assistantStage
-                    : migratedStage || "answer"
+                ? ASSISTANT_STAGES.has(rawAssistantStage || "")
+                    ? (rawAssistantStage as
+                          | "thinking"
+                          | "planning"
+                          | "questioning"
+                          | "tools_calling"
+                          | "answering")
+                    : "answering"
                 : undefined;
 
+        const isToolLikeStage = TOOL_STAGES.has(assistantStage || "");
+
         const toolTrace =
-            role === "assistant" && assistantStage === "tool"
+            role === "assistant" && isToolLikeStage
                 ? message.toolTrace &&
                   typeof message.toolTrace.callId === "string" &&
                   typeof message.toolTrace.toolName === "string" &&

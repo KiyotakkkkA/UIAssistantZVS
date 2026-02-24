@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
+import { Icon } from "@iconify/react";
 import { Avatar, Button, Loader, Modal } from "../../atoms";
 import {
     ChatUserBubbleCard,
+    PlanningToolBubbleCard,
     QaToolBubbleCard,
     ThinkingBubbleCard,
     ToolBubbleCard,
 } from "../../molecules/cards/chat";
 import { MarkdownStaticContent } from "../../molecules/render";
-import type { AssistantStage, ChatMessage } from "../../../../types/Chat";
+import type {
+    AssistantStage,
+    ChatMessage,
+    ToolTrace,
+} from "../../../../types/Chat";
 import { useMessages } from "../../../../hooks";
 
 interface MessageFeedProps {
@@ -19,18 +25,23 @@ interface MessageFeedProps {
 }
 
 type AssistantStageBlock = {
-    stage: "thinking" | "tool" | "answer";
+    stage: AssistantStage;
     messages: ChatMessage[];
+};
+
+const normalizeAssistantStage = (stage?: AssistantStage): AssistantStage => {
+    if (!stage) {
+        return "answering";
+    }
+
+    return stage;
 };
 
 const buildAssistantStageBlocks = (
     stages: ChatMessage[],
 ): AssistantStageBlock[] => {
     return stages.reduce<AssistantStageBlock[]>((accumulator, message) => {
-        const stage = (message.assistantStage || "answer") as
-            | "thinking"
-            | "tool"
-            | "answer";
+        const stage = normalizeAssistantStage(message.assistantStage);
         const lastBlock = accumulator[accumulator.length - 1];
 
         if (!lastBlock || lastBlock.stage !== stage) {
@@ -41,6 +52,29 @@ const buildAssistantStageBlocks = (
         lastBlock.messages.push(message);
         return accumulator;
     }, []);
+};
+
+const buildStageLineIcon = ({
+    isStageActive,
+    icon,
+}: {
+    isStageActive: boolean;
+    icon: string;
+}) => {
+    return (
+        <span
+            className={`absolute -left-5.5 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full bg-main-900 ${
+                isStageActive ? "shadow-[0_0_0_2px_rgba(255,255,255,0.08)]" : ""
+            }`}
+        >
+            <Icon
+                icon={icon}
+                width={12}
+                height={12}
+                className="text-indigo-300"
+            />
+        </span>
+    );
 };
 
 function AssistantResponseBlock({
@@ -72,8 +106,33 @@ function AssistantResponseBlock({
 
     const stageLoaderTitles: Record<AssistantStage, string> = {
         thinking: "Думаю...",
-        tool: "Вызываю инструменты...",
-        answer: "Генерирую ответ...",
+        planning: "Строю план...",
+        questioning: "Формулирую уточнение...",
+        tools_calling: "Вызываю инструменты...",
+        answering: "Генерирую ответ...",
+    };
+
+    const stageMeta: Record<AssistantStage, { label: string; icon: string }> = {
+        thinking: {
+            label: "Этап: Размышления",
+            icon: "mdi:head-lightbulb-outline",
+        },
+        planning: {
+            label: "Этап: Планирование",
+            icon: "mdi:clipboard-text-outline",
+        },
+        questioning: {
+            label: "Этап: Уточнение",
+            icon: "mdi:chat-question-outline",
+        },
+        tools_calling: {
+            label: "Этап: Вызов инструментов",
+            icon: "mdi:tools",
+        },
+        answering: {
+            label: "Этап: Ответ",
+            icon: "mdi:message-text-outline",
+        },
     };
 
     if (!stageBlocks.length && !normalizedActiveStage) {
@@ -83,88 +142,228 @@ function AssistantResponseBlock({
     return (
         <article className="flex gap-3 justify-start">
             <Avatar label="AI" tone="assistant" />
-            <div className="w-full max-w-[72%] space-y-3 rounded-2xl px-4 py-3 text-sm leading-relaxed text-main-100">
-                {stageBlocks.map((block, blockIndex) => {
-                    if (block.stage === "thinking") {
-                        return (
-                            <ThinkingBubbleCard
-                                key={`thinking_${blockIndex}`}
-                                content={block.messages
-                                    .map((message) => message.content)
-                                    .join("\n")}
-                                isLoading={
-                                    normalizedActiveStage === "thinking" &&
-                                    activeBlockIndex === blockIndex
-                                }
-                            />
-                        );
-                    }
-
-                    if (block.stage === "tool") {
-                        const isToolBlockLoading =
-                            normalizedActiveStage === "tool" &&
+            <div className="w-full max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed text-main-100">
+                <div className="relative space-y-3 pl-5">
+                    <div className="pointer-events-none absolute left-1.5 top-1 bottom-1 w-px bg-main-700/70" />
+                    {stageBlocks.map((block, blockIndex) => {
+                        const stageKey = normalizeAssistantStage(block.stage);
+                        const isStageActive =
+                            normalizedActiveStage === stageKey &&
                             activeBlockIndex === blockIndex;
 
-                        return block.messages.map((message, toolIndex) =>
-                            message.toolTrace?.toolName === "qa_tool" ? (
-                                <QaToolBubbleCard
-                                    key={message.id}
-                                    toolTrace={message.toolTrace}
-                                    answered={
-                                        message.toolTrace?.status === "answered"
-                                    }
-                                    onSendAnswer={(answer) =>
-                                        sendQaAnswer(message.id, answer)
-                                    }
-                                />
-                            ) : (
-                                <ToolBubbleCard
-                                    key={message.id}
-                                    content={message.content}
-                                    toolTrace={message.toolTrace}
-                                    onApproveCommandExec={() =>
-                                        onApproveCommandExec(message.id)
-                                    }
-                                    onRejectCommandExec={() =>
-                                        onRejectCommandExec(message.id)
-                                    }
-                                    isLoading={
-                                        isToolBlockLoading &&
-                                        toolIndex === block.messages.length - 1
-                                    }
-                                />
-                            ),
-                        );
-                    }
-
-                    const combinedAnswer = block.messages
-                        .map((message) => message.content)
-                        .join("");
-                    const answerTimestamp =
-                        block.messages[block.messages.length - 1]?.timestamp;
-
-                    return (
-                        <div key={`answer_${blockIndex}`}>
-                            <MarkdownStaticContent content={combinedAnswer} />
-                            {normalizedActiveStage === "answer" &&
-                                activeBlockIndex === blockIndex && (
-                                    <div className="mt-2 flex items-center gap-2 text-[11px] text-main-400">
-                                        <Loader className="h-3.5 w-3.5" />
-                                        <span>Генерирую ответ...</span>
+                        if (block.stage === "thinking") {
+                            return (
+                                <div
+                                    key={`thinking_${blockIndex}`}
+                                    className="relative"
+                                >
+                                    {buildStageLineIcon({
+                                        isStageActive,
+                                        icon: stageMeta[stageKey].icon,
+                                    })}
+                                    <div className="mb-1 flex items-center gap-2 text-[11px] text-main-300">
+                                        <span>{stageMeta[stageKey].label}</span>
+                                        <span className="text-main-500">•</span>
+                                        <span>
+                                            {blockIndex + 1}/
+                                            {stageBlocks.length}
+                                        </span>
                                     </div>
-                                )}
-                            <p className="mt-2 text-[11px] text-main-400">
-                                {answerTimestamp}
-                            </p>
+                                    <div>
+                                        <ThinkingBubbleCard
+                                            content={block.messages
+                                                .map(
+                                                    (message) =>
+                                                        message.content,
+                                                )
+                                                .join("\n")}
+                                            isLoading={isStageActive}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        if (
+                            block.stage === "planning" ||
+                            block.stage === "questioning" ||
+                            block.stage === "tools_calling"
+                        ) {
+                            const isToolBlockLoading =
+                                (normalizedActiveStage === "planning" ||
+                                    normalizedActiveStage === "questioning" ||
+                                    normalizedActiveStage ===
+                                        "tools_calling") &&
+                                activeBlockIndex === blockIndex;
+
+                            const renderedItems: JSX.Element[] = [];
+
+                            for (
+                                let toolIndex = 0;
+                                toolIndex < block.messages.length;
+                                toolIndex += 1
+                            ) {
+                                const message = block.messages[toolIndex];
+                                const toolName = message.toolTrace?.toolName;
+
+                                if (toolName === "planning_tool") {
+                                    const planningMessages = [message];
+                                    let nextIndex = toolIndex + 1;
+
+                                    while (nextIndex < block.messages.length) {
+                                        const nextMessage =
+                                            block.messages[nextIndex];
+                                        if (
+                                            nextMessage.toolTrace?.toolName !==
+                                            "planning_tool"
+                                        ) {
+                                            break;
+                                        }
+
+                                        planningMessages.push(nextMessage);
+                                        nextIndex += 1;
+                                    }
+
+                                    renderedItems.push(
+                                        <PlanningToolBubbleCard
+                                            key={planningMessages[0].id}
+                                            traces={planningMessages
+                                                .map((item) => item.toolTrace)
+                                                .filter(
+                                                    (
+                                                        trace,
+                                                    ): trace is ToolTrace =>
+                                                        Boolean(trace),
+                                                )}
+                                            isLoading={
+                                                isToolBlockLoading &&
+                                                nextIndex ===
+                                                    block.messages.length
+                                            }
+                                        />,
+                                    );
+
+                                    toolIndex = nextIndex - 1;
+                                    continue;
+                                }
+
+                                renderedItems.push(
+                                    toolName === "qa_tool" ? (
+                                        <QaToolBubbleCard
+                                            key={message.id}
+                                            toolTrace={message.toolTrace}
+                                            answered={
+                                                message.toolTrace?.status ===
+                                                "answered"
+                                            }
+                                            onSendAnswer={(answer) =>
+                                                sendQaAnswer(message.id, answer)
+                                            }
+                                        />
+                                    ) : (
+                                        <ToolBubbleCard
+                                            key={message.id}
+                                            content={message.content}
+                                            toolTrace={message.toolTrace}
+                                            onApproveCommandExec={() =>
+                                                onApproveCommandExec(message.id)
+                                            }
+                                            onRejectCommandExec={() =>
+                                                onRejectCommandExec(message.id)
+                                            }
+                                            isLoading={
+                                                isToolBlockLoading &&
+                                                toolIndex ===
+                                                    block.messages.length - 1
+                                            }
+                                        />
+                                    ),
+                                );
+                            }
+
+                            return (
+                                <div
+                                    key={`tool_${blockIndex}`}
+                                    className="relative"
+                                >
+                                    {buildStageLineIcon({
+                                        isStageActive,
+                                        icon: stageMeta[stageKey].icon,
+                                    })}
+                                    <div className="mb-1 flex items-center gap-2 text-[11px] text-main-300">
+                                        <span>{stageMeta[stageKey].label}</span>
+                                        <span className="text-main-500">•</span>
+                                        <span>
+                                            {blockIndex + 1}/
+                                            {stageBlocks.length}
+                                        </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {renderedItems}
+                                    </div>
+                                </div>
+                            );
+                        }
+
+                        const combinedAnswer = block.messages
+                            .map((message) => message.content)
+                            .join("");
+                        const answerTimestamp =
+                            block.messages[block.messages.length - 1]
+                                ?.timestamp;
+
+                        return (
+                            <div
+                                key={`answer_${blockIndex}`}
+                                className="relative"
+                            >
+                                {buildStageLineIcon({
+                                    isStageActive,
+                                    icon: stageMeta[stageKey].icon,
+                                })}
+                                <div className="mb-1 flex items-center gap-2 text-[11px] text-main-300">
+                                    <span>{stageMeta[stageKey].label}</span>
+                                    <span className="text-main-500">•</span>
+                                    <span>
+                                        {blockIndex + 1}/{stageBlocks.length}
+                                    </span>
+                                </div>
+                                <div>
+                                    <MarkdownStaticContent
+                                        content={combinedAnswer}
+                                    />
+                                    {isStageActive && (
+                                        <div className="mt-2 flex items-center gap-2 text-[11px] text-main-400">
+                                            <Loader className="h-3.5 w-3.5" />
+                                            <span>Генерирую ответ...</span>
+                                        </div>
+                                    )}
+                                    <p className="mt-2 text-[11px] text-main-400">
+                                        {answerTimestamp}
+                                    </p>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {normalizedActiveStage && !hasActiveBlock && (
+                        <div className="relative">
+                            <span className="absolute -left-5.5  top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full border border-main-500 bg-main-900 shadow-[0_0_0_2px_rgba(255,255,255,0.08)]">
+                                <Icon
+                                    icon={stageMeta[normalizedActiveStage].icon}
+                                    width={10}
+                                    height={10}
+                                    className="text-main-300"
+                                />
+                            </span>
+                            <div className="flex items-center gap-2 rounded-xl border border-main-700/60 bg-main-900/50 px-3 py-2 text-xs text-main-300">
+                                <Loader className="h-3.5 w-3.5" />
+                                <span>
+                                    {stageLoaderTitles[normalizedActiveStage]}
+                                </span>
+                            </div>
                         </div>
-                    );
-                })}
-                {normalizedActiveStage && !hasActiveBlock && (
-                    <div className="flex items-center gap-2 rounded-xl border border-main-700/60 bg-main-900/50 px-3 py-2 text-xs text-main-300">
-                        <Loader className="h-3.5 w-3.5" />
-                        <span>{stageLoaderTitles[normalizedActiveStage]}</span>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </article>
     );

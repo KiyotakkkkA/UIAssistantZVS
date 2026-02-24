@@ -8,12 +8,21 @@ import type {
 import { DatabaseService } from "../DatabaseService";
 import { MetaService } from "./MetaService";
 
+const CHAT_DRIVERS = new Set<ChatDriver>(["ollama", ""]);
+const WORKSPACE_TABS = new Set<WorkspaceTab>([
+    "dialogs",
+    "projects",
+    "scenario",
+]);
+
 const isChatDriver = (value: unknown): value is ChatDriver => {
-    return value === "ollama" || value === "";
+    return typeof value === "string" && CHAT_DRIVERS.has(value as ChatDriver);
 };
 
 const isWorkspaceTab = (value: unknown): value is WorkspaceTab => {
-    return value === "dialogs" || value === "projects" || value === "scenario";
+    return (
+        typeof value === "string" && WORKSPACE_TABS.has(value as WorkspaceTab)
+    );
 };
 
 const normalizeNullableId = (value: unknown): string | null => {
@@ -33,31 +42,32 @@ const normalizeWorkspaceContext = (profile: UserProfile): UserProfile => {
           : "dialogs";
     const lastActiveTab = profile.lastActiveTab || inferredTab;
 
-    if (lastActiveTab === "dialogs") {
-        return {
-            ...profile,
+    const normalizeByTab: Record<
+        WorkspaceTab,
+        (next: UserProfile) => UserProfile
+    > = {
+        dialogs: (next) => ({
+            ...next,
             activeProjectId: null,
             activeScenarioId: null,
             lastActiveTab,
-        };
-    }
-
-    if (lastActiveTab === "projects") {
-        return {
-            ...profile,
-            activeProjectId: normalizeNullableId(profile.activeProjectId),
+        }),
+        projects: (next) => ({
+            ...next,
+            activeProjectId: normalizeNullableId(next.activeProjectId),
             activeScenarioId: null,
             lastActiveTab,
-        };
-    }
-
-    return {
-        ...profile,
-        activeDialogId: null,
-        activeProjectId: null,
-        activeScenarioId: normalizeNullableId(profile.activeScenarioId),
-        lastActiveTab,
+        }),
+        scenario: (next) => ({
+            ...next,
+            activeDialogId: null,
+            activeProjectId: null,
+            activeScenarioId: normalizeNullableId(next.activeScenarioId),
+            lastActiveTab,
+        }),
     };
+
+    return normalizeByTab[lastActiveTab](profile);
 };
 
 export class UserProfileService {

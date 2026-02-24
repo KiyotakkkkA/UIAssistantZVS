@@ -141,6 +141,10 @@ const appApi: AppApi = {
         proxyHttpRequest: (payload) =>
             ipcRenderer.invoke("app:proxy-http-request", payload),
     },
+    llm: {
+        streamOllamaChat: (payload) =>
+            ipcRenderer.invoke("app:ollama-stream-chat", payload),
+    },
     fs: {
         listDirectory: (cwd: string) =>
             ipcRenderer.invoke("app:fs-list-directory", cwd),

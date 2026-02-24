@@ -8,6 +8,7 @@ import {
 } from "./scenarioVariables";
 
 const CONDITION_CONTINUE_OUTPUTS = ["yes", "no", "always"] as const;
+const CONTINUE_ENABLED_KINDS = new Set(["start", "tool", "prompt", "variable"]);
 
 const tryParseOutputSchemaNames = (raw?: string): string[] => {
     if (!raw) {
@@ -59,29 +60,29 @@ export const getVariableParamOutputPorts = (
 export const getParameterInputPorts = (
     block: ScenarioSimpleBlockNode,
 ): string[] => {
-    if (block.kind === "tool") {
-        return getToolParamInputPorts(block);
-    }
+    const resolverByKind: Partial<
+        Record<ScenarioSimpleBlockNode["kind"], () => string[]>
+    > = {
+        tool: () => getToolParamInputPorts(block),
+        condition: () => getConditionParamInputPorts(block),
+    };
 
-    if (block.kind === "condition") {
-        return getConditionParamInputPorts(block);
-    }
-
-    return [];
+    const resolver = resolverByKind[block.kind];
+    return resolver ? resolver() : [];
 };
 
 export const getParameterOutputPorts = (
     block: ScenarioSimpleBlockNode,
 ): string[] => {
-    if (block.kind === "tool") {
-        return getToolParamOutputPorts(block);
-    }
+    const resolverByKind: Partial<
+        Record<ScenarioSimpleBlockNode["kind"], () => string[]>
+    > = {
+        tool: () => getToolParamOutputPorts(block),
+        variable: () => getVariableParamOutputPorts(block),
+    };
 
-    if (block.kind === "variable") {
-        return getVariableParamOutputPorts(block);
-    }
-
-    return [];
+    const resolver = resolverByKind[block.kind];
+    return resolver ? resolver() : [];
 };
 
 export const getContinueOutputPorts = (
@@ -91,12 +92,7 @@ export const getContinueOutputPorts = (
         return getConditionContinueOutputPorts();
     }
 
-    if (
-        block.kind === "start" ||
-        block.kind === "tool" ||
-        block.kind === "prompt" ||
-        block.kind === "variable"
-    ) {
+    if (CONTINUE_ENABLED_KINDS.has(block.kind)) {
         return [VARIABLE_CONTINUE_OUTPUT_PORT];
     }
 

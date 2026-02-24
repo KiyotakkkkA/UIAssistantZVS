@@ -1,7 +1,12 @@
 export type MessageRole = "system" | "user" | "assistant";
 export type OllamaRole = MessageRole | "tool";
 
-export type AssistantStage = "answer" | "tool" | "thinking";
+export type AssistantStage =
+    | "thinking"
+    | "planning"
+    | "questioning"
+    | "tools_calling"
+    | "answering";
 
 export type ToolTrace = {
     callId: string;

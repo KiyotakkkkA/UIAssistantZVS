@@ -3,6 +3,10 @@ import type {
     ChatDialog,
     ChatDialogListItem,
     DeleteDialogResult,
+    OllamaChatChunk,
+    OllamaMessage,
+    OllamaResponseFormat,
+    OllamaToolDefinition,
 } from "./Chat";
 import type {
     CreateProjectPayload,
@@ -244,6 +248,20 @@ export type AppApiNetworkNamespace = {
     ) => Promise<ProxyHttpRequestResult>;
 };
 
+export type StreamOllamaChatPayload = {
+    model: string;
+    messages: OllamaMessage[];
+    tools?: OllamaToolDefinition[];
+    format?: OllamaResponseFormat;
+    think?: boolean;
+};
+
+export type AppApiLlmNamespace = {
+    streamOllamaChat: (
+        payload: StreamOllamaChatPayload,
+    ) => Promise<OllamaChatChunk[]>;
+};
+
 export type FsDirectoryEntry = {
     name: string;
     type: "file" | "directory";
@@ -303,5 +321,6 @@ export type AppApi = {
     scenarios: AppApiScenariosNamespace;
     cache: AppApiCacheNamespace;
     network: AppApiNetworkNamespace;
+    llm: AppApiLlmNamespace;
     fs: AppApiFsNamespace;
 };
