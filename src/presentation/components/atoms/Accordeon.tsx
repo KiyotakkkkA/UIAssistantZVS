@@ -1,10 +1,17 @@
-import { type PropsWithChildren, useEffect, useRef, useState } from "react";
+import {
+    type PropsWithChildren,
+    type ReactNode,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 
 type AccordeonProps = PropsWithChildren<{
     title: string;
     subtitle?: string;
     defaultOpen?: boolean;
     className?: string;
+    titleIcon?: ReactNode;
 }>;
 
 export function Accordeon({
@@ -12,6 +19,7 @@ export function Accordeon({
     subtitle,
     defaultOpen = false,
     className = "",
+    titleIcon,
     children,
 }: AccordeonProps) {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -37,9 +45,16 @@ export function Accordeon({
             >
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex flex-col items-start">
-                        <p className="text-xs font-semibold text-main-100">
-                            {title}
-                        </p>
+                        <div className="flex items-center gap-2">
+                            {titleIcon ? (
+                                <span className="text-main-300">
+                                    {titleIcon}
+                                </span>
+                            ) : null}
+                            <p className="text-xs font-semibold text-main-100">
+                                {title}
+                            </p>
+                        </div>
                         {subtitle ? (
                             <p className="mt-1 text-[11px] text-main-400 text-left">
                                 {subtitle}

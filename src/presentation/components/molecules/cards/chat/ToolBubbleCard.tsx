@@ -1,4 +1,5 @@
-import { Accordeon, Button } from "../../../atoms";
+import { Accordeon, Button, Loader } from "../../../atoms";
+import { Icon } from "@iconify/react";
 import { ShikiCodeBlock } from "../../render/ShikiCodeBlock";
 import type { ToolTrace } from "../../../../../types/Chat";
 
@@ -7,6 +8,7 @@ type ToolBubbleCardProps = {
     toolTrace?: ToolTrace;
     onApproveCommandExec?: () => void;
     onRejectCommandExec?: () => void;
+    isLoading?: boolean;
 };
 
 const parseToolTrace = (raw: string): Partial<ToolTrace> | null => {
@@ -28,6 +30,7 @@ export function ToolBubbleCard({
     toolTrace,
     onApproveCommandExec,
     onRejectCommandExec,
+    isLoading = false,
 }: ToolBubbleCardProps) {
     const payload = toolTrace ?? parseToolTrace(content);
 
@@ -54,6 +57,12 @@ export function ToolBubbleCard({
                     execStatus === "pending"
                         ? `ПОДТВЕРЖДЕНИЕ ${payload.toolName || "unknown"}`
                         : `Инструмент: ${payload.toolName || "unknown"}`
+                }
+                titleIcon={
+                    <span className="flex items-center gap-1.5">
+                        <Icon icon="mdi:tools" width={14} height={14} />
+                        {isLoading ? <Loader className="h-3 w-3" /> : null}
+                    </span>
                 }
                 subtitle={
                     execStatus === "pending"

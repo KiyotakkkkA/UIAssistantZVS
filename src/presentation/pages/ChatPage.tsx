@@ -24,6 +24,8 @@ export const ChatPage = observer(function ChatPage() {
         cancelGeneration,
         isStreaming,
         isAwaitingFirstChunk,
+        activeStage,
+        activeResponseToId,
     } = useChat();
 
     useEffect(() => {
@@ -46,6 +48,8 @@ export const ChatPage = observer(function ChatPage() {
                     messages={messages}
                     sendMessage={sendMessage}
                     showLoader={isAwaitingFirstChunk}
+                    activeStage={activeStage}
+                    activeResponseToId={activeResponseToId}
                 />
             )}
             <MessageComposer

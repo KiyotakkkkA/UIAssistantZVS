@@ -22,6 +22,8 @@ export const ProjectPage = observer(function ProjectPage() {
         cancelGeneration,
         isStreaming,
         isAwaitingFirstChunk,
+        activeStage,
+        activeResponseToId,
     } = useChat();
 
     const [documents, setDocuments] = useState<SavedFileRecord[]>([]);
@@ -191,6 +193,8 @@ export const ProjectPage = observer(function ProjectPage() {
                 messages={messages}
                 sendMessage={sendMessage}
                 showLoader={isAwaitingFirstChunk}
+                activeStage={activeStage}
+                activeResponseToId={activeResponseToId}
             />
             <MessageComposer
                 onMessageSend={sendMessage}

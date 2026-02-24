@@ -7,6 +7,9 @@ type UseMessagesParams = {
     sendMessage: (content: string) => void;
 };
 
+const isScenarioLaunchMessage = (content: string, author: string) =>
+    author === "system" && content.startsWith("SCENARIO_LAUNCH:");
+
 export const useMessages = ({ sendMessage }: UseMessagesParams) => {
     const toasts = useToasts();
 
@@ -104,9 +107,21 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
                     (message) => message.id === messageId,
                 );
                 if (index !== -1) {
+                    const targetMessage = dialog.messages[index];
+                    const previousMessage = dialog.messages[index - 1];
+                    const truncateIndex =
+                        targetMessage?.author === "user" &&
+                        previousMessage &&
+                        isScenarioLaunchMessage(
+                            previousMessage.content,
+                            previousMessage.author,
+                        )
+                            ? index - 1
+                            : index;
+
                     chatsStore.replaceByDialog({
                         ...dialog,
-                        messages: dialog.messages.slice(0, index),
+                        messages: dialog.messages.slice(0, truncateIndex),
                         updatedAt: new Date().toISOString(),
                     });
                 }
@@ -159,12 +174,33 @@ export const useMessages = ({ sendMessage }: UseMessagesParams) => {
             );
             chatsStore.replaceByDialog(updatedDialog);
         } else {
+            const targetIndex = dialog.messages.findIndex(
+                (message) => message.id === deleteMessageId,
+            );
+            const targetMessage = dialog.messages[targetIndex];
+            const previousMessage = dialog.messages[targetIndex - 1];
+            const deletedIds = new Set<string>([deleteMessageId]);
+
+            if (
+                targetMessage?.author === "user" &&
+                previousMessage &&
+                isScenarioLaunchMessage(
+                    previousMessage.content,
+                    previousMessage.author,
+                )
+            ) {
+                deletedIds.add(previousMessage.id);
+            }
+
             chatsStore.replaceByDialog({
                 ...dialog,
                 messages: dialog.messages.filter(
                     (message) =>
-                        message.id !== deleteMessageId &&
-                        message.answeringAt !== deleteMessageId,
+                        !deletedIds.has(message.id) &&
+                        !(
+                            typeof message.answeringAt === "string" &&
+                            deletedIds.has(message.answeringAt)
+                        ),
                 ),
                 updatedAt: new Date().toISOString(),
             });

@@ -284,6 +284,9 @@ class ChatsStore {
                           },
                       }
                     : {}),
+                ...(typeof message.hidden === "boolean"
+                    ? { hidden: message.hidden }
+                    : {}),
             })),
         };
     }

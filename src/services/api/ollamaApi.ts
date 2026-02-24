@@ -133,6 +133,35 @@ const emitChunksFromRaw = <TChunk>(
     }
 };
 
+const emitChunksFromRawProgressive = async <TChunk>(
+    raw: string,
+    onChunk: (chunk: TChunk) => void,
+    signal?: AbortSignal,
+) => {
+    const lines = raw.split(/\r?\n/);
+    let emitted = 0;
+
+    for (const line of lines) {
+        if (signal?.aborted) {
+            throw new DOMException("Request was aborted", "AbortError");
+        }
+
+        const parsed = parseStreamJsonLine<TChunk>(line);
+        if (!parsed) {
+            continue;
+        }
+
+        onChunk(parsed);
+        emitted += 1;
+
+        if (emitted % 8 === 0) {
+            await new Promise<void>((resolve) => {
+                setTimeout(resolve, 0);
+            });
+        }
+    }
+};
+
 export const postOllamaStream = async <TChunk = unknown>(
     endpoint: string,
     payload: Record<string, unknown>,
@@ -160,7 +189,7 @@ export const postOllamaStream = async <TChunk = unknown>(
             throw new DOMException("Request was aborted", "AbortError");
         }
 
-        emitChunksFromRaw(raw, onChunk);
+        await emitChunksFromRawProgressive(raw, onChunk, signal);
         return;
     }
 

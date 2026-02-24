@@ -167,17 +167,34 @@ export class DialogsService {
     ): ChatDialog {
         const dialog = this.getDialogById(dialogId, activeDialogId);
 
+        const targetIndex = dialog.messages.findIndex(
+            (message) => message.id === messageId,
+        );
         const targetMessage = dialog.messages.find(
             (message) => message.id === messageId,
         );
 
-        if (!targetMessage) {
+        if (!targetMessage || targetIndex === -1) {
             return dialog;
+        }
+
+        const deletedIds = new Set<string>([messageId]);
+        const previousMessage = dialog.messages[targetIndex - 1];
+
+        if (
+            targetMessage.author === "user" &&
+            this.isScenarioLaunchMessage(previousMessage)
+        ) {
+            deletedIds.add(previousMessage.id);
         }
 
         const nextMessages = dialog.messages.filter(
             (message) =>
-                message.id !== messageId && message.answeringAt !== messageId,
+                !deletedIds.has(message.id) &&
+                !(
+                    typeof message.answeringAt === "string" &&
+                    deletedIds.has(message.answeringAt)
+                ),
         );
 
         const updatedDialog: ChatDialog = {
@@ -204,9 +221,17 @@ export class DialogsService {
             return dialog;
         }
 
+        const targetMessage = dialog.messages[messageIndex];
+        const previousMessage = dialog.messages[messageIndex - 1];
+        const truncateIndex =
+            targetMessage?.author === "user" &&
+            this.isScenarioLaunchMessage(previousMessage)
+                ? messageIndex - 1
+                : messageIndex;
+
         const updatedDialog: ChatDialog = {
             ...dialog,
-            messages: dialog.messages.slice(0, messageIndex),
+            messages: dialog.messages.slice(0, truncateIndex),
             updatedAt: new Date().toISOString(),
         };
 
@@ -363,7 +388,18 @@ export class DialogsService {
                 : {}),
             ...(assistantStage ? { assistantStage } : {}),
             ...(toolTrace ? { toolTrace } : {}),
+            ...(typeof message.hidden === "boolean"
+                ? { hidden: message.hidden }
+                : {}),
         };
+    }
+
+    private isScenarioLaunchMessage(message: ChatMessage | undefined): boolean {
+        return (
+            message?.author === "system" &&
+            typeof message.content === "string" &&
+            message.content.startsWith("SCENARIO_LAUNCH:")
+        );
     }
 
     private toDialogListItem(dialog: ChatDialog): ChatDialogListItem {

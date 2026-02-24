@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Avatar, Button, Loader, Modal } from "../../atoms";
 import {
     ChatUserBubbleCard,
@@ -7,37 +7,76 @@ import {
     ToolBubbleCard,
 } from "../../molecules/cards/chat";
 import { MarkdownStaticContent } from "../../molecules/render";
-import type { ChatMessage } from "../../../../types/Chat";
+import type { AssistantStage, ChatMessage } from "../../../../types/Chat";
 import { useMessages } from "../../../../hooks";
 
 interface MessageFeedProps {
     messages: ChatMessage[];
     sendMessage: (content: string) => void;
     showLoader?: boolean;
+    activeStage?: AssistantStage | null;
+    activeResponseToId?: string | null;
 }
+
+type AssistantStageBlock = {
+    stage: "thinking" | "tool" | "answer";
+    messages: ChatMessage[];
+};
+
+const buildAssistantStageBlocks = (
+    stages: ChatMessage[],
+): AssistantStageBlock[] => {
+    return stages.reduce<AssistantStageBlock[]>((accumulator, message) => {
+        const stage = (message.assistantStage || "answer") as
+            | "thinking"
+            | "tool"
+            | "answer";
+        const lastBlock = accumulator[accumulator.length - 1];
+
+        if (!lastBlock || lastBlock.stage !== stage) {
+            accumulator.push({ stage, messages: [message] });
+            return accumulator;
+        }
+
+        lastBlock.messages.push(message);
+        return accumulator;
+    }, []);
+};
 
 function AssistantResponseBlock({
     stages,
     sendQaAnswer,
     onApproveCommandExec,
     onRejectCommandExec,
+    activeStage,
+    isActive,
 }: {
     stages: ChatMessage[];
     sendQaAnswer: (qaMessageId: string, answer: string) => void;
     onApproveCommandExec: (messageId: string) => void;
     onRejectCommandExec: (messageId: string) => void;
+    activeStage?: AssistantStage | null;
+    isActive?: boolean;
 }) {
-    const thinkingStages = stages.filter(
-        (message) => message.assistantStage === "thinking",
-    );
-    const toolStages = stages.filter(
-        (message) => message.assistantStage === "tool",
-    );
-    const answerStage = [...stages]
-        .reverse()
-        .find((message) => message.assistantStage === "answer");
+    const stageBlocks = buildAssistantStageBlocks(stages);
+    const normalizedActiveStage = isActive && activeStage ? activeStage : null;
 
-    if (!thinkingStages.length && !toolStages.length && !answerStage) {
+    const activeBlockIndex =
+        normalizedActiveStage === null
+            ? -1
+            : stageBlocks
+                  .map((block) => block.stage)
+                  .lastIndexOf(normalizedActiveStage);
+
+    const hasActiveBlock = activeBlockIndex !== -1;
+
+    const stageLoaderTitles: Record<AssistantStage, string> = {
+        thinking: "Думаю...",
+        tool: "Вызываю инструменты...",
+        answer: "Генерирую ответ...",
+    };
+
+    if (!stageBlocks.length && !normalizedActiveStage) {
         return null;
     }
 
@@ -45,43 +84,85 @@ function AssistantResponseBlock({
         <article className="flex gap-3 justify-start">
             <Avatar label="AI" tone="assistant" />
             <div className="w-full max-w-[72%] space-y-3 rounded-2xl px-4 py-3 text-sm leading-relaxed text-main-100">
-                {thinkingStages.length > 0 && (
-                    <ThinkingBubbleCard
-                        content={thinkingStages
-                            .map((message) => message.content)
-                            .join("\n")}
-                    />
-                )}
-                {toolStages.map((message) =>
-                    message.toolTrace?.toolName === "qa_tool" ? (
-                        <QaToolBubbleCard
-                            key={message.id}
-                            toolTrace={message.toolTrace}
-                            answered={message.toolTrace?.status === "answered"}
-                            onSendAnswer={(answer) =>
-                                sendQaAnswer(message.id, answer)
-                            }
-                        />
-                    ) : (
-                        <ToolBubbleCard
-                            key={message.id}
-                            content={message.content}
-                            toolTrace={message.toolTrace}
-                            onApproveCommandExec={() =>
-                                onApproveCommandExec(message.id)
-                            }
-                            onRejectCommandExec={() =>
-                                onRejectCommandExec(message.id)
-                            }
-                        />
-                    ),
-                )}
-                {answerStage && (
-                    <div>
-                        <MarkdownStaticContent content={answerStage.content} />
-                        <p className="mt-2 text-[11px] text-main-400">
-                            {answerStage.timestamp}
-                        </p>
+                {stageBlocks.map((block, blockIndex) => {
+                    if (block.stage === "thinking") {
+                        return (
+                            <ThinkingBubbleCard
+                                key={`thinking_${blockIndex}`}
+                                content={block.messages
+                                    .map((message) => message.content)
+                                    .join("\n")}
+                                isLoading={
+                                    normalizedActiveStage === "thinking" &&
+                                    activeBlockIndex === blockIndex
+                                }
+                            />
+                        );
+                    }
+
+                    if (block.stage === "tool") {
+                        const isToolBlockLoading =
+                            normalizedActiveStage === "tool" &&
+                            activeBlockIndex === blockIndex;
+
+                        return block.messages.map((message, toolIndex) =>
+                            message.toolTrace?.toolName === "qa_tool" ? (
+                                <QaToolBubbleCard
+                                    key={message.id}
+                                    toolTrace={message.toolTrace}
+                                    answered={
+                                        message.toolTrace?.status === "answered"
+                                    }
+                                    onSendAnswer={(answer) =>
+                                        sendQaAnswer(message.id, answer)
+                                    }
+                                />
+                            ) : (
+                                <ToolBubbleCard
+                                    key={message.id}
+                                    content={message.content}
+                                    toolTrace={message.toolTrace}
+                                    onApproveCommandExec={() =>
+                                        onApproveCommandExec(message.id)
+                                    }
+                                    onRejectCommandExec={() =>
+                                        onRejectCommandExec(message.id)
+                                    }
+                                    isLoading={
+                                        isToolBlockLoading &&
+                                        toolIndex === block.messages.length - 1
+                                    }
+                                />
+                            ),
+                        );
+                    }
+
+                    const combinedAnswer = block.messages
+                        .map((message) => message.content)
+                        .join("");
+                    const answerTimestamp =
+                        block.messages[block.messages.length - 1]?.timestamp;
+
+                    return (
+                        <div key={`answer_${blockIndex}`}>
+                            <MarkdownStaticContent content={combinedAnswer} />
+                            {normalizedActiveStage === "answer" &&
+                                activeBlockIndex === blockIndex && (
+                                    <div className="mt-2 flex items-center gap-2 text-[11px] text-main-400">
+                                        <Loader className="h-3.5 w-3.5" />
+                                        <span>Генерирую ответ...</span>
+                                    </div>
+                                )}
+                            <p className="mt-2 text-[11px] text-main-400">
+                                {answerTimestamp}
+                            </p>
+                        </div>
+                    );
+                })}
+                {normalizedActiveStage && !hasActiveBlock && (
+                    <div className="flex items-center gap-2 rounded-xl border border-main-700/60 bg-main-900/50 px-3 py-2 text-xs text-main-300">
+                        <Loader className="h-3.5 w-3.5" />
+                        <span>{stageLoaderTitles[normalizedActiveStage]}</span>
                     </div>
                 )}
             </div>
@@ -93,10 +174,36 @@ export function MessageFeed({
     messages,
     sendMessage,
     showLoader = false,
+    activeStage = null,
+    activeResponseToId = null,
 }: MessageFeedProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const previousLastMessageIdRef = useRef<string | null>(null);
     const scrollContainerRef = useRef<HTMLElement | null>(null);
+    const linkedStagesByUserId = useMemo(() => {
+        const userMessageIds = new Set(
+            messages
+                .filter((message) => message.author === "user")
+                .map((message) => message.id),
+        );
+        const grouped = new Map<string, ChatMessage[]>();
+
+        messages.forEach((message) => {
+            if (
+                message.author !== "assistant" ||
+                !message.answeringAt ||
+                !userMessageIds.has(message.answeringAt)
+            ) {
+                return;
+            }
+
+            const linkedStages = grouped.get(message.answeringAt) || [];
+            linkedStages.push(message);
+            grouped.set(message.answeringAt, linkedStages);
+        });
+
+        return grouped;
+    }, [messages]);
     const {
         editingMessageId,
         editingValue,
@@ -152,11 +259,10 @@ export function MessageFeed({
                         }
 
                         if (message.author === "user") {
-                            const linkedStages = messages.filter(
-                                (candidate) =>
-                                    candidate.author === "assistant" &&
-                                    candidate.answeringAt === message.id,
-                            );
+                            const linkedStages =
+                                linkedStagesByUserId.get(message.id) || [];
+                            const isActiveResponse =
+                                activeResponseToId === message.id;
 
                             linkedStages.forEach((item) =>
                                 consumedMessageIds.add(item.id),
@@ -200,7 +306,8 @@ export function MessageFeed({
                                         }}
                                     />
 
-                                    {linkedStages.length > 0 && (
+                                    {(linkedStages.length > 0 ||
+                                        isActiveResponse) && (
                                         <AssistantResponseBlock
                                             stages={linkedStages}
                                             sendQaAnswer={sendQaAnswer}
@@ -210,6 +317,8 @@ export function MessageFeed({
                                             onRejectCommandExec={
                                                 rejectCommandExec
                                             }
+                                            activeStage={activeStage}
+                                            isActive={isActiveResponse}
                                         />
                                     )}
                                 </div>
@@ -232,6 +341,8 @@ export function MessageFeed({
                                             approveCommandExec
                                         }
                                         onRejectCommandExec={rejectCommandExec}
+                                        activeStage={null}
+                                        isActive={false}
                                     />
                                 </div>
                             );
@@ -240,7 +351,7 @@ export function MessageFeed({
                         return null;
                     });
                 })()}
-                {showLoader && (
+                {showLoader && !activeResponseToId && (
                     <div className="flex items-center gap-2 px-2 text-sm text-main-400">
                         <Loader />
                         <span>Модель печатает...</span>

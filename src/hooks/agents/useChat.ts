@@ -4,7 +4,7 @@ import { useChatParams } from "../useChatParams";
 import { useToasts } from "../useToasts";
 import { useUserProfile } from "../useUserProfile";
 import type { ChatDriver } from "../../types/App";
-import type { ChatDialog, ChatMessage } from "../../types/Chat";
+import type { AssistantStage, ChatDialog, ChatMessage } from "../../types/Chat";
 import { createOllamaAdapter } from "./adapters/ollamaAdapter";
 import type { ChatProviderAdapter } from "../../types/AIRequests";
 import { chatsStore } from "../../stores/chatsStore";
@@ -13,76 +13,19 @@ import { projectsStore } from "../../stores/projectsStore";
 import { commandExecApprovalService } from "../../services/commandExecApproval";
 import { parseScenarioLaunchPayload } from "../../utils/scenarioLaunchEnvelope";
 import {
+    appendAssistantStageChunk,
+    buildScenarioRuntimeEnvText,
+    createMessageId,
+    getCommandRequestMeta,
+    getScenarioFormatHint,
+    getTimeStamp,
+    splitTextChunk,
+} from "../../utils/chatStream";
+import {
     getSystemPrompt,
     getUserPrompt,
     getProjectPrompt,
 } from "../../prompts/base";
-import type { OllamaResponseFormat } from "../../types/Chat";
-
-const getTimeStamp = () =>
-    new Date().toLocaleTimeString("ru-RU", {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-
-const createMessageId = () => `msg_${crypto.randomUUID().replace(/-/g, "")}`;
-
-const getCommandRequestMeta = (args: Record<string, unknown>) => ({
-    command: typeof args.command === "string" ? args.command : "",
-    cwd: typeof args.cwd === "string" ? args.cwd : ".",
-    isAdmin: false,
-});
-
-const getScenarioFormatHint = (
-    scenarioFlow?: string,
-): OllamaResponseFormat | undefined => {
-    if (!scenarioFlow) {
-        return undefined;
-    }
-
-    const marker = "MODEL_FORMAT_HINT_JSON_SCHEMA:";
-    const markerIndex = scenarioFlow.indexOf(marker);
-
-    if (markerIndex < 0) {
-        return undefined;
-    }
-
-    const jsonCandidate = scenarioFlow
-        .slice(markerIndex + marker.length)
-        .trim()
-        .split("\n")
-        .find((line) => line.trim().length > 0)
-        ?.trim();
-
-    if (!jsonCandidate) {
-        return undefined;
-    }
-
-    try {
-        const parsed = JSON.parse(jsonCandidate) as Record<string, unknown>;
-        return parsed;
-    } catch {
-        return undefined;
-    }
-};
-
-const buildScenarioRuntimeEnvText = () => {
-    const now = new Date().toLocaleString("ru-RU", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-
-    const projectDirectory = projectsStore.activeProject?.directoryPath?.trim();
-
-    return [
-        "SCENARIO_RUNTIME_ENV:",
-        `  - current_date=${now}`,
-        `  - project_directory=${projectDirectory || ""}`,
-    ].join("\n");
-};
 
 export function useChat() {
     const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
@@ -91,6 +34,10 @@ export function useChat() {
 
     const [isAwaitingFirstChunk, setIsAwaitingFirstChunk] = useState(false);
     const [isStreaming, setIsStreaming] = useState(false);
+    const [activeStage, setActiveStage] = useState<AssistantStage | null>(null);
+    const [activeResponseToId, setActiveResponseToId] = useState<string | null>(
+        null,
+    );
     const messages = chatsStore.messages;
     const visibleMessages = useMemo(
         () =>
@@ -171,7 +118,9 @@ export function useChat() {
                 scenarioLaunchPayload?.scenarioFlow,
             );
             const scenarioRuntimeEnvText = scenarioLaunchPayload
-                ? buildScenarioRuntimeEnvText()
+                ? buildScenarioRuntimeEnvText(
+                      projectsStore.activeProject?.directoryPath,
+                  )
                 : "";
             const userVisibleContent =
                 scenarioLaunchPayload?.displayMessage || content;
@@ -206,9 +155,6 @@ export function useChat() {
                 timestamp: getTimeStamp(),
                 ...(isHiddenQa ? { hidden: true } : {}),
             };
-
-            const assistantTimestamp = getTimeStamp();
-            const assistantMessageId = createMessageId();
 
             const currentDialog = ensureDialog();
 
@@ -291,25 +237,163 @@ export function useChat() {
                 ...historyForStorage,
                 ...requestConstraintMessages,
             ];
-            const answerMessage: ChatMessage = {
-                id: assistantMessageId,
-                author: "assistant",
-                content: "",
-                timestamp: assistantTimestamp,
-                assistantStage: "answer",
-                answeringAt: userMessage.id,
+            const chunkQueue: Array<{
+                stage: Extract<AssistantStage, "thinking" | "answer">;
+                chunkText: string;
+            }> = [];
+            let queueDrainResolver: (() => void) | null = null;
+            let flushFrameId: number | null = null;
+            const flushChunkLimitPerFrame = 6;
+
+            const resolveQueueDrain = () => {
+                if (chunkQueue.length !== 0 || flushFrameId !== null) {
+                    return;
+                }
+
+                if (queueDrainResolver) {
+                    const resolve = queueDrainResolver;
+                    queueDrainResolver = null;
+                    resolve();
+                }
             };
 
-            commitMessages([...historyForStorage, answerMessage]);
+            const flushChunkQueue = () => {
+                flushFrameId = null;
+
+                if (chunkQueue.length === 0) {
+                    resolveQueueDrain();
+                    return;
+                }
+
+                const frameBatch = chunkQueue.splice(
+                    0,
+                    flushChunkLimitPerFrame,
+                );
+
+                updateMessages((prev) =>
+                    frameBatch.reduce(
+                        (accumulator, item) =>
+                            appendAssistantStageChunk(
+                                accumulator,
+                                userMessage.id,
+                                item.stage,
+                                item.chunkText,
+                            ),
+                        prev,
+                    ),
+                );
+
+                if (chunkQueue.length > 0) {
+                    flushFrameId =
+                        window.requestAnimationFrame(flushChunkQueue);
+                    return;
+                }
+
+                resolveQueueDrain();
+            };
+
+            const flushChunkQueueImmediate = () => {
+                if (flushFrameId !== null) {
+                    window.cancelAnimationFrame(flushFrameId);
+                    flushFrameId = null;
+                }
+
+                if (chunkQueue.length === 0) {
+                    resolveQueueDrain();
+                    return;
+                }
+
+                const immediateBatch = chunkQueue.splice(0, chunkQueue.length);
+
+                updateMessages((prev) =>
+                    immediateBatch.reduce(
+                        (accumulator, item) =>
+                            appendAssistantStageChunk(
+                                accumulator,
+                                userMessage.id,
+                                item.stage,
+                                item.chunkText,
+                            ),
+                        prev,
+                    ),
+                );
+
+                resolveQueueDrain();
+            };
+
+            const scheduleChunkFlush = () => {
+                if (flushFrameId !== null) {
+                    return;
+                }
+
+                flushFrameId = window.requestAnimationFrame(flushChunkQueue);
+            };
+
+            const enqueueStageChunk = (
+                stage: Extract<AssistantStage, "thinking" | "answer">,
+                chunkText: string,
+            ) => {
+                if (!chunkText) {
+                    return;
+                }
+
+                splitTextChunk(chunkText).forEach((chunkPart) => {
+                    chunkQueue.push({ stage, chunkText: chunkPart });
+                });
+
+                scheduleChunkFlush();
+            };
+
+            const waitForChunkQueueDrain = async () => {
+                if (chunkQueue.length === 0 && flushFrameId === null) {
+                    return;
+                }
+
+                await new Promise<void>((resolve) => {
+                    queueDrainResolver = resolve;
+                });
+            };
+
+            const resetChunkQueue = () => {
+                chunkQueue.length = 0;
+
+                if (flushFrameId !== null) {
+                    window.cancelAnimationFrame(flushFrameId);
+                    flushFrameId = null;
+                }
+
+                resolveQueueDrain();
+            };
+
+            const setStreamStage = (stage: AssistantStage) => {
+                setActiveStage((previous) =>
+                    previous === stage ? previous : stage,
+                );
+            };
+
+            commitMessages(historyForStorage);
             setIsStreaming(true);
             setIsAwaitingFirstChunk(true);
+            setActiveResponseToId(userMessage.id);
+            setActiveStage("thinking");
             cancellationRequestedRef.current = false;
             const abortController = new AbortController();
             abortControllerRef.current = abortController;
             const toolTraceMessageIds = new Map<string, string>();
-            let thinkingMessageId: string | null = null;
+            const isCurrentAnswerMessage = (message: ChatMessage) =>
+                message.author === "assistant" &&
+                message.assistantStage === "answer" &&
+                message.answeringAt === userMessage.id;
 
             let hasFirstChunk = false;
+            const markFirstActivity = () => {
+                if (hasFirstChunk) {
+                    return;
+                }
+
+                hasFirstChunk = true;
+                setIsAwaitingFirstChunk(false);
+            };
 
             try {
                 await adapter.send({
@@ -400,6 +484,9 @@ export function useChat() {
                         });
                     },
                     onToolCall: ({ callId, toolName, args }) => {
+                        flushChunkQueueImmediate();
+                        setStreamStage("tool");
+                        markFirstActivity();
                         const messageId = createMessageId();
                         toolTraceMessageIds.set(callId, messageId);
                         const commandMeta =
@@ -434,6 +521,8 @@ export function useChat() {
                         ]);
                     },
                     onToolResult: ({ callId, toolName, args, result }) => {
+                        flushChunkQueueImmediate();
+                        setStreamStage("tool");
                         const messageId = toolTraceMessageIds.get(callId);
 
                         updateMessages((prev) => {
@@ -488,46 +577,14 @@ export function useChat() {
                             );
                         });
                     },
-                    onThinkingChunk: (chunkText, done) => {
+                    onThinkingChunk: (chunkText) => {
                         if (!chunkText) {
-                            if (done && thinkingMessageId) {
-                                thinkingMessageId = null;
-                            }
                             return;
                         }
 
-                        if (!thinkingMessageId) {
-                            thinkingMessageId = createMessageId();
-
-                            updateMessages((prev) => [
-                                ...prev,
-                                {
-                                    id: thinkingMessageId as string,
-                                    author: "assistant",
-                                    assistantStage: "thinking",
-                                    answeringAt: userMessage.id,
-                                    content: chunkText,
-                                    timestamp: getTimeStamp(),
-                                },
-                            ]);
-
-                            return;
-                        }
-
-                        updateMessages((prev) =>
-                            prev.map((message) =>
-                                message.id === thinkingMessageId
-                                    ? {
-                                          ...message,
-                                          content: `${message.content}${chunkText}`,
-                                      }
-                                    : message,
-                            ),
-                        );
-
-                        if (done) {
-                            thinkingMessageId = null;
-                        }
+                        setStreamStage("thinking");
+                        markFirstActivity();
+                        enqueueStageChunk("thinking", chunkText);
                     },
                     signal: abortController.signal,
                     onChunk: (chunkText, done) => {
@@ -538,40 +595,14 @@ export function useChat() {
                             return;
                         }
 
-                        if (!hasFirstChunk) {
-                            hasFirstChunk = true;
-                            setIsAwaitingFirstChunk(false);
-                        }
+                        setStreamStage("answer");
+                        markFirstActivity();
 
-                        updateMessages((prev) => {
-                            const assistantIndex = prev.findIndex(
-                                (message) => message.id === assistantMessageId,
-                            );
-
-                            if (assistantIndex === -1) {
-                                return [
-                                    ...prev,
-                                    {
-                                        id: assistantMessageId,
-                                        author: "assistant",
-                                        assistantStage: "answer",
-                                        answeringAt: userMessage.id,
-                                        content: chunkText,
-                                        timestamp: assistantTimestamp,
-                                    },
-                                ];
-                            }
-
-                            const updated = [...prev];
-                            updated[assistantIndex] = {
-                                ...updated[assistantIndex],
-                                content: `${updated[assistantIndex].content}${chunkText}`,
-                            };
-
-                            return updated;
-                        });
+                        enqueueStageChunk("answer", chunkText);
                     },
                 });
+
+                await waitForChunkQueueDrain();
 
                 const snapshot: ChatDialog = {
                     ...currentDialog,
@@ -588,9 +619,12 @@ export function useChat() {
                     error instanceof Error &&
                     error.name === "AbortError"
                 ) {
+                    resetChunkQueue();
                     commitMessages(requestBaseHistory);
                     return;
                 }
+
+                await waitForChunkQueueDrain();
 
                 const errorMessage =
                     error instanceof Error
@@ -598,37 +632,37 @@ export function useChat() {
                         : "Не удалось получить ответ модели";
 
                 updateMessages((prev) => {
-                    const assistantIndex = prev.findIndex(
-                        (message) => message.id === assistantMessageId,
-                    );
+                    const lastMessage = prev[prev.length - 1];
 
-                    if (assistantIndex === -1) {
+                    if (!lastMessage || !isCurrentAnswerMessage(lastMessage)) {
                         return [
                             ...prev,
                             {
-                                id: assistantMessageId,
+                                id: createMessageId(),
                                 author: "assistant",
                                 assistantStage: "answer",
                                 answeringAt: userMessage.id,
                                 content: `Ошибка: ${errorMessage}`,
-                                timestamp: assistantTimestamp,
+                                timestamp: getTimeStamp(),
                             },
                         ];
                     }
 
-                    const updated = [...prev];
-                    updated[assistantIndex] = {
-                        ...updated[assistantIndex],
+                    const updatedLastMessage: ChatMessage = {
+                        ...lastMessage,
                         content: `Ошибка: ${errorMessage}`,
                     };
 
-                    return updated;
+                    return [...prev.slice(0, -1), updatedLastMessage];
                 });
             } finally {
+                resetChunkQueue();
                 abortControllerRef.current = null;
                 cancellationRequestedRef.current = false;
                 setIsAwaitingFirstChunk(false);
                 setIsStreaming(false);
+                setActiveStage(null);
+                setActiveResponseToId(null);
             }
         },
     });
@@ -650,5 +684,7 @@ export function useChat() {
         cancelGeneration,
         isStreaming,
         isAwaitingFirstChunk,
+        activeStage,
+        activeResponseToId,
     };
 }

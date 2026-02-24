@@ -481,14 +481,22 @@ class DialogsService {
   }
   deleteMessageFromDialog(dialogId, messageId, activeDialogId) {
     const dialog2 = this.getDialogById(dialogId, activeDialogId);
+    const targetIndex = dialog2.messages.findIndex(
+      (message) => message.id === messageId
+    );
     const targetMessage = dialog2.messages.find(
       (message) => message.id === messageId
     );
-    if (!targetMessage) {
+    if (!targetMessage || targetIndex === -1) {
       return dialog2;
     }
+    const deletedIds = /* @__PURE__ */ new Set([messageId]);
+    const previousMessage = dialog2.messages[targetIndex - 1];
+    if (targetMessage.author === "user" && this.isScenarioLaunchMessage(previousMessage)) {
+      deletedIds.add(previousMessage.id);
+    }
     const nextMessages = dialog2.messages.filter(
-      (message) => message.id !== messageId && message.answeringAt !== messageId
+      (message) => !deletedIds.has(message.id) && !(typeof message.answeringAt === "string" && deletedIds.has(message.answeringAt))
     );
     const updatedDialog = {
       ...dialog2,
@@ -506,9 +514,12 @@ class DialogsService {
     if (messageIndex === -1) {
       return dialog2;
     }
+    const targetMessage = dialog2.messages[messageIndex];
+    const previousMessage = dialog2.messages[messageIndex - 1];
+    const truncateIndex = targetMessage?.author === "user" && this.isScenarioLaunchMessage(previousMessage) ? messageIndex - 1 : messageIndex;
     const updatedDialog = {
       ...dialog2,
-      messages: dialog2.messages.slice(0, messageIndex),
+      messages: dialog2.messages.slice(0, truncateIndex),
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
     this.writeDialog(updatedDialog);
@@ -588,8 +599,12 @@ class DialogsService {
       }),
       ...typeof message.answeringAt === "string" ? { answeringAt: message.answeringAt } : {},
       ...assistantStage ? { assistantStage } : {},
-      ...toolTrace ? { toolTrace } : {}
+      ...toolTrace ? { toolTrace } : {},
+      ...typeof message.hidden === "boolean" ? { hidden: message.hidden } : {}
     };
+  }
+  isScenarioLaunchMessage(message) {
+    return message?.author === "system" && typeof message.content === "string" && message.content.startsWith("SCENARIO_LAUNCH:");
   }
   toDialogListItem(dialog2) {
     const lastMessage = dialog2.messages.length > 0 ? dialog2.messages[dialog2.messages.length - 1] : null;
