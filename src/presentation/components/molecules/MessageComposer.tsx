@@ -194,8 +194,9 @@ export const MessageComposer = observer(function MessageComposer({
     isStreaming = false,
 }: MessageComposerProps) {
     const toasts = useToasts();
+    const { userProfile } = useChatParams();
     const { mistralVoiceRecModel, mistralToken, voiceRecognitionDriver } =
-        useChatParams();
+        userProfile;
     const { scenarios, switchScenario } = useScenario();
     const { scenarioToFlow } = useScenarioConvert();
 

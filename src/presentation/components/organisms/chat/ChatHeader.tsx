@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { useTheme, useToasts } from "../../../../hooks";
+import { useToasts } from "../../../../hooks";
 import { toolsStore } from "../../../../stores/toolsStore";
 import { Button, Modal } from "../../atoms";
 import { ToolPackageCard } from "../../molecules/cards/chat";
@@ -29,7 +29,6 @@ export function ChatHeader({
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isToolsOpen, setIsToolsOpen] = useState(false);
     const settingsViewRef = useRef<SettingsViewHandle | null>(null);
-    const { themePreference, themeOptions, setTheme } = useTheme();
     const toasts = useToasts();
 
     const handleSaveSettings = async () => {
@@ -121,14 +120,7 @@ export function ChatHeader({
                     </Button>
                 }
             >
-                <SettingsView
-                    ref={settingsViewRef}
-                    themePreference={themePreference}
-                    themeOptions={themeOptions}
-                    setTheme={(themeId) => {
-                        void setTheme(themeId);
-                    }}
-                />
+                <SettingsView ref={settingsViewRef} />
             </Modal>
 
             <Modal

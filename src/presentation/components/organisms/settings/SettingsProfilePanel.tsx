@@ -1,22 +1,21 @@
 import { InputBig, InputSmall } from "../../atoms";
+import type { UserProfile } from "../../../../types/App";
 
 type SettingsProfilePanelProps = {
-    userName: string;
-    userPrompt: string;
-    userLanguage: string;
-    setUserName: (value: string) => void;
-    setUserPrompt: (value: string) => void;
-    setUserLanguage: (value: string) => void;
+    userProfile: Pick<UserProfile, "userName" | "userPrompt" | "userLanguage">;
+    updateUserProfileDraft: (
+        nextDraft: Partial<
+            Pick<UserProfile, "userName" | "userPrompt" | "userLanguage">
+        >,
+    ) => void;
 };
 
 export const SettingsProfilePanel = ({
-    userName,
-    userPrompt,
-    userLanguage,
-    setUserName,
-    setUserPrompt,
-    setUserLanguage,
+    userProfile,
+    updateUserProfileDraft,
 }: SettingsProfilePanelProps) => {
+    const { userName, userPrompt, userLanguage } = userProfile;
+
     return (
         <div className="space-y-5">
             <div className="rounded-2xl bg-main-900/40 p-4">
@@ -28,7 +27,9 @@ export const SettingsProfilePanel = ({
                         <InputSmall
                             value={userName}
                             onChange={(event) =>
-                                setUserName(event.target.value)
+                                updateUserProfileDraft({
+                                    userName: event.target.value,
+                                })
                             }
                             placeholder="Пользователь"
                         />
@@ -41,7 +42,9 @@ export const SettingsProfilePanel = ({
                         <InputSmall
                             value={userLanguage}
                             onChange={(event) =>
-                                setUserLanguage(event.target.value)
+                                updateUserProfileDraft({
+                                    userLanguage: event.target.value,
+                                })
                             }
                             placeholder="Русский"
                         />
@@ -53,7 +56,9 @@ export const SettingsProfilePanel = ({
                         </p>
                         <InputBig
                             value={userPrompt}
-                            onChange={setUserPrompt}
+                            onChange={(value) =>
+                                updateUserProfileDraft({ userPrompt: value })
+                            }
                             placeholder="Введите инструкции для модели"
                             className="h-28 rounded-xl border border-main-700 bg-main-800 px-3 py-2 text-sm text-main-100 placeholder:text-main-500"
                         />

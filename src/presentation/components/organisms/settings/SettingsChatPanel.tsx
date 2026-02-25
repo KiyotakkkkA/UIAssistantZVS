@@ -9,6 +9,8 @@ import { Link } from "react-router-dom";
 export const SettingsChatPanel = () => {
     const [isModelsPickOpen, setIsModelsPickOpen] = useState(false);
 
+    const { userProfile, updateChatParams } = useChatParams();
+
     const {
         chatDriver,
         ollamaModel,
@@ -20,17 +22,7 @@ export const SettingsChatPanel = () => {
         telegramBotToken,
         assistantName,
         maxToolCallsPerResponse,
-        setChatDriver,
-        setOllamaModel,
-        setOllamaToken,
-        setMistralVoiceRecModel,
-        setMistralToken,
-        setVoiceRecognitionDriver,
-        setTelegramId,
-        setTelegramBotToken,
-        setAssistantName,
-        setMaxToolCallsPerResponse,
-    } = useChatParams();
+    } = userProfile;
 
     return (
         <div className="gap-5">
@@ -55,7 +47,9 @@ export const SettingsChatPanel = () => {
                         <InputSmall
                             value={assistantName}
                             onChange={(event) =>
-                                setAssistantName(event.target.value)
+                                void updateChatParams({
+                                    assistantName: event.target.value,
+                                })
                             }
                             placeholder="Чарли"
                         />
@@ -70,12 +64,16 @@ export const SettingsChatPanel = () => {
                             onChange={(event) => {
                                 const raw = Number(event.target.value);
                                 if (!Number.isFinite(raw)) {
-                                    setMaxToolCallsPerResponse(1);
+                                    void updateChatParams({
+                                        maxToolCallsPerResponse: 1,
+                                    });
                                     return;
                                 }
 
                                 const nextValue = Math.max(1, Math.floor(raw));
-                                setMaxToolCallsPerResponse(nextValue);
+                                void updateChatParams({
+                                    maxToolCallsPerResponse: nextValue,
+                                });
                             }}
                             placeholder="4"
                             type="number"
@@ -112,9 +110,11 @@ export const SettingsChatPanel = () => {
                         <InputCheckbox
                             checked={voiceRecognitionDriver === "mistral"}
                             onChange={(checked) => {
-                                void setVoiceRecognitionDriver(
-                                    checked ? "mistral" : "",
-                                );
+                                void updateChatParams({
+                                    voiceRecognitionDriver: checked
+                                        ? "mistral"
+                                        : "",
+                                });
                             }}
                         />
                     </div>
@@ -126,7 +126,9 @@ export const SettingsChatPanel = () => {
                         <InputSmall
                             value={mistralVoiceRecModel}
                             onChange={(event) =>
-                                void setMistralVoiceRecModel(event.target.value)
+                                void updateChatParams({
+                                    mistralVoiceRecModel: event.target.value,
+                                })
                             }
                             placeholder="voxtral-mini-transcribe-realtime-2602"
                         />
@@ -141,7 +143,9 @@ export const SettingsChatPanel = () => {
                                 <InputSmall
                                     value={mistralToken}
                                     onChange={(event) =>
-                                        void setMistralToken(event.target.value)
+                                        void updateChatParams({
+                                            mistralToken: event.target.value,
+                                        })
                                     }
                                     placeholder="MISTRAL_API_KEY"
                                     type="password"
@@ -189,7 +193,9 @@ export const SettingsChatPanel = () => {
                         <InputCheckbox
                             checked={chatDriver === "ollama"}
                             onChange={(checked) => {
-                                setChatDriver(checked ? "ollama" : "");
+                                void updateChatParams({
+                                    chatDriver: checked ? "ollama" : "",
+                                });
                             }}
                         />
                     </div>
@@ -227,7 +233,9 @@ export const SettingsChatPanel = () => {
                                 <InputSmall
                                     value={ollamaToken}
                                     onChange={(event) =>
-                                        setOllamaToken(event.target.value)
+                                        void updateChatParams({
+                                            ollamaToken: event.target.value,
+                                        })
                                     }
                                     placeholder="Bearer token"
                                     type="password"
@@ -272,7 +280,9 @@ export const SettingsChatPanel = () => {
                         <InputSmall
                             value={telegramId}
                             onChange={(event) =>
-                                void setTelegramId(event.target.value)
+                                void updateChatParams({
+                                    telegramId: event.target.value,
+                                })
                             }
                             placeholder="123456789"
                         />
@@ -287,9 +297,10 @@ export const SettingsChatPanel = () => {
                                 <InputSmall
                                     value={telegramBotToken}
                                     onChange={(event) =>
-                                        void setTelegramBotToken(
-                                            event.target.value,
-                                        )
+                                        void updateChatParams({
+                                            telegramBotToken:
+                                                event.target.value,
+                                        })
                                     }
                                     placeholder="123456789:AA..."
                                     type="password"
@@ -320,7 +331,7 @@ export const SettingsChatPanel = () => {
                 <SettingsChatOllamaModelsPickForm
                     currentModel={ollamaModel}
                     onSelectModel={(modelName) => {
-                        void setOllamaModel(modelName);
+                        void updateChatParams({ ollamaModel: modelName });
                     }}
                     onClose={() => setIsModelsPickOpen(false)}
                 />

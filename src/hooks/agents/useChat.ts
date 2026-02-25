@@ -36,7 +36,8 @@ const resolveToolStage = (toolName: string): AssistantStage => {
 };
 
 export function useChat() {
-    const { chatDriver, ollamaModel, ollamaToken } = useChatParams();
+    const { userProfile: chatParamsProfile } = useChatParams();
+    const { chatDriver, ollamaModel, ollamaToken } = chatParamsProfile;
     const { userProfile } = useUserProfile();
     const toasts = useToasts();
 

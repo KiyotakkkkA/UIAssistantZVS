@@ -1,17 +1,19 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
-import { useParams } from "react-router-dom";
-import { useChat } from "../../../hooks/agents";
-import { useProjects, useToasts } from "../../../hooks";
-import { useFileSave } from "../../../hooks/files";
+import { useNavigate, useParams } from "react-router-dom";
+import { useChat } from "../../../../hooks/agents";
+import { useProjects, useToasts } from "../../../../hooks";
+import { useFileSave } from "../../../../hooks/files";
 import { Icon } from "@iconify/react";
-import { MessageComposer } from "../../components/molecules";
-import { Button, Loader, Modal } from "../../components/atoms";
-import { ChatHeader, MessageFeed } from "../../components/organisms/chat";
-import type { SavedFileRecord } from "../../../types/ElectronApi";
+import { MessageComposer } from "../../../components/molecules";
+import { Button, Modal } from "../../../components/atoms";
+import { ChatHeader, MessageFeed } from "../../../components/organisms/chat";
+import type { SavedFileRecord } from "../../../../types/ElectronApi";
+import { LoadingFallbackPage } from "../../LoadingFallbackPage";
 
 export const ProjectPage = observer(function ProjectPage() {
     const { projectId = "" } = useParams();
+    const navigate = useNavigate();
     const toasts = useToasts();
     const { switchProject, activeProject } = useProjects();
     const { getFilesByIds, openFile, openPath } = useFileSave();
@@ -82,6 +84,12 @@ export const ProjectPage = observer(function ProjectPage() {
             if (!project || isCancelled) {
                 if (!isCancelled) {
                     setDocuments([]);
+                    setIsProjectLoading(false);
+                    toasts.warning({
+                        title: "Проект не найден",
+                        description: "Открыт список диалогов по умолчанию.",
+                    });
+                    navigate("/workspace/dialogs", { replace: true });
                 }
                 return;
             }
@@ -97,7 +105,7 @@ export const ProjectPage = observer(function ProjectPage() {
         return () => {
             isCancelled = true;
         };
-    }, [projectId, switchProject, getFilesByIds]);
+    }, [projectId, switchProject, getFilesByIds, navigate, toasts]);
 
     const openDocument = async (fileId: string) => {
         const isOpened = await openFile(fileId);
@@ -136,12 +144,7 @@ export const ProjectPage = observer(function ProjectPage() {
     };
 
     if (isProjectLoading) {
-        return (
-            <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
-                <Loader className="h-6 w-6" />
-                <p className="text-sm text-main-300">Загрузка проекта...</p>
-            </section>
-        );
+        return <LoadingFallbackPage title="Загрузка проекта..." />;
     }
 
     return (

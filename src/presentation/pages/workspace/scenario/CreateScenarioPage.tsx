@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
-import { useToasts } from "../../../hooks";
-import { useScenario } from "../../../hooks/agents";
-import { Button, InputBig, InputSmall } from "../../components/atoms";
+import { useToasts } from "../../../../hooks";
+import { useScenario } from "../../../../hooks/agents";
+import { Button, InputBig, InputSmall } from "../../../components/atoms";
 
 export const CreateScenarioPage = observer(function CreateScenarioPage() {
     const navigate = useNavigate();
@@ -50,7 +50,7 @@ export const CreateScenarioPage = observer(function CreateScenarioPage() {
                 description: "Сценарий добавлен в рабочую область.",
             });
 
-            navigate(`/scenario/${scenario.id}`);
+            navigate(`/workspace/scenario/${scenario.id}`);
         } finally {
             setIsCreating(false);
         }

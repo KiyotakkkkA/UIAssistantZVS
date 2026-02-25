@@ -67,11 +67,11 @@ export const ChatSidebar = observer(function ChatSidebar() {
     const activeSection = useMemo<"dialogs" | "projects" | "scenario">(() => {
         const pathname = location.pathname;
 
-        if (pathname.startsWith("/projects")) {
+        if (pathname.startsWith("/workspace/projects")) {
             return "projects";
         }
 
-        if (pathname.startsWith("/scenario")) {
+        if (pathname.startsWith("/workspace/scenario")) {
             return "scenario";
         }
 
@@ -79,7 +79,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
     }, [location.pathname]);
 
     const openCreateModal = () => {
-        navigate("/dialogs");
+        navigate("/workspace/dialogs");
         setEditMode("create");
         setDialogName("");
         setTargetDialogId(null);
@@ -87,34 +87,24 @@ export const ChatSidebar = observer(function ChatSidebar() {
     };
 
     const openProjectsPage = () => {
-        navigate("/projects/create");
+        navigate("/workspace/projects/create");
     };
 
     const openScenarioPage = () => {
-        navigate("/scenario/create");
+        navigate("/workspace/scenario/create");
     };
 
     const selectDialogAndOpenPage = (dialogId: string) => {
-        navigate("/dialogs");
+        navigate("/workspace/dialogs");
         void switchDialog(dialogId);
     };
 
     const selectProjectAndOpenPage = (projectId: string) => {
-        navigate(`/projects/${projectId}`);
+        navigate(`/workspace/projects/${projectId}`);
     };
 
-    const selectScenarioAndOpenPage = async (scenarioId: string) => {
-        const scenario = await switchScenario(scenarioId);
-
-        if (!scenario) {
-            toasts.warning({
-                title: "Сценарий не найден",
-                description: "Не удалось открыть выбранный сценарий.",
-            });
-            return;
-        }
-
-        navigate(`/scenario/${scenarioId}`);
+    const selectScenarioAndOpenPage = (scenarioId: string) => {
+        navigate(`/workspace/scenario/${scenarioId}`);
     };
 
     const createOptionsList = [
@@ -316,7 +306,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
         if (activeProjectId === deleteProjectId) {
             clearActiveProject();
-            navigate("/dialogs");
+            navigate("/workspace/dialogs");
         }
 
         toasts.info({
@@ -345,7 +335,7 @@ export const ChatSidebar = observer(function ChatSidebar() {
 
         if (activeScenarioId === deleteScenarioId) {
             clearActiveScenario();
-            navigate("/dialogs");
+            navigate("/workspace/dialogs");
         }
 
         toasts.info({

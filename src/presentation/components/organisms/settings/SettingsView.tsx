@@ -7,18 +7,12 @@ import {
     type ReactNode,
 } from "react";
 import { Icon } from "@iconify/react";
-import { useUserProfile } from "../../../../hooks";
+import { useTheme, useUserProfile } from "../../../../hooks";
 import { SettingsChatPanel } from "./SettingsChatPanel";
 import { SettingsInterfacePanel } from "./SettingsInterfacePanel";
 import { SettingsProfilePanel } from "./SettingsProfilePanel";
 
 type SettingsRoute = "interface" | "chat" | "profile";
-
-interface SettingsViewProps {
-    themePreference: string;
-    themeOptions: { value: string; label: string }[];
-    setTheme: (themeId: string) => void;
-}
 
 export type SettingsViewHandle = {
     save: () => Promise<{
@@ -55,139 +49,125 @@ const settingsRoutes: SettingsRouteItem[] = [
     },
 ];
 
-export const SettingsView = forwardRef<SettingsViewHandle, SettingsViewProps>(
-    ({ themePreference, themeOptions, setTheme }, ref) => {
-        const [activeRoute, setActiveRoute] =
-            useState<SettingsRoute>("interface");
-        const { userProfile, updateUserProfile } = useUserProfile();
+export const SettingsView = forwardRef<SettingsViewHandle>((_, ref) => {
+    const [activeRoute, setActiveRoute] = useState<SettingsRoute>("interface");
+    const { userProfile, updateUserProfile } = useUserProfile();
+    const { themeOptions } = useTheme();
 
-        const [profileDraft, setProfileDraft] = useState<{
-            userName: string;
-            userPrompt: string;
-            userLanguage: string;
-        }>({
+    const [profileDraft, setProfileDraft] = useState<{
+        userName: string;
+        userPrompt: string;
+        userLanguage: string;
+    }>({
+        userName: userProfile.userName,
+        userPrompt: userProfile.userPrompt,
+        userLanguage: userProfile.userLanguage,
+    });
+
+    useEffect(() => {
+        setProfileDraft({
             userName: userProfile.userName,
             userPrompt: userProfile.userPrompt,
             userLanguage: userProfile.userLanguage,
         });
+    }, [
+        userProfile.userName,
+        userProfile.userPrompt,
+        userProfile.userLanguage,
+    ]);
 
-        useEffect(() => {
-            setProfileDraft({
-                userName: userProfile.userName,
-                userPrompt: userProfile.userPrompt,
-                userLanguage: userProfile.userLanguage,
-            });
-        }, [
-            userProfile.userName,
-            userProfile.userPrompt,
-            userProfile.userLanguage,
-        ]);
+    useImperativeHandle(
+        ref,
+        () => ({
+            save: async () => {
+                if (activeRoute === "chat") {
+                    return { saved: true, scope: "chat" };
+                }
 
-        useImperativeHandle(
-            ref,
-            () => ({
-                save: async () => {
-                    if (activeRoute === "chat") {
-                        return { saved: true, scope: "chat" };
-                    }
+                if (activeRoute === "profile") {
+                    await updateUserProfile({
+                        userName:
+                            profileDraft.userName.trim() || "Пользователь",
+                        userPrompt: profileDraft.userPrompt,
+                        userLanguage: profileDraft.userLanguage,
+                    });
+                    return { saved: true, scope: "profile" };
+                }
 
-                    if (activeRoute === "profile") {
-                        await updateUserProfile({
-                            userName:
-                                profileDraft.userName.trim() || "Пользователь",
-                            userPrompt: profileDraft.userPrompt,
-                            userLanguage: profileDraft.userLanguage,
-                        });
-                        return { saved: true, scope: "profile" };
-                    }
+                return { saved: false, scope: "general" };
+            },
+        }),
+        [activeRoute, profileDraft, updateUserProfile],
+    );
 
-                    return { saved: false, scope: "general" };
-                },
-            }),
-            [activeRoute, profileDraft, updateUserProfile],
-        );
+    const renderedPanel: Record<SettingsRoute, ReactNode> = useMemo(
+        () => ({
+            interface: (
+                <SettingsInterfacePanel
+                    userProfile={userProfile}
+                    themeOptions={themeOptions}
+                    updateUserProfile={(nextProfile) => {
+                        void updateUserProfile(nextProfile);
+                    }}
+                />
+            ),
+            chat: <SettingsChatPanel />,
+            profile: (
+                <SettingsProfilePanel
+                    userProfile={profileDraft}
+                    updateUserProfileDraft={(nextDraft) => {
+                        setProfileDraft((prev) => ({
+                            ...prev,
+                            ...nextDraft,
+                        }));
+                    }}
+                />
+            ),
+        }),
+        [profileDraft, themeOptions, updateUserProfile, userProfile],
+    );
 
-        const renderedPanel: Record<SettingsRoute, ReactNode> = useMemo(
-            () => ({
-                interface: (
-                    <SettingsInterfacePanel
-                        themePreference={themePreference}
-                        themeOptions={themeOptions}
-                        setTheme={setTheme}
-                    />
-                ),
-                chat: <SettingsChatPanel />,
-                profile: (
-                    <SettingsProfilePanel
-                        userName={profileDraft.userName}
-                        userPrompt={profileDraft.userPrompt}
-                        userLanguage={profileDraft.userLanguage}
-                        setUserName={(value) => {
-                            setProfileDraft((prev) => ({
-                                ...prev,
-                                userName: value,
-                            }));
-                        }}
-                        setUserPrompt={(value) => {
-                            setProfileDraft((prev) => ({
-                                ...prev,
-                                userPrompt: value,
-                            }));
-                        }}
-                        setUserLanguage={(value) => {
-                            setProfileDraft((prev) => ({
-                                ...prev,
-                                userLanguage: value,
-                            }));
-                        }}
-                    />
-                ),
-            }),
-            [profileDraft, setTheme, themeOptions, themePreference],
-        );
+    return (
+        <div className="grid h-full min-h-[68vh] gap-6 md:grid-cols-[300px_1fr]">
+            <aside className="min-h-0 md:border-r md:border-main-700/80 md:pr-3">
+                <nav className="space-y-2 md:h-full md:overflow-y-auto md:pr-2">
+                    {settingsRoutes.map((route) => {
+                        const isActive = route.key === activeRoute;
 
-        return (
-            <div className="grid h-full min-h-[68vh] gap-6 md:grid-cols-[300px_1fr]">
-                <aside className="min-h-0 md:border-r md:border-main-700/80 md:pr-3">
-                    <nav className="space-y-2 md:h-full md:overflow-y-auto md:pr-2">
-                        {settingsRoutes.map((route) => {
-                            const isActive = route.key === activeRoute;
+                        return (
+                            <button
+                                key={route.key}
+                                type="button"
+                                onClick={() => setActiveRoute(route.key)}
+                                aria-current={isActive ? "page" : undefined}
+                                className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
+                                    isActive
+                                        ? "bg-main-700/60 text-main-100"
+                                        : "text-main-300 hover:bg-main-800/60 hover:text-main-100"
+                                }`}
+                            >
+                                <span className="inline-flex items-center gap-2">
+                                    <Icon
+                                        icon={route.icon}
+                                        width="16"
+                                        height="16"
+                                    />
+                                    {route.title}
+                                </span>
+                                <span className="mt-1 block text-xs font-normal leading-4 text-main-400">
+                                    {route.description}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </nav>
+            </aside>
 
-                            return (
-                                <button
-                                    key={route.key}
-                                    type="button"
-                                    onClick={() => setActiveRoute(route.key)}
-                                    aria-current={isActive ? "page" : undefined}
-                                    className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium transition-colors cursor-pointer ${
-                                        isActive
-                                            ? "bg-main-700/60 text-main-100"
-                                            : "text-main-300 hover:bg-main-800/60 hover:text-main-100"
-                                    }`}
-                                >
-                                    <span className="inline-flex items-center gap-2">
-                                        <Icon
-                                            icon={route.icon}
-                                            width="16"
-                                            height="16"
-                                        />
-                                        {route.title}
-                                    </span>
-                                    <span className="mt-1 block text-xs font-normal leading-4 text-main-400">
-                                        {route.description}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </nav>
-                </aside>
-
-                <section className="min-h-0 overflow-y-auto overflow-x-hidden pr-1 md:pr-2">
-                    {renderedPanel[activeRoute]}
-                </section>
-            </div>
-        );
-    },
-);
+            <section className="min-h-0 overflow-y-auto overflow-x-hidden pr-1 md:pr-2">
+                {renderedPanel[activeRoute]}
+            </section>
+        </div>
+    );
+});
 
 SettingsView.displayName = "SettingsView";

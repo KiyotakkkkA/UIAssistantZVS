@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate, useParams } from "react-router-dom";
-import { useFileDownload, useFileUpload, useToasts } from "../../../hooks";
-import { useScenario } from "../../../hooks/agents";
-import { Button, InputSmall, Loader, TreeView } from "../../components/atoms";
+import { useFileDownload, useFileUpload, useToasts } from "../../../../hooks";
+import { useScenario } from "../../../../hooks/agents";
+import { Button, InputSmall, TreeView } from "../../../components/atoms";
 import {
     ScenarioCanvas,
     type ScenarioCanvasInsertRequest,
-} from "../../components/organisms/scenarios";
-import { toolsStore } from "../../../stores/toolsStore";
+} from "../../../components/organisms/scenarios";
+import { toolsStore } from "../../../../stores/toolsStore";
 import { Icon } from "@iconify/react";
-import type { Scenario } from "../../../types/Scenario";
+import type { Scenario } from "../../../../types/Scenario";
+import { LoadingFallbackPage } from "../../LoadingFallbackPage";
 
 type ImportedScenarioPayload = {
     name?: unknown;
@@ -233,6 +234,8 @@ export const ScenarioPage = observer(function ScenarioPage() {
         filteredBaseStructures.length === 0;
 
     useEffect(() => {
+        setIsLoading(true);
+
         if (!scenarioId) {
             setIsLoading(false);
             return;
@@ -252,7 +255,7 @@ export const ScenarioPage = observer(function ScenarioPage() {
                     title: "Сценарий не найден",
                     description: "Открыт список диалогов по умолчанию.",
                 });
-                navigate("/dialogs", { replace: true });
+                navigate("/workspace/dialogs", { replace: true });
                 return;
             }
 
@@ -265,12 +268,7 @@ export const ScenarioPage = observer(function ScenarioPage() {
     }, [navigate, scenarioId, switchScenario, toasts]);
 
     if (isLoading) {
-        return (
-            <section className="animate-page-fade-in flex min-w-0 flex-1 flex-col items-center justify-center gap-3 rounded-3xl bg-main-900/70 backdrop-blur-md">
-                <Loader className="h-6 w-6" />
-                <p className="text-sm text-main-300">Загрузка сценария...</p>
-            </section>
-        );
+        return <LoadingFallbackPage title="Загрузка сценария..." />;
     }
 
     return (

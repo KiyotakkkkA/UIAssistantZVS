@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
-import { toolsStore } from "../../../stores/toolsStore";
-import { useProjects, useToasts } from "../../../hooks";
-import { useFileSave } from "../../../hooks/files";
-import type { UploadedFileData } from "../../../types/ElectronApi";
+import { toolsStore } from "../../../../stores/toolsStore";
+import { useProjects, useToasts } from "../../../../hooks";
+import { useFileSave } from "../../../../hooks/files";
+import type { UploadedFileData } from "../../../../types/ElectronApi";
 import {
     Button,
     InputBig,
@@ -13,8 +13,8 @@ import {
     InputPath,
     InputSmall,
     Modal,
-} from "../../components/atoms";
-import { RequiredToolsPickForm } from "../../components/organisms/forms";
+} from "../../../components/atoms";
+import { RequiredToolsPickForm } from "../../../components/organisms/forms";
 
 export const CreateProjectPage = observer(function CreateProjectPage() {
     const navigate = useNavigate();
@@ -115,7 +115,7 @@ export const CreateProjectPage = observer(function CreateProjectPage() {
             });
 
             setIsConfirmOpen(false);
-            navigate(`/projects/${project.id}`);
+            navigate(`/workspace/projects/${project.id}`);
         } finally {
             setIsCreating(false);
         }
