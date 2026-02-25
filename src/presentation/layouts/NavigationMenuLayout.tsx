@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Icon } from "@iconify/react";
+import { Button, Modal } from "../components/atoms";
+import { JobManageForm } from "../components/organisms/forms";
 
 type NavigationTab = {
     id: "workspace" | "storage";
@@ -27,6 +29,7 @@ const navigationTabs: NavigationTab[] = [
 export const NavigationMenuLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
+    const [isJobsModalOpen, setIsJobsModalOpen] = useState(false);
     const activeTabId = useMemo(() => {
         if (location.pathname.startsWith("/storage")) {
             return "storage";
@@ -45,6 +48,19 @@ export const NavigationMenuLayout = () => {
                         <p className="text-xs uppercase tracking-[0.18em] text-main-400">
                             Навигация
                         </p>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-8 w-8"
+                            onClick={() => setIsJobsModalOpen(true)}
+                            title="Фоновые задачи"
+                        >
+                            <Icon
+                                icon="mdi:book-clock"
+                                width={16}
+                                height={16}
+                            />
+                        </Button>
                     </div>
                     <nav className="space-y-2">
                         {navigationTabs.map((tab) => {
@@ -78,6 +94,15 @@ export const NavigationMenuLayout = () => {
                     <Outlet />
                 </section>
             </div>
+
+            <Modal
+                open={isJobsModalOpen}
+                onClose={() => setIsJobsModalOpen(false)}
+                title="Управление фоновыми задачами"
+                className="max-w-[95vw] min-h-[84vh]"
+            >
+                <JobManageForm />
+            </Modal>
         </main>
     );
 };

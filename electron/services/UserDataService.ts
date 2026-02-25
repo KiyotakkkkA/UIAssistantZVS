@@ -370,6 +370,14 @@ export class UserDataService {
         return this.themesService.getThemesList();
     }
 
+    getCurrentUserId(): string {
+        return this.userProfileService.getCurrentUserId();
+    }
+
+    getDatabaseService(): DatabaseService {
+        return this.databaseService;
+    }
+
     getThemeData(themeId: string): ThemeData {
         return this.themesService.getThemeData(themeId);
     }

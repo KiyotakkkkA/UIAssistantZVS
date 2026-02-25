@@ -2,14 +2,30 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import { Icon } from "@iconify/react";
-import { useToasts, useVectorStorage } from "../../../hooks";
-import { useFileSave } from "../../../hooks/files";
-import { Button, InputSmall, Modal, Switcher } from "../../components/atoms";
+import { useJobs, useToasts, useVectorStorage } from "../../../hooks";
+import { useFileSave, useUpload } from "../../../hooks/files";
+import {
+    Button,
+    InputCheckbox,
+    InputSmall,
+    Modal,
+    Switcher,
+} from "../../components/atoms";
 import { StoredFileCard } from "../../components/molecules/cards/storage";
 import { LoadingFallbackPage } from "../LoadingFallbackPage";
 import { storageStore } from "../../../stores/storageStore";
+import type { UploadedFileData } from "../../../types/ElectronApi";
 
 type StorageView = "files" | "vector-stores";
+
+type PreparedVectorFile = {
+    localId: string;
+    source: "storage" | "upload";
+    name: string;
+    size: number;
+    storageFileId?: string;
+    uploadedFile?: UploadedFileData;
+};
 
 const STORAGE_VIEW_OPTIONS: { value: StorageView; label: string }[] = [
     { value: "files", label: "Файлы" },
@@ -18,13 +34,23 @@ const STORAGE_VIEW_OPTIONS: { value: StorageView; label: string }[] = [
 
 export const StoragePage = observer(function StoragePage() {
     const toasts = useToasts();
+    const { createJob } = useJobs();
     const { createVectorStorage, deleteVectorStorage } = useVectorStorage();
+    const { pickFiles, isUploading } = useUpload();
     const { openFile } = useFileSave();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<StorageView>("files");
     const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [vectorSearchQuery, setVectorSearchQuery] = useState("");
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [isStorageFilesPickOpen, setIsStorageFilesPickOpen] = useState(false);
+    const [storageFilesSearchQuery, setStorageFilesSearchQuery] = useState("");
+    const [pickedStorageFileIds, setPickedStorageFileIds] = useState<string[]>(
+        [],
+    );
+    const [preparedVectorFiles, setPreparedVectorFiles] = useState<
+        PreparedVectorFile[]
+    >([]);
     const files = storageStore.files;
     const vectorStorages = storageStore.vectorStorages;
 
@@ -94,6 +120,46 @@ export const StoragePage = observer(function StoragePage() {
         });
     }, [vectorSearchQuery, vectorStorages]);
 
+    const filteredStorageFilesForPick = useMemo(() => {
+        const normalizedQuery = storageFilesSearchQuery.trim().toLowerCase();
+
+        if (!normalizedQuery) {
+            return files.filter((file) => {
+                const extension = file.originalName.toLowerCase();
+                return (
+                    extension.endsWith(".pdf") || extension.endsWith(".docx")
+                );
+            });
+        }
+
+        return files.filter((file) => {
+            const extension = file.originalName.toLowerCase();
+            if (!extension.endsWith(".pdf") && !extension.endsWith(".docx")) {
+                return false;
+            }
+
+            return file.originalName.toLowerCase().includes(normalizedQuery);
+        });
+    }, [files, storageFilesSearchQuery]);
+
+    const preparedStorageFileIds = useMemo(
+        () =>
+            preparedVectorFiles
+                .map((file) => file.storageFileId)
+                .filter((fileId): fileId is string => Boolean(fileId)),
+        [preparedVectorFiles],
+    );
+
+    const preparedUploadedFiles = useMemo(
+        () =>
+            preparedVectorFiles
+                .map((file) => file.uploadedFile)
+                .filter((uploadedFile): uploadedFile is UploadedFileData =>
+                    Boolean(uploadedFile),
+                ),
+        [preparedVectorFiles],
+    );
+
     const openSelectedFile = async () => {
         const selectedFile = storageStore.selectedFile;
 
@@ -153,6 +219,105 @@ export const StoragePage = observer(function StoragePage() {
         if (isDeleted) {
             setIsDeleteConfirmOpen(false);
         }
+    };
+
+    const addFilesFromExplorer = async () => {
+        const pickedFiles = await pickFiles({
+            accept: [".pdf", ".docx"],
+            multiple: true,
+        });
+
+        if (!pickedFiles.length) {
+            return;
+        }
+
+        const nextPrepared: PreparedVectorFile[] = pickedFiles.map((file) => ({
+            localId: `upload_${crypto.randomUUID()}`,
+            source: "upload",
+            name: file.name,
+            size: file.size,
+            uploadedFile: file,
+        }));
+
+        setPreparedVectorFiles((previous) => [...previous, ...nextPrepared]);
+    };
+
+    const toggleStorageFileForPick = (fileId: string, checked: boolean) => {
+        setPickedStorageFileIds((previous) => {
+            if (checked) {
+                return [...new Set([...previous, fileId])];
+            }
+
+            return previous.filter((currentFileId) => currentFileId !== fileId);
+        });
+    };
+
+    const confirmPickedStorageFiles = () => {
+        const preparedIds = new Set(preparedStorageFileIds);
+        const selectedRecords = files.filter((file) =>
+            pickedStorageFileIds.includes(file.id),
+        );
+
+        const nextPrepared = selectedRecords
+            .filter((file) => !preparedIds.has(file.id))
+            .map((file) => ({
+                localId: `storage_${file.id}`,
+                source: "storage" as const,
+                name: file.originalName,
+                size: file.size,
+                storageFileId: file.id,
+            }));
+
+        setPreparedVectorFiles((previous) => [...previous, ...nextPrepared]);
+        setIsStorageFilesPickOpen(false);
+    };
+
+    const removePreparedFile = (localId: string) => {
+        setPreparedVectorFiles((previous) =>
+            previous.filter((preparedFile) => preparedFile.localId !== localId),
+        );
+    };
+
+    const runVectorization = async () => {
+        const selectedVectorStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedVectorStorage) {
+            toasts.info({
+                title: "Стор не выбран",
+                description: "Выберите векторное хранилище для запуска.",
+            });
+            return;
+        }
+
+        if (!preparedVectorFiles.length) {
+            toasts.info({
+                title: "Файлы не выбраны",
+                description:
+                    "Добавьте PDF/DOCX файлы из проводника или из хранилища.",
+            });
+            return;
+        }
+
+        toasts.info({
+            title: "Запуск векторизации",
+            description: "Создаю фоновую задачу...",
+        });
+
+        const created = await createJob({
+            kind: "vectorization",
+            name: `vectorize_${selectedVectorStorage.name}`,
+            description: `Индексация файлов в ${selectedVectorStorage.name}`,
+            vectorStorageId: selectedVectorStorage.id,
+            sourceFileIds: preparedStorageFileIds,
+            uploadedFiles: preparedUploadedFiles,
+        });
+
+        if (!created) {
+            return;
+        }
+
+        setPreparedVectorFiles([]);
+        setPickedStorageFileIds([]);
     };
 
     const isActiveViewLoading =
@@ -395,6 +560,56 @@ export const StoragePage = observer(function StoragePage() {
                                         </span>
                                     </Button>
                                     <Button
+                                        variant="secondary"
+                                        shape="rounded-lg"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => {
+                                            void addFilesFromExplorer();
+                                        }}
+                                        disabled={isUploading}
+                                    >
+                                        <Icon
+                                            icon="mdi:file-upload-outline"
+                                            width={16}
+                                        />
+                                        <span className="ml-1">
+                                            Добавить файл
+                                        </span>
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        shape="rounded-lg"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => {
+                                            setPickedStorageFileIds(
+                                                preparedStorageFileIds,
+                                            );
+                                            setIsStorageFilesPickOpen(true);
+                                        }}
+                                    >
+                                        <Icon
+                                            icon="mdi:database-search-outline"
+                                            width={16}
+                                        />
+                                        <span className="ml-1">
+                                            Из хранилища
+                                        </span>
+                                    </Button>
+                                    <Button
+                                        variant="primary"
+                                        shape="rounded-lg"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => {
+                                            void runVectorization();
+                                        }}
+                                    >
+                                        <Icon
+                                            icon="mdi:play-circle-outline"
+                                            width={16}
+                                        />
+                                        <span className="ml-1">Запустить</span>
+                                    </Button>
+                                    <Button
                                         variant="danger"
                                         shape="rounded-lg"
                                         className="h-8 px-3 text-xs"
@@ -450,15 +665,74 @@ export const StoragePage = observer(function StoragePage() {
                                         </p>
                                     </div>
 
+                                    <div className="mt-4 rounded-xl border border-main-600/70 bg-main-800/45 p-3 text-sm text-main-200">
+                                        Для векторизации должна быть запущена
+                                        локальная Ollama-модель
+                                        <span className="font-semibold">
+                                            {" "}
+                                            embeddingModel{" "}
+                                        </span>
+                                        на стандартном порту
+                                        <span className="font-semibold">
+                                            {" "}
+                                            11434
+                                        </span>
+                                        .
+                                    </div>
+
                                     <div className="mt-8 rounded-xl border border-main-700/70 bg-main-900/45 p-3">
                                         <h4 className="text-sm font-semibold text-main-100">
-                                            Привязанные файлы
+                                            Подготовленные файлы
                                         </h4>
-                                        <div className="mt-3 flex h-28 items-center justify-center text-xs text-main-400">
-                                            {storageStore.selectedVectorStorage
-                                                .fileIds.length > 0
-                                                ? `Файлов: ${storageStore.selectedVectorStorage.fileIds.length}`
-                                                : "Это векторное хранилище пока пусто."}
+                                        <div className="mt-3 space-y-2">
+                                            {preparedVectorFiles.length > 0 ? (
+                                                preparedVectorFiles.map(
+                                                    (file) => (
+                                                        <div
+                                                            key={file.localId}
+                                                            className="rounded-lg border border-main-700/70 bg-main-900/55 px-3 py-2"
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <p className="truncate text-sm text-main-200">
+                                                                        {
+                                                                            file.name
+                                                                        }
+                                                                    </p>
+                                                                    <p className="text-xs text-main-400">
+                                                                        {file.source ===
+                                                                        "upload"
+                                                                            ? "Источник: Проводник"
+                                                                            : "Источник: Хранилище"}
+                                                                    </p>
+                                                                </div>
+                                                                <Button
+                                                                    variant="secondary"
+                                                                    shape="rounded-lg"
+                                                                    className="h-7 w-7"
+                                                                    onClick={() =>
+                                                                        removePreparedFile(
+                                                                            file.localId,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Icon
+                                                                        icon="mdi:close"
+                                                                        width={
+                                                                            14
+                                                                        }
+                                                                    />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <div className="flex h-20 items-center justify-center text-xs text-main-400">
+                                                    Добавьте PDF/DOCX файлы для
+                                                    векторизации.
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -524,6 +798,85 @@ export const StoragePage = observer(function StoragePage() {
                         {storageStore.selectedVectorStorage?.name ||
                             "Не выбрано"}
                     </p>
+                </div>
+            </Modal>
+
+            <Modal
+                open={isStorageFilesPickOpen}
+                onClose={() => setIsStorageFilesPickOpen(false)}
+                title="Выбор файлов из хранилища"
+                className="max-w-4xl min-h-[70vh]"
+                footer={
+                    <>
+                        <Button
+                            variant="secondary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={() => setIsStorageFilesPickOpen(false)}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            variant="primary"
+                            shape="rounded-lg"
+                            className="h-9 px-4"
+                            onClick={confirmPickedStorageFiles}
+                        >
+                            Добавить выбранные
+                        </Button>
+                    </>
+                }
+            >
+                <div className="space-y-3">
+                    <p className="text-main-300">
+                        Поддерживаются только типы PDF и DOCX
+                    </p>
+                    <InputSmall
+                        value={storageFilesSearchQuery}
+                        onChange={(event) =>
+                            setStorageFilesSearchQuery(event.target.value)
+                        }
+                        placeholder="Фильтр по имени файла..."
+                    />
+
+                    <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
+                        {filteredStorageFilesForPick.length > 0 ? (
+                            filteredStorageFilesForPick.map((file) => {
+                                const isPicked = pickedStorageFileIds.includes(
+                                    file.id,
+                                );
+
+                                return (
+                                    <div
+                                        key={file.id}
+                                        className="flex items-center gap-3 rounded-xl border border-main-700/70 bg-main-900/55 p-2"
+                                    >
+                                        <InputCheckbox
+                                            checked={isPicked}
+                                            onChange={(checked) =>
+                                                toggleStorageFileForPick(
+                                                    file.id,
+                                                    checked,
+                                                )
+                                            }
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="truncate text-sm text-main-100">
+                                                {file.originalName}
+                                            </p>
+                                            <p className="text-xs text-main-400">
+                                                {file.id}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="rounded-xl border border-dashed border-main-700/70 px-3 py-6 text-center text-sm text-main-400">
+                                Не найдены подходящие PDF/DOCX файлы.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </Modal>
         </section>

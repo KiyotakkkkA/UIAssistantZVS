@@ -8,8 +8,6 @@ import type {
     OllamaToolDefinition,
 } from "../../types/Chat";
 import type {
-    GetOllamaEmbedPayload,
-    GetOllamaEmbedResult,
     ProxyHttpRequestPayload,
     StreamOllamaChatPayload,
 } from "../../types/ElectronApi";
@@ -152,18 +150,6 @@ export const streamOllamaChat = async (
             setTimeout(resolve, 0);
         });
     }
-};
-
-export const getOllamaEmbed = async (
-    payload: GetOllamaEmbedPayload,
-): Promise<GetOllamaEmbedResult> => {
-    const llmApi = window.appApi?.llm;
-
-    if (!llmApi?.getOllamaEmbed) {
-        throw new Error("LLM API is not available in current environment");
-    }
-
-    return llmApi.getOllamaEmbed(payload);
 };
 
 export const postOllamaJson = async <TResponse = unknown>(

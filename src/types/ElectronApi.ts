@@ -49,6 +49,50 @@ export type SavedFileRecord = FileManifestEntry & {
     id: string;
 };
 
+export type JobEventTag = "info" | "success" | "warning" | "error";
+
+export type JobRecord = {
+    id: string;
+    name: string;
+    description: string;
+    isCompleted: boolean;
+    isPending: boolean;
+    createdAt: string;
+    updatedAt: string;
+    startedAt: string;
+    finishedAt: string | null;
+    errorMessage: string | null;
+};
+
+export type JobEventRecord = {
+    id: string;
+    jobId: string;
+    message: string;
+    tag: JobEventTag;
+    createdAt: string;
+};
+
+export type CreateJobPayload = {
+    name: string;
+    description?: string;
+    kind?: "generic" | "vectorization";
+    vectorStorageId?: string;
+    sourceFileIds?: string[];
+    uploadedFiles?: UploadedFileData[];
+    totalSteps?: number;
+    stepDelayMs?: number;
+};
+
+export type JobRealtimeEvent =
+    | {
+          type: "job.updated";
+          job: JobRecord;
+      }
+    | {
+          type: "job.event.created";
+          event: JobEventRecord;
+      };
+
 export type VectorStorageUsedByProject = {
     id: string;
     title: string;
@@ -276,6 +320,15 @@ export type AppApiCacheNamespace = {
     setCacheEntry: (key: string, entry: AppCacheEntry) => Promise<void>;
 };
 
+export type AppApiJobsNamespace = {
+    getJobs: () => Promise<JobRecord[]>;
+    getJobById: (jobId: string) => Promise<JobRecord | null>;
+    getJobEvents: (jobId: string) => Promise<JobEventRecord[]>;
+    createJob: (payload: CreateJobPayload) => Promise<JobRecord>;
+    cancelJob: (jobId: string) => Promise<boolean>;
+    onJobEvent: (listener: (event: JobRealtimeEvent) => void) => () => void;
+};
+
 export type AppApiNetworkNamespace = {
     proxyHttpRequest: (
         payload: ProxyHttpRequestPayload,
@@ -290,26 +343,10 @@ export type StreamOllamaChatPayload = {
     think?: boolean;
 };
 
-export type GetOllamaEmbedPayload = {
-    model: string;
-    input: string | string[];
-};
-
-export type GetOllamaEmbedResult = {
-    model: string;
-    embeddings: number[][];
-    total_duration?: number;
-    load_duration?: number;
-    prompt_eval_count?: number;
-};
-
 export type AppApiLlmNamespace = {
     streamOllamaChat: (
         payload: StreamOllamaChatPayload,
     ) => Promise<OllamaChatChunk[]>;
-    getOllamaEmbed: (
-        payload: GetOllamaEmbedPayload,
-    ) => Promise<GetOllamaEmbedResult>;
 };
 
 export type StartMistralRealtimeTranscriptionPayload = {
@@ -407,6 +444,7 @@ export type AppApi = {
     scenarios: AppApiScenariosNamespace;
     vectorStorages: AppApiVectorStoragesNamespace;
     cache: AppApiCacheNamespace;
+    jobs: AppApiJobsNamespace;
     network: AppApiNetworkNamespace;
     llm: AppApiLlmNamespace;
     voice: AppApiVoiceNamespace;

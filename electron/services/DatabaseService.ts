@@ -2,6 +2,9 @@ import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type {
     FileManifestEntry,
+    JobEventRecord,
+    JobEventTag,
+    JobRecord,
     SavedFileRecord,
     UpdateVectorStoragePayload,
     VectorStorageRecord,
@@ -424,6 +427,318 @@ export class DatabaseService {
         transaction(fileIds);
     }
 
+    createJob(
+        createdBy: string,
+        payload: {
+            name: string;
+            description: string;
+        },
+    ): JobRecord {
+        const now = new Date().toISOString();
+        const jobId = `job_${randomUUID().replace(/-/g, "")}`;
+
+        this.database
+            .prepare(
+                `
+                INSERT INTO jobs (
+                    id,
+                    name,
+                    description,
+                    is_completed,
+                    is_pending,
+                    created_at,
+                    updated_at,
+                    started_at,
+                    finished_at,
+                    error_message,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `,
+            )
+            .run(
+                jobId,
+                payload.name,
+                payload.description,
+                0,
+                1,
+                now,
+                now,
+                now,
+                null,
+                null,
+                createdBy,
+            );
+
+        return this.getJobById(jobId, createdBy)!;
+    }
+
+    getJobs(createdBy: string): JobRecord[] {
+        const rows = this.database
+            .prepare(
+                `
+                SELECT
+                    id,
+                    name,
+                    description,
+                    is_completed,
+                    is_pending,
+                    created_at,
+                    updated_at,
+                    started_at,
+                    finished_at,
+                    error_message
+                FROM jobs
+                WHERE created_by = ?
+                ORDER BY updated_at DESC
+                `,
+            )
+            .all(createdBy) as Array<{
+            id: string;
+            name: string;
+            description: string;
+            is_completed: number;
+            is_pending: number;
+            created_at: string;
+            updated_at: string;
+            started_at: string;
+            finished_at: string | null;
+            error_message: string | null;
+        }>;
+
+        return rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            isCompleted: row.is_completed === 1,
+            isPending: row.is_pending === 1,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            startedAt: row.started_at,
+            finishedAt: row.finished_at,
+            errorMessage: row.error_message,
+        }));
+    }
+
+    getJobById(jobId: string, createdBy: string): JobRecord | null {
+        const row = this.database
+            .prepare(
+                `
+                SELECT
+                    id,
+                    name,
+                    description,
+                    is_completed,
+                    is_pending,
+                    created_at,
+                    updated_at,
+                    started_at,
+                    finished_at,
+                    error_message
+                FROM jobs
+                WHERE id = ? AND created_by = ?
+                `,
+            )
+            .get(jobId, createdBy) as
+            | {
+                  id: string;
+                  name: string;
+                  description: string;
+                  is_completed: number;
+                  is_pending: number;
+                  created_at: string;
+                  updated_at: string;
+                  started_at: string;
+                  finished_at: string | null;
+                  error_message: string | null;
+              }
+            | undefined;
+
+        if (!row) {
+            return null;
+        }
+
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            isCompleted: row.is_completed === 1,
+            isPending: row.is_pending === 1,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            startedAt: row.started_at,
+            finishedAt: row.finished_at,
+            errorMessage: row.error_message,
+        };
+    }
+
+    updateJob(
+        jobId: string,
+        createdBy: string,
+        payload: {
+            isCompleted?: boolean;
+            isPending?: boolean;
+            finishedAt?: string | null;
+            errorMessage?: string | null;
+        },
+    ): JobRecord | null {
+        const current = this.getJobById(jobId, createdBy);
+
+        if (!current) {
+            return null;
+        }
+
+        const nextIsCompleted =
+            typeof payload.isCompleted === "boolean"
+                ? payload.isCompleted
+                : current.isCompleted;
+        const nextIsPending =
+            typeof payload.isPending === "boolean"
+                ? payload.isPending
+                : current.isPending;
+        const nextFinishedAt =
+            payload.finishedAt !== undefined
+                ? payload.finishedAt
+                : current.finishedAt;
+        const nextErrorMessage =
+            payload.errorMessage !== undefined
+                ? payload.errorMessage
+                : current.errorMessage;
+
+        this.database
+            .prepare(
+                `
+                UPDATE jobs
+                SET is_completed = ?,
+                    is_pending = ?,
+                    finished_at = ?,
+                    error_message = ?,
+                    updated_at = ?
+                WHERE id = ? AND created_by = ?
+                `,
+            )
+            .run(
+                nextIsCompleted ? 1 : 0,
+                nextIsPending ? 1 : 0,
+                nextFinishedAt,
+                nextErrorMessage,
+                new Date().toISOString(),
+                jobId,
+                createdBy,
+            );
+
+        return this.getJobById(jobId, createdBy);
+    }
+
+    addJobEvent(
+        createdBy: string,
+        jobId: string,
+        message: string,
+        tag: JobEventTag,
+    ): JobEventRecord {
+        const now = new Date().toISOString();
+        const jobEventId = `job_event_${randomUUID().replace(/-/g, "")}`;
+
+        this.database
+            .prepare(
+                `
+                INSERT INTO jobs_events (
+                    id,
+                    job_id,
+                    message,
+                    tag,
+                    created_at,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                `,
+            )
+            .run(jobEventId, jobId, message, tag, now, createdBy);
+
+        return {
+            id: jobEventId,
+            jobId,
+            message,
+            tag,
+            createdAt: now,
+        };
+    }
+
+    getJobEvents(jobId: string, createdBy: string): JobEventRecord[] {
+        const rows = this.database
+            .prepare(
+                `
+                SELECT id, job_id, message, tag, created_at
+                FROM jobs_events
+                WHERE job_id = ? AND created_by = ?
+                ORDER BY created_at DESC
+                `,
+            )
+            .all(jobId, createdBy) as Array<{
+            id: string;
+            job_id: string;
+            message: string;
+            tag: JobEventTag;
+            created_at: string;
+        }>;
+
+        return rows.map((row) => ({
+            id: row.id,
+            jobId: row.job_id,
+            message: row.message,
+            tag: row.tag,
+            createdAt: row.created_at,
+        }));
+    }
+
+    markPendingJobsAsInterrupted(createdBy: string): string[] {
+        const rows = this.database
+            .prepare(
+                `
+                SELECT id
+                FROM jobs
+                WHERE created_by = ? AND is_pending = 1
+                `,
+            )
+            .all(createdBy) as Array<{ id: string }>;
+
+        if (!rows.length) {
+            return [];
+        }
+
+        const now = new Date().toISOString();
+
+        this.database
+            .prepare(
+                `
+                UPDATE jobs
+                SET is_pending = 0,
+                    is_completed = 0,
+                    finished_at = ?,
+                    error_message = ?,
+                    updated_at = ?
+                WHERE created_by = ? AND is_pending = 1
+                `,
+            )
+            .run(
+                now,
+                "Процесс был остановлен при перезапуске приложения",
+                now,
+                createdBy,
+            );
+
+        for (const row of rows) {
+            this.addJobEvent(
+                createdBy,
+                row.id,
+                "Задача остановлена из-за перезапуска приложения",
+                "warning",
+            );
+        }
+
+        return rows.map((row) => row.id);
+    }
+
     createVectorStorage(createdBy: string, name: string): VectorStorageRecord {
         const now = new Date().toISOString();
         const vectorStorageId = `vs_${randomUUID().replace(/-/g, "")}`;
@@ -815,6 +1130,32 @@ export class DatabaseService {
                 data_json TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS jobs (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                is_completed INTEGER NOT NULL DEFAULT 0,
+                is_pending INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                error_message TEXT,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS jobs_events (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                tag TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(job_id) REFERENCES jobs(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS vector_storages (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -859,6 +1200,10 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_vector_storage_files_created_by ON vector_storage_files(created_by);
             CREATE INDEX IF NOT EXISTS idx_vector_storage_projects_created_by ON vector_storage_projects(created_by);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_jobs_created_by ON jobs(created_by);
+            CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_jobs_events_job_id ON jobs_events(job_id);
+            CREATE INDEX IF NOT EXISTS idx_jobs_events_created_at ON jobs_events(created_at DESC);
         `);
     }
 

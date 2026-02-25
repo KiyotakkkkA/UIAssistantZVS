@@ -101,12 +101,27 @@ const appApi = {
     getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),
     setCacheEntry: (key, entry) => electron.ipcRenderer.invoke("app:set-cache-entry", key, entry)
   },
+  jobs: {
+    getJobs: () => electron.ipcRenderer.invoke("app:get-jobs"),
+    getJobById: (jobId) => electron.ipcRenderer.invoke("app:get-job-by-id", jobId),
+    getJobEvents: (jobId) => electron.ipcRenderer.invoke("app:get-job-events", jobId),
+    createJob: (payload) => electron.ipcRenderer.invoke("app:create-job", payload),
+    cancelJob: (jobId) => electron.ipcRenderer.invoke("app:cancel-job", jobId),
+    onJobEvent: (listener) => {
+      const handler = (_event, payload) => {
+        listener(payload);
+      };
+      electron.ipcRenderer.on("app:jobs-event", handler);
+      return () => {
+        electron.ipcRenderer.off("app:jobs-event", handler);
+      };
+    }
+  },
   network: {
     proxyHttpRequest: (payload) => electron.ipcRenderer.invoke("app:proxy-http-request", payload)
   },
   llm: {
-    streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload),
-    getOllamaEmbed: (payload) => electron.ipcRenderer.invoke("app:ollama-get-embed", payload)
+    streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload)
   },
   voice: {
     startMistralRealtimeTranscription: (payload) => electron.ipcRenderer.invoke("app:voice-transcription-start", payload),

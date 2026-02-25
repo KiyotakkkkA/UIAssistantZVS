@@ -1,7 +1,6 @@
 import type { StreamChatParams } from "../../../types/Chat";
 import type { ChatProviderAdapter } from "../../../types/AIRequests";
 import {
-    embedOllama,
     streamChatOllama,
     toOllamaMessages,
 } from "../../../utils/chat/ollamaChat";
@@ -16,12 +15,6 @@ export const createOllamaAdapter = ({
     format,
 }: CreateOllamaAdapterParams): ChatProviderAdapter => {
     return {
-        embed: async ({ input, model: embedModel }) => {
-            return embedOllama({
-                model: embedModel ?? model,
-                input,
-            });
-        },
         send: async ({
             history,
             tools,

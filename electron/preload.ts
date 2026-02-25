@@ -151,6 +151,27 @@ const appApi: AppApi = {
         setCacheEntry: (key: string, entry: AppCacheEntry) =>
             ipcRenderer.invoke("app:set-cache-entry", key, entry),
     },
+    jobs: {
+        getJobs: () => ipcRenderer.invoke("app:get-jobs"),
+        getJobById: (jobId: string) =>
+            ipcRenderer.invoke("app:get-job-by-id", jobId),
+        getJobEvents: (jobId: string) =>
+            ipcRenderer.invoke("app:get-job-events", jobId),
+        createJob: (payload) => ipcRenderer.invoke("app:create-job", payload),
+        cancelJob: (jobId: string) =>
+            ipcRenderer.invoke("app:cancel-job", jobId),
+        onJobEvent: (listener) => {
+            const handler = (_event: unknown, payload: unknown) => {
+                listener(payload as Parameters<typeof listener>[0]);
+            };
+
+            ipcRenderer.on("app:jobs-event", handler);
+
+            return () => {
+                ipcRenderer.off("app:jobs-event", handler);
+            };
+        },
+    },
     network: {
         proxyHttpRequest: (payload) =>
             ipcRenderer.invoke("app:proxy-http-request", payload),
@@ -158,8 +179,6 @@ const appApi: AppApi = {
     llm: {
         streamOllamaChat: (payload) =>
             ipcRenderer.invoke("app:ollama-stream-chat", payload),
-        getOllamaEmbed: (payload) =>
-            ipcRenderer.invoke("app:ollama-get-embed", payload),
     },
     voice: {
         startMistralRealtimeTranscription: (payload) =>

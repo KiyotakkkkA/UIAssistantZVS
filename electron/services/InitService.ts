@@ -7,6 +7,7 @@ export class InitService {
     private readonly resourcesPath: string;
     private readonly themesPath: string;
     private readonly filesPath: string;
+    private readonly vectorIndexPath: string;
     private readonly metaPath: string;
     private readonly databasePath: string;
 
@@ -14,6 +15,7 @@ export class InitService {
         this.resourcesPath = paths.resourcesPath;
         this.themesPath = paths.themesPath;
         this.filesPath = paths.filesPath;
+        this.vectorIndexPath = paths.vectorIndexPath;
         this.metaPath = paths.metaPath;
         this.databasePath = paths.databasePath;
     }
@@ -22,6 +24,7 @@ export class InitService {
         this.ensureDirectory(this.resourcesPath);
         this.ensureDirectory(this.themesPath);
         this.ensureDirectory(this.filesPath);
+        this.ensureDirectory(this.vectorIndexPath);
         this.ensureDatabase(this.databasePath);
         this.ensureMeta();
         this.ensureThemes();

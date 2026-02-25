@@ -21,31 +21,41 @@ type GetEmbedPayload = {
     input: string | string[];
 };
 
+const LOCAL_OLLAMA_HOST = "http://127.0.0.1:11434";
+
 export class OllamaService {
     private cachedHost = "";
-    private cachedToken = "";
+    private cachedAuthHeader = "";
     private cachedClient: Ollama | null = null;
 
-    private getClient(token: string): Ollama {
-        const host = Config.OLLAMA_BASE_URL.trim();
+    private getClient(
+        host: string,
+        token: string,
+        mode: "bearer" | "raw" | "none",
+    ): Ollama {
         const normalizedToken = token.trim();
+        const authorizationHeader = this.toAuthorizationHeader(
+            normalizedToken,
+            mode,
+        );
+        const authCacheKey = authorizationHeader || "";
 
         if (
             this.cachedClient &&
             this.cachedHost === host &&
-            this.cachedToken === normalizedToken
+            this.cachedAuthHeader === authCacheKey
         ) {
             return this.cachedClient;
         }
 
         this.cachedHost = host;
-        this.cachedToken = normalizedToken;
+        this.cachedAuthHeader = authCacheKey;
         this.cachedClient = new Ollama({
             host,
-            ...(normalizedToken
+            ...(authorizationHeader
                 ? {
                       headers: {
-                          Authorization: `Bearer ${normalizedToken}`,
+                          Authorization: authorizationHeader,
                       },
                   }
                 : {}),
@@ -54,19 +64,91 @@ export class OllamaService {
         return this.cachedClient;
     }
 
+    private toAuthorizationHeader(
+        token: string,
+        mode: "bearer" | "raw" | "none",
+    ): string | null {
+        if (!token) {
+            return null;
+        }
+
+        if (mode === "none") {
+            return null;
+        }
+
+        if (mode === "raw") {
+            return token.replace(/^Bearer\s+/i, "").trim();
+        }
+
+        return /^Bearer\s+/i.test(token) ? token : `Bearer ${token}`;
+    }
+
+    private isUnauthorizedError(error: unknown): boolean {
+        if (!(error instanceof Error)) {
+            return false;
+        }
+
+        return /unauthorized|401/i.test(error.message);
+    }
+
+    private async executeWithAuthFallback<T>(
+        host: string,
+        token: string,
+        callback: (client: Ollama) => Promise<T>,
+    ): Promise<T> {
+        const normalizedToken = token.trim();
+        const modes: Array<"bearer" | "raw" | "none"> = normalizedToken
+            ? ["bearer", "raw", "none"]
+            : ["none"];
+
+        let lastError: unknown = null;
+
+        for (const mode of modes) {
+            try {
+                const client = this.getClient(host, normalizedToken, mode);
+                return await callback(client);
+            } catch (error) {
+                lastError = error;
+
+                if (!this.isUnauthorizedError(error)) {
+                    throw error;
+                }
+            }
+        }
+
+        if (lastError instanceof Error) {
+            throw new Error(
+                [
+                    `Ollama auth failed (${lastError.message}).`,
+                    `baseUrl=${host}`,
+                    `tokenProvided=${normalizedToken.length > 0 ? "yes" : "no"}`,
+                    "Проверьте token/host в настройках профиля и доступность Ollama API.",
+                ].join(" "),
+            );
+        }
+
+        throw new Error("Ollama auth failed: unknown error");
+    }
+
     async streamChat(
         payload: StreamOllamaChatPayload,
         token: string,
     ): Promise<OllamaChatChunk[]> {
-        const client = this.getClient(token);
-        const stream = await client.chat({
-            model: payload.model,
-            messages: payload.messages as ChatRequest["messages"],
-            ...(payload.tools ? { tools: payload.tools } : {}),
-            ...(payload.format ? { format: payload.format } : {}),
-            ...(payload.think !== undefined ? { think: payload.think } : {}),
-            stream: true,
-        });
+        const stream = await this.executeWithAuthFallback(
+            Config.OLLAMA_BASE_URL.trim(),
+            token,
+            (client) =>
+                client.chat({
+                    model: payload.model,
+                    messages: payload.messages as ChatRequest["messages"],
+                    ...(payload.tools ? { tools: payload.tools } : {}),
+                    ...(payload.format ? { format: payload.format } : {}),
+                    ...(payload.think !== undefined
+                        ? { think: payload.think }
+                        : {}),
+                    stream: true,
+                }),
+        );
 
         const chunks: OllamaChatChunk[] = [];
 
@@ -91,11 +173,15 @@ export class OllamaService {
     }
 
     async getEmbed(payload: GetEmbedPayload, token: string) {
-        const client = this.getClient(token);
-        const response = await client.embed({
-            model: payload.model,
-            input: payload.input,
-        });
+        const response = await this.executeWithAuthFallback(
+            LOCAL_OLLAMA_HOST,
+            token,
+            (client) =>
+                client.embed({
+                    model: payload.model,
+                    input: payload.input,
+                }),
+        );
 
         const embeddingsSource = Array.isArray(response.embeddings)
             ? response.embeddings

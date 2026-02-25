@@ -10,12 +10,16 @@ import { CommandExecService } from "./services/CommandExecService";
 import { BrowserService } from "./services/BrowserService";
 import { OllamaService } from "./services/agents/OllamaService";
 import { MistralService } from "./services/agents/MistralService";
+import { LanceDbService } from "./services/LanceDbService";
+import { VectorizationService } from "./services/VectorizationService";
+import { JobsStorage } from "./services/jobs/JobsStorage";
+import { JobService } from "./services/jobs/JobService";
 import { createElectronPaths } from "./paths";
 import type { UserProfile } from "../src/types/App";
 import type { ChatDialog } from "../src/types/Chat";
 import type {
     AppCacheEntry,
-    GetOllamaEmbedPayload,
+    CreateJobPayload,
     ProxyHttpRequestPayload,
     SaveImageFromSourcePayload,
     StartMistralRealtimeTranscriptionPayload,
@@ -57,6 +61,7 @@ let commandExecService: CommandExecService;
 let browserService: BrowserService;
 let ollamaService: OllamaService;
 let mistralService: MistralService;
+let jobService: JobService;
 
 const mimeByExtension: Record<string, string> = {
     ".png": "image/png",
@@ -155,6 +160,7 @@ function createWindow() {
 app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
         void mistralService?.stopAll();
+        void jobService?.shutdown();
         app.quit();
         win = null;
     }
@@ -176,6 +182,23 @@ app.whenReady()
         commandExecService = new CommandExecService();
         browserService = new BrowserService();
         ollamaService = new OllamaService();
+        const lanceDbService = new LanceDbService(appPaths.vectorIndexPath);
+        const vectorizationService = new VectorizationService(
+            userDataService,
+            ollamaService,
+            lanceDbService,
+        );
+        const jobsStorage = new JobsStorage(
+            userDataService.getDatabaseService(),
+            () => userDataService.getCurrentUserId(),
+        );
+        jobService = new JobService(
+            jobsStorage,
+            vectorizationService,
+            (jobEvent) => {
+                win?.webContents.send("app:jobs-event", jobEvent);
+            },
+        );
         mistralService = new MistralService((eventPayload) => {
             win?.webContents.send(
                 "app:voice-transcription-event",
@@ -291,6 +314,19 @@ app.whenReady()
         ipcMain.handle("app:get-cache-entry", (_event, key: string) =>
             userDataService.getCacheEntry(key),
         );
+        ipcMain.handle("app:get-jobs", () => jobService.getJobs());
+        ipcMain.handle("app:get-job-by-id", (_event, jobId: string) =>
+            jobService.getJobById(jobId),
+        );
+        ipcMain.handle("app:get-job-events", (_event, jobId: string) =>
+            jobService.getJobEvents(jobId),
+        );
+        ipcMain.handle("app:create-job", (_event, payload: CreateJobPayload) =>
+            jobService.createJob(payload),
+        );
+        ipcMain.handle("app:cancel-job", (_event, jobId: string) =>
+            jobService.cancelJob(jobId),
+        );
         ipcMain.handle(
             "app:update-vector-storage",
             (
@@ -312,15 +348,6 @@ app.whenReady()
                     userDataService.getBootData().userProfile.ollamaToken;
 
                 return ollamaService.streamChat(payload, token);
-            },
-        );
-        ipcMain.handle(
-            "app:ollama-get-embed",
-            async (_event, payload: GetOllamaEmbedPayload) => {
-                const token =
-                    userDataService.getBootData().userProfile.ollamaToken;
-
-                return ollamaService.getEmbed(payload, token);
             },
         );
 
