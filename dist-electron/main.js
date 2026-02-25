@@ -188,10 +188,12 @@ class InitService {
 const defaultProfile = {
   themePreference: "dark-main",
   ollamaModel: "gpt-oss:20b",
+  ollamaEmbeddingModel: "embeddinggemma",
   ollamaToken: "",
   mistralVoiceRecModel: "",
   mistralToken: "",
   voiceRecognitionDriver: "",
+  embeddingDriver: "",
   telegramId: "",
   telegramBotToken: "",
   chatDriver: "ollama",
@@ -223,6 +225,7 @@ const VOICE_RECOGNITION_DRIVERS = /* @__PURE__ */ new Set([
   "mistral",
   ""
 ]);
+const EMBEDDING_DRIVERS = /* @__PURE__ */ new Set(["ollama", ""]);
 const WORKSPACE_TABS = /* @__PURE__ */ new Set([
   "dialogs",
   "projects",
@@ -236,6 +239,9 @@ const isWorkspaceTab = (value) => {
 };
 const isVoiceRecognitionDriver = (value) => {
   return typeof value === "string" && VOICE_RECOGNITION_DRIVERS.has(value);
+};
+const isEmbeddingDriver = (value) => {
+  return typeof value === "string" && EMBEDDING_DRIVERS.has(value);
 };
 const normalizeNullableId = (value) => {
   if (typeof value !== "string") {
@@ -292,10 +298,12 @@ class UserProfileService {
         ...defaultProfile,
         ...typeof parsed.themePreference === "string" ? { themePreference: parsed.themePreference } : {},
         ...typeof parsed.ollamaModel === "string" ? { ollamaModel: parsed.ollamaModel } : {},
+        ...typeof parsed.ollamaEmbeddingModel === "string" ? { ollamaEmbeddingModel: parsed.ollamaEmbeddingModel } : {},
         ...typeof parsed.ollamaToken === "string" ? { ollamaToken: parsed.ollamaToken } : {},
         ...typeof parsed.mistralVoiceRecModel === "string" ? { mistralVoiceRecModel: parsed.mistralVoiceRecModel } : {},
         ...typeof parsed.mistralToken === "string" ? { mistralToken: parsed.mistralToken } : {},
         ...isVoiceRecognitionDriver(parsed.voiceRecognitionDriver) ? { voiceRecognitionDriver: parsed.voiceRecognitionDriver } : {},
+        ...isEmbeddingDriver(parsed.embeddingDriver) ? { embeddingDriver: parsed.embeddingDriver } : {},
         ...typeof parsed.telegramId === "string" ? { telegramId: parsed.telegramId } : {},
         ...typeof parsed.telegramBotToken === "string" ? { telegramBotToken: parsed.telegramBotToken } : {},
         ...isChatDriver(parsed.chatDriver) ? { chatDriver: parsed.chatDriver } : {},
@@ -3512,6 +3520,24 @@ class OllamaService {
       });
     }
     return chunks;
+  }
+  async getEmbed(payload, token) {
+    const client = this.getClient(token);
+    const response = await client.embed({
+      model: payload.model,
+      input: payload.input
+    });
+    const embeddingsSource = Array.isArray(response.embeddings) ? response.embeddings : [];
+    const embeddings = embeddingsSource.map(
+      (vector) => Array.isArray(vector) ? vector.map((value) => Number(value)) : []
+    );
+    return {
+      model: response.model,
+      embeddings,
+      ...typeof response.total_duration === "number" ? { total_duration: response.total_duration } : {},
+      ...typeof response.load_duration === "number" ? { load_duration: response.load_duration } : {},
+      ...typeof response.prompt_eval_count === "number" ? { prompt_eval_count: response.prompt_eval_count } : {}
+    };
   }
 }
 var realtime = {};
@@ -15069,7 +15095,7 @@ const toErrorMessage = (error) => {
   }
   return "Realtime transcription failed";
 };
-class MistralRealtimeTranscriptionService {
+class MistralService {
   constructor(emitEvent) {
     this.emitEvent = emitEvent;
   }
@@ -15228,7 +15254,7 @@ let userDataService;
 let commandExecService;
 let browserService;
 let ollamaService;
-let mistralRealtimeTranscriptionService;
+let mistralService;
 const mimeByExtension = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -15308,7 +15334,7 @@ function createWindow() {
 }
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
-    void mistralRealtimeTranscriptionService?.stopAll();
+    void mistralService?.stopAll();
     app.quit();
     win = null;
   }
@@ -15326,7 +15352,7 @@ app.whenReady().then(() => {
   commandExecService = new CommandExecService();
   browserService = new BrowserService();
   ollamaService = new OllamaService();
-  mistralRealtimeTranscriptionService = new MistralRealtimeTranscriptionService((eventPayload) => {
+  mistralService = new MistralService((eventPayload) => {
     win?.webContents.send(
       "app:voice-transcription-event",
       eventPayload
@@ -15470,6 +15496,13 @@ app.whenReady().then(() => {
     }
   );
   ipcMain.handle(
+    "app:ollama-get-embed",
+    async (_event, payload) => {
+      const token = userDataService.getBootData().userProfile.ollamaToken;
+      return ollamaService.getEmbed(payload, token);
+    }
+  );
+  ipcMain.handle(
     "app:proxy-http-request",
     async (_event, payload) => {
       const url2 = typeof payload?.url === "string" ? payload.url.trim() : "";
@@ -15513,26 +15546,19 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:voice-transcription-start",
     async (_event, payload) => {
-      return mistralRealtimeTranscriptionService.startSession(
-        payload
-      );
+      return mistralService.startSession(payload);
     }
   );
   ipcMain.handle(
     "app:voice-transcription-push-chunk",
     async (_event, sessionId, chunk) => {
-      await mistralRealtimeTranscriptionService.pushChunk(
-        sessionId,
-        chunk
-      );
+      await mistralService.pushChunk(sessionId, chunk);
     }
   );
   ipcMain.handle(
     "app:voice-transcription-stop",
     async (_event, sessionId) => {
-      await mistralRealtimeTranscriptionService.stopSession(
-        sessionId
-      );
+      await mistralService.stopSession(sessionId);
     }
   );
   ipcMain.handle(

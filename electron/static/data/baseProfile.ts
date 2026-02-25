@@ -3,10 +3,12 @@ import { UserProfile } from "../../../src/types/App";
 export const defaultProfile: UserProfile = {
     themePreference: "dark-main",
     ollamaModel: "gpt-oss:20b",
+    ollamaEmbeddingModel: "embeddinggemma",
     ollamaToken: "",
     mistralVoiceRecModel: "",
     mistralToken: "",
     voiceRecognitionDriver: "",
+    embeddingDriver: "",
     telegramId: "",
     telegramBotToken: "",
     chatDriver: "ollama",

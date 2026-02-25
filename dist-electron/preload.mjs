@@ -105,7 +105,8 @@ const appApi = {
     proxyHttpRequest: (payload) => electron.ipcRenderer.invoke("app:proxy-http-request", payload)
   },
   llm: {
-    streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload)
+    streamOllamaChat: (payload) => electron.ipcRenderer.invoke("app:ollama-stream-chat", payload),
+    getOllamaEmbed: (payload) => electron.ipcRenderer.invoke("app:ollama-get-embed", payload)
   },
   voice: {
     startMistralRealtimeTranscription: (payload) => electron.ipcRenderer.invoke("app:voice-transcription-start", payload),

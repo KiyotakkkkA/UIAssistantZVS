@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { defaultProfile } from "../../static/data";
 import type {
     ChatDriver,
+    EmbeddingDriver,
     UserProfile,
     VoiceRecognitionDriver,
     WorkspaceTab,
@@ -14,6 +15,7 @@ const VOICE_RECOGNITION_DRIVERS = new Set<VoiceRecognitionDriver>([
     "mistral",
     "",
 ]);
+const EMBEDDING_DRIVERS = new Set<EmbeddingDriver>(["ollama", ""]);
 const WORKSPACE_TABS = new Set<WorkspaceTab>([
     "dialogs",
     "projects",
@@ -36,6 +38,13 @@ const isVoiceRecognitionDriver = (
     return (
         typeof value === "string" &&
         VOICE_RECOGNITION_DRIVERS.has(value as VoiceRecognitionDriver)
+    );
+};
+
+const isEmbeddingDriver = (value: unknown): value is EmbeddingDriver => {
+    return (
+        typeof value === "string" &&
+        EMBEDDING_DRIVERS.has(value as EmbeddingDriver)
     );
 };
 
@@ -116,6 +125,9 @@ export class UserProfileService {
                 ...(typeof parsed.ollamaModel === "string"
                     ? { ollamaModel: parsed.ollamaModel }
                     : {}),
+                ...(typeof parsed.ollamaEmbeddingModel === "string"
+                    ? { ollamaEmbeddingModel: parsed.ollamaEmbeddingModel }
+                    : {}),
                 ...(typeof parsed.ollamaToken === "string"
                     ? { ollamaToken: parsed.ollamaToken }
                     : {}),
@@ -127,6 +139,9 @@ export class UserProfileService {
                     : {}),
                 ...(isVoiceRecognitionDriver(parsed.voiceRecognitionDriver)
                     ? { voiceRecognitionDriver: parsed.voiceRecognitionDriver }
+                    : {}),
+                ...(isEmbeddingDriver(parsed.embeddingDriver)
+                    ? { embeddingDriver: parsed.embeddingDriver }
                     : {}),
                 ...(typeof parsed.telegramId === "string"
                     ? { telegramId: parsed.telegramId }

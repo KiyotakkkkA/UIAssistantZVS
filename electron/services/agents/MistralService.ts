@@ -6,7 +6,7 @@ import {
 import type {
     StartMistralRealtimeTranscriptionPayload,
     VoiceTranscriptionEvent,
-} from "../../src/types/ElectronApi";
+} from "../../../src/types/ElectronApi";
 
 type SessionState = {
     id: string;
@@ -40,7 +40,7 @@ const toErrorMessage = (error: unknown): string => {
     return "Realtime transcription failed";
 };
 
-export class MistralRealtimeTranscriptionService {
+export class MistralService {
     private readonly sessions = new Map<string, SessionState>();
 
     constructor(

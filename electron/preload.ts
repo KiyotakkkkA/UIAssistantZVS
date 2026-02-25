@@ -158,6 +158,8 @@ const appApi: AppApi = {
     llm: {
         streamOllamaChat: (payload) =>
             ipcRenderer.invoke("app:ollama-stream-chat", payload),
+        getOllamaEmbed: (payload) =>
+            ipcRenderer.invoke("app:ollama-get-embed", payload),
     },
     voice: {
         startMistralRealtimeTranscription: (payload) =>

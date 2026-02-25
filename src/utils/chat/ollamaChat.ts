@@ -1,4 +1,4 @@
-import { streamOllamaChat } from "../../services/api";
+import { getOllamaEmbed, streamOllamaChat } from "../../services/api";
 import type {
     ChatMessage,
     OllamaMessage,
@@ -53,3 +53,15 @@ export const toOllamaMessages = (messages: ChatMessage[]): OllamaMessage[] =>
             role: message.author,
             content: message.content,
         }));
+
+export const embedOllama = async (params: {
+    model: string;
+    input: string | string[];
+}): Promise<number[][]> => {
+    const result = await getOllamaEmbed({
+        model: params.model,
+        input: params.input,
+    });
+
+    return result.embeddings;
+};

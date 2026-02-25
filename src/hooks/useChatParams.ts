@@ -7,10 +7,12 @@ type ChatSettingsFields = Pick<
     UserProfile,
     | "chatDriver"
     | "ollamaModel"
+    | "ollamaEmbeddingModel"
     | "ollamaToken"
     | "mistralVoiceRecModel"
     | "mistralToken"
     | "voiceRecognitionDriver"
+    | "embeddingDriver"
     | "telegramId"
     | "telegramBotToken"
     | "assistantName"

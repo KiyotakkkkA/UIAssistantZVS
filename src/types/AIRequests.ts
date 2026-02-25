@@ -27,6 +27,12 @@ export type ChatAdapterRequest = {
     onChunk: (chunkText: string, done: boolean) => void;
 };
 
+export type EmbedAdapterRequest = {
+    input: string | string[];
+    model?: string;
+};
+
 export type ChatProviderAdapter = {
     send: (request: ChatAdapterRequest) => Promise<void>;
+    embed: (request: EmbedAdapterRequest) => Promise<number[][]>;
 };

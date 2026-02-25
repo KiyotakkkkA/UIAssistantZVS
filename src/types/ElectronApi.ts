@@ -290,10 +290,26 @@ export type StreamOllamaChatPayload = {
     think?: boolean;
 };
 
+export type GetOllamaEmbedPayload = {
+    model: string;
+    input: string | string[];
+};
+
+export type GetOllamaEmbedResult = {
+    model: string;
+    embeddings: number[][];
+    total_duration?: number;
+    load_duration?: number;
+    prompt_eval_count?: number;
+};
+
 export type AppApiLlmNamespace = {
     streamOllamaChat: (
         payload: StreamOllamaChatPayload,
     ) => Promise<OllamaChatChunk[]>;
+    getOllamaEmbed: (
+        payload: GetOllamaEmbedPayload,
+    ) => Promise<GetOllamaEmbedResult>;
 };
 
 export type StartMistralRealtimeTranscriptionPayload = {

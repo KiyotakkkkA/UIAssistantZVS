@@ -1,15 +1,18 @@
 export type ChatDriver = "" | "ollama";
 export type VoiceRecognitionDriver = "" | "mistral";
+export type EmbeddingDriver = "" | "ollama";
 
 export type WorkspaceTab = "dialogs" | "projects" | "scenario";
 
 export type UserProfile = {
     themePreference: string;
     ollamaModel: string;
+    ollamaEmbeddingModel: string;
     ollamaToken: string;
     mistralVoiceRecModel: string;
     mistralToken: string;
     voiceRecognitionDriver: VoiceRecognitionDriver;
+    embeddingDriver: EmbeddingDriver;
     telegramId: string;
     telegramBotToken: string;
     chatDriver: ChatDriver;
