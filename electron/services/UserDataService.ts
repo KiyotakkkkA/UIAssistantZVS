@@ -14,6 +14,10 @@ import type { UploadedFileData } from "../../src/types/ElectronApi";
 import type { AppCacheEntry } from "../../src/types/ElectronApi";
 import type { SavedFileRecord } from "../../src/types/ElectronApi";
 import type {
+    UpdateVectorStoragePayload,
+    VectorStorageRecord,
+} from "../../src/types/ElectronApi";
+import type {
     CreateProjectPayload,
     DeleteProjectResult,
     Project,
@@ -305,6 +309,45 @@ export class UserDataService {
 
     getFilesByIds(fileIds: string[]): SavedFileRecord[] {
         return this.fileStorageService.getFilesByIds(fileIds);
+    }
+
+    getAllFiles(): SavedFileRecord[] {
+        return this.fileStorageService.getAllFiles();
+    }
+
+    getVectorStorages(): VectorStorageRecord[] {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.getVectorStorages(currentUserId);
+    }
+
+    createVectorStorage(): VectorStorageRecord {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        const vectorStorageName = `store_${randomUUID().replace(/-/g, "")}`;
+
+        return this.databaseService.createVectorStorage(
+            currentUserId,
+            vectorStorageName,
+        );
+    }
+
+    updateVectorStorage(
+        vectorStorageId: string,
+        payload: UpdateVectorStoragePayload,
+    ): VectorStorageRecord | null {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.updateVectorStorage(
+            vectorStorageId,
+            payload,
+            currentUserId,
+        );
+    }
+
+    deleteVectorStorage(vectorStorageId: string): boolean {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.deleteVectorStorage(
+            vectorStorageId,
+            currentUserId,
+        );
     }
 
     getFileById(fileId: string): SavedFileRecord | null {

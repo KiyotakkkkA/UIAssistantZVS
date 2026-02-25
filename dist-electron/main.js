@@ -993,6 +993,9 @@ class FileStorageService {
   getFilesByIds(fileIds) {
     return this.databaseService.getFilesByIds(fileIds, this.createdBy);
   }
+  getAllFiles() {
+    return this.databaseService.getAllFiles(this.createdBy);
+  }
   getFileById(fileId) {
     return this.databaseService.getFileById(fileId, this.createdBy);
   }
@@ -1228,6 +1231,21 @@ class DatabaseService {
     );
     return fileIds.map((fileId) => byId.get(fileId)).filter((file) => Boolean(file));
   }
+  getAllFiles(createdBy) {
+    const rows = this.database.prepare(
+      `SELECT id, path, original_name, size, saved_at
+                 FROM files
+                 WHERE created_by = ?
+                 ORDER BY saved_at DESC`
+    ).all(createdBy);
+    return rows.map((row) => ({
+      id: row.id,
+      path: row.path,
+      originalName: row.original_name,
+      size: row.size,
+      savedAt: row.saved_at
+    }));
+  }
   getFileById(fileId, createdBy) {
     const row = this.database.prepare(
       `SELECT id, path, original_name, size, saved_at
@@ -1259,6 +1277,186 @@ class DatabaseService {
       }
     });
     transaction(fileIds);
+  }
+  createVectorStorage(createdBy, name) {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const vectorStorageId = `vs_${randomUUID().replace(/-/g, "")}`;
+    this.database.prepare(
+      `
+                INSERT INTO vector_storages (
+                    id,
+                    name,
+                    size,
+                    last_active_at,
+                    created_at,
+                    updated_at,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+    ).run(vectorStorageId, name, 0, now, now, now, createdBy);
+    return this.getVectorStorageById(vectorStorageId, createdBy);
+  }
+  deleteVectorStorage(vectorStorageId, createdBy) {
+    const result = this.database.prepare(
+      `
+                DELETE FROM vector_storages
+                WHERE id = ? AND created_by = ?
+                `
+    ).run(vectorStorageId, createdBy);
+    return result.changes > 0;
+  }
+  updateVectorStorage(vectorStorageId, payload, createdBy) {
+    const existing = this.database.prepare(
+      `
+                SELECT id, name, size, last_active_at
+                FROM vector_storages
+                WHERE id = ? AND created_by = ?
+                `
+    ).get(vectorStorageId, createdBy);
+    if (!existing) {
+      return null;
+    }
+    const nextName = typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : existing.name;
+    const nextSize = typeof payload.size === "number" && Number.isFinite(payload.size) ? Math.max(0, payload.size) : existing.size;
+    const nextLastActiveAt = typeof payload.lastActiveAt === "string" && payload.lastActiveAt ? payload.lastActiveAt : existing.last_active_at;
+    this.database.prepare(
+      `
+                UPDATE vector_storages
+                SET name = ?,
+                    size = ?,
+                    last_active_at = ?,
+                    updated_at = ?
+                WHERE id = ? AND created_by = ?
+                `
+    ).run(
+      nextName,
+      nextSize,
+      nextLastActiveAt,
+      (/* @__PURE__ */ new Date()).toISOString(),
+      vectorStorageId,
+      createdBy
+    );
+    if (Array.isArray(payload.fileIds)) {
+      this.replaceVectorStorageFiles(
+        vectorStorageId,
+        payload.fileIds,
+        createdBy
+      );
+    }
+    if (Array.isArray(payload.projectIds)) {
+      this.replaceVectorStorageProjects(
+        vectorStorageId,
+        payload.projectIds,
+        createdBy
+      );
+    }
+    return this.getVectorStorageById(vectorStorageId, createdBy);
+  }
+  getVectorStorages(createdBy) {
+    const storageRows = this.database.prepare(
+      `
+                SELECT id, name, size, last_active_at, created_at
+                FROM vector_storages
+                WHERE created_by = ?
+                ORDER BY created_at DESC
+                `
+    ).all(createdBy);
+    if (!storageRows.length) {
+      return [];
+    }
+    const storageIds = storageRows.map((row) => row.id);
+    const placeholders = storageIds.map(() => "?").join(", ");
+    const fileRelationRows = this.database.prepare(
+      `
+                SELECT vector_storage_id, file_id
+                FROM vector_storage_files
+                WHERE created_by = ?
+                  AND vector_storage_id IN (${placeholders})
+                `
+    ).all(createdBy, ...storageIds);
+    const projectRelationRows = this.database.prepare(
+      `
+                SELECT vsp.vector_storage_id, vsp.project_id, p.payload_json
+                FROM vector_storage_projects vsp
+                JOIN projects p ON p.id = vsp.project_id AND p.created_by = vsp.created_by
+                WHERE vsp.created_by = ?
+                  AND vsp.vector_storage_id IN (${placeholders})
+                `
+    ).all(createdBy, ...storageIds);
+    const fileIdsByStorageId = /* @__PURE__ */ new Map();
+    for (const row of fileRelationRows) {
+      const current = fileIdsByStorageId.get(row.vector_storage_id) ?? [];
+      current.push(row.file_id);
+      fileIdsByStorageId.set(row.vector_storage_id, current);
+    }
+    const projectRefsByStorageId = /* @__PURE__ */ new Map();
+    for (const row of projectRelationRows) {
+      const parsedProject = this.tryParseJson(row.payload_json);
+      const title = parsedProject && typeof parsedProject.name === "string" ? parsedProject.name : "Проект";
+      const current = projectRefsByStorageId.get(row.vector_storage_id) ?? [];
+      current.push({
+        id: row.project_id,
+        title
+      });
+      projectRefsByStorageId.set(row.vector_storage_id, current);
+    }
+    return storageRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      size: row.size,
+      lastActiveAt: row.last_active_at,
+      createdAt: row.created_at,
+      fileIds: fileIdsByStorageId.get(row.id) ?? [],
+      usedByProjects: projectRefsByStorageId.get(row.id) ?? []
+    }));
+  }
+  getVectorStorageById(vectorStorageId, createdBy) {
+    return this.getVectorStorages(createdBy).find(
+      (vectorStorage) => vectorStorage.id === vectorStorageId
+    ) ?? null;
+  }
+  replaceVectorStorageFiles(vectorStorageId, fileIds, createdBy) {
+    this.database.prepare(
+      `
+                DELETE FROM vector_storage_files
+                WHERE vector_storage_id = ? AND created_by = ?
+                `
+    ).run(vectorStorageId, createdBy);
+    const insertStmt = this.database.prepare(
+      `
+            INSERT OR IGNORE INTO vector_storage_files (
+                vector_storage_id,
+                file_id,
+                created_by
+            )
+            VALUES (?, ?, ?)
+            `
+    );
+    for (const fileId of fileIds) {
+      insertStmt.run(vectorStorageId, fileId, createdBy);
+    }
+  }
+  replaceVectorStorageProjects(vectorStorageId, projectIds, createdBy) {
+    this.database.prepare(
+      `
+                DELETE FROM vector_storage_projects
+                WHERE vector_storage_id = ? AND created_by = ?
+                `
+    ).run(vectorStorageId, createdBy);
+    const insertStmt = this.database.prepare(
+      `
+            INSERT OR IGNORE INTO vector_storage_projects (
+                vector_storage_id,
+                project_id,
+                created_by
+            )
+            VALUES (?, ?, ?)
+            `
+    );
+    for (const projectId of projectIds) {
+      insertStmt.run(vectorStorageId, projectId, createdBy);
+    }
   }
   getCacheEntry(key) {
     const row = this.database.prepare(
@@ -1353,6 +1551,38 @@ class DatabaseService {
                 data_json TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS vector_storages (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                size INTEGER NOT NULL DEFAULT 0,
+                last_active_at TEXT NOT NULL,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS vector_storage_files (
+                vector_storage_id TEXT NOT NULL,
+                file_id TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                PRIMARY KEY(vector_storage_id, file_id),
+                FOREIGN KEY(vector_storage_id) REFERENCES vector_storages(id) ON DELETE CASCADE,
+                FOREIGN KEY(file_id) REFERENCES files(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS vector_storage_projects (
+                vector_storage_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                PRIMARY KEY(vector_storage_id, project_id),
+                FOREIGN KEY(vector_storage_id) REFERENCES vector_storages(id) ON DELETE CASCADE,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_dialogs_created_by ON dialogs(created_by);
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
@@ -1360,6 +1590,10 @@ class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_scenarios_created_by ON scenarios(created_by);
             CREATE INDEX IF NOT EXISTS idx_scenarios_updated_at ON scenarios(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_files_created_by ON files(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_storages_created_by ON vector_storages(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_storages_updated_at ON vector_storages(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_vector_storage_files_created_by ON vector_storage_files(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_storage_projects_created_by ON vector_storage_projects(created_by);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
         `);
   }
@@ -1607,6 +1841,36 @@ class UserDataService {
   }
   getFilesByIds(fileIds) {
     return this.fileStorageService.getFilesByIds(fileIds);
+  }
+  getAllFiles() {
+    return this.fileStorageService.getAllFiles();
+  }
+  getVectorStorages() {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.getVectorStorages(currentUserId);
+  }
+  createVectorStorage() {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    const vectorStorageName = `store_${randomUUID().replace(/-/g, "")}`;
+    return this.databaseService.createVectorStorage(
+      currentUserId,
+      vectorStorageName
+    );
+  }
+  updateVectorStorage(vectorStorageId, payload) {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.updateVectorStorage(
+      vectorStorageId,
+      payload,
+      currentUserId
+    );
+  }
+  deleteVectorStorage(vectorStorageId) {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.deleteVectorStorage(
+      vectorStorageId,
+      currentUserId
+    );
   }
   getFileById(fileId) {
     return this.fileStorageService.getFileById(fileId);
@@ -15169,8 +15433,28 @@ app.whenReady().then(() => {
     (_event, fileIds) => userDataService.getFilesByIds(fileIds)
   );
   ipcMain.handle(
+    "app:get-all-files",
+    () => userDataService.getAllFiles()
+  );
+  ipcMain.handle(
+    "app:get-vector-storages",
+    () => userDataService.getVectorStorages()
+  );
+  ipcMain.handle(
+    "app:create-vector-storage",
+    () => userDataService.createVectorStorage()
+  );
+  ipcMain.handle(
+    "app:delete-vector-storage",
+    (_event, vectorStorageId) => userDataService.deleteVectorStorage(vectorStorageId)
+  );
+  ipcMain.handle(
     "app:get-cache-entry",
     (_event, key) => userDataService.getCacheEntry(key)
+  );
+  ipcMain.handle(
+    "app:update-vector-storage",
+    (_event, vectorStorageId, payload) => userDataService.updateVectorStorage(vectorStorageId, payload)
   );
   ipcMain.handle(
     "app:set-cache-entry",

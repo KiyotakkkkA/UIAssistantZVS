@@ -101,6 +101,7 @@ const appApi: AppApi = {
         saveFiles: (files) => ipcRenderer.invoke("app:save-files", files),
         saveImageFromSource: (payload) =>
             ipcRenderer.invoke("app:save-image-from-source", payload),
+        getAllFiles: () => ipcRenderer.invoke("app:get-all-files"),
         getFilesByIds: (fileIds) =>
             ipcRenderer.invoke("app:get-files-by-ids", fileIds),
         openFile: (fileId) => ipcRenderer.invoke("app:open-saved-file", fileId),
@@ -130,6 +131,19 @@ const appApi: AppApi = {
             ipcRenderer.invoke("app:update-scenario", scenarioId, payload),
         deleteScenario: (scenarioId: string) =>
             ipcRenderer.invoke("app:delete-scenario", scenarioId),
+    },
+    vectorStorages: {
+        getVectorStorages: () => ipcRenderer.invoke("app:get-vector-storages"),
+        createVectorStorage: () =>
+            ipcRenderer.invoke("app:create-vector-storage"),
+        updateVectorStorage: (vectorStorageId: string, payload) =>
+            ipcRenderer.invoke(
+                "app:update-vector-storage",
+                vectorStorageId,
+                payload,
+            ),
+        deleteVectorStorage: (vectorStorageId: string) =>
+            ipcRenderer.invoke("app:delete-vector-storage", vectorStorageId),
     },
     cache: {
         getCacheEntry: (key: string) =>

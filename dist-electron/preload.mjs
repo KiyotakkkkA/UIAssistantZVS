@@ -67,6 +67,7 @@ const appApi = {
   files: {
     saveFiles: (files) => electron.ipcRenderer.invoke("app:save-files", files),
     saveImageFromSource: (payload) => electron.ipcRenderer.invoke("app:save-image-from-source", payload),
+    getAllFiles: () => electron.ipcRenderer.invoke("app:get-all-files"),
     getFilesByIds: (fileIds) => electron.ipcRenderer.invoke("app:get-files-by-ids", fileIds),
     openFile: (fileId) => electron.ipcRenderer.invoke("app:open-saved-file", fileId),
     openPath: (targetPath) => electron.ipcRenderer.invoke("app:open-path", targetPath),
@@ -85,6 +86,16 @@ const appApi = {
     createScenario: (payload) => electron.ipcRenderer.invoke("app:create-scenario", payload),
     updateScenario: (scenarioId, payload) => electron.ipcRenderer.invoke("app:update-scenario", scenarioId, payload),
     deleteScenario: (scenarioId) => electron.ipcRenderer.invoke("app:delete-scenario", scenarioId)
+  },
+  vectorStorages: {
+    getVectorStorages: () => electron.ipcRenderer.invoke("app:get-vector-storages"),
+    createVectorStorage: () => electron.ipcRenderer.invoke("app:create-vector-storage"),
+    updateVectorStorage: (vectorStorageId, payload) => electron.ipcRenderer.invoke(
+      "app:update-vector-storage",
+      vectorStorageId,
+      payload
+    ),
+    deleteVectorStorage: (vectorStorageId) => electron.ipcRenderer.invoke("app:delete-vector-storage", vectorStorageId)
   },
   cache: {
     getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),

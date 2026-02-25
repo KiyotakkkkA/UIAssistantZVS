@@ -1,6 +1,6 @@
 import { forwardRef, type ReactNode } from "react";
 
-type ButtonVariants = "primary" | "secondary";
+type ButtonVariants = "primary" | "secondary" | "danger";
 type ButtonShape =
     | "rounded-none"
     | "rounded-sm"
@@ -22,6 +22,7 @@ const variants: Record<ButtonVariants, string> = {
     primary:
         "bg-white hover:opacity-80 border-transparent text-black transition-opacity",
     secondary: "bg-main-700 hover:bg-main-600 border-transparent text-white",
+    danger: "bg-red-500 hover:bg-red-600 border-transparent text-white",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

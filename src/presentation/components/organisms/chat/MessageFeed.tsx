@@ -574,7 +574,7 @@ export function MessageFeed({
                             Отмена
                         </Button>
                         <Button
-                            variant="primary"
+                            variant="danger"
                             shape="rounded-lg"
                             className="h-9 px-4"
                             onClick={() => {

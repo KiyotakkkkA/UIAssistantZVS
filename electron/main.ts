@@ -19,6 +19,7 @@ import type {
     SaveImageFromSourcePayload,
     StartMistralRealtimeTranscriptionPayload,
     StreamOllamaChatPayload,
+    UpdateVectorStoragePayload,
     UploadedFileData,
 } from "../src/types/ElectronApi";
 import type { CreateProjectPayload } from "../src/types/Project";
@@ -273,8 +274,30 @@ app.whenReady()
         ipcMain.handle("app:get-files-by-ids", (_event, fileIds: string[]) =>
             userDataService.getFilesByIds(fileIds),
         );
+        ipcMain.handle("app:get-all-files", () =>
+            userDataService.getAllFiles(),
+        );
+        ipcMain.handle("app:get-vector-storages", () =>
+            userDataService.getVectorStorages(),
+        );
+        ipcMain.handle("app:create-vector-storage", () =>
+            userDataService.createVectorStorage(),
+        );
+        ipcMain.handle(
+            "app:delete-vector-storage",
+            (_event, vectorStorageId: string) =>
+                userDataService.deleteVectorStorage(vectorStorageId),
+        );
         ipcMain.handle("app:get-cache-entry", (_event, key: string) =>
             userDataService.getCacheEntry(key),
+        );
+        ipcMain.handle(
+            "app:update-vector-storage",
+            (
+                _event,
+                vectorStorageId: string,
+                payload: UpdateVectorStoragePayload,
+            ) => userDataService.updateVectorStorage(vectorStorageId, payload),
         );
         ipcMain.handle(
             "app:set-cache-entry",

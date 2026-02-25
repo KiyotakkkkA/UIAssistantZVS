@@ -239,7 +239,7 @@ export function ScenarioConditionSettingsForm({
                                 placeholder="Название входного поля"
                             />
                             <Button
-                                variant="secondary"
+                                variant="danger"
                                 shape="rounded-lg"
                                 className="h-9 px-3"
                                 onClick={() => removeField(field.id)}
@@ -280,7 +280,7 @@ export function ScenarioConditionSettingsForm({
                                 />
                             </div>
                             <Button
-                                variant="secondary"
+                                variant="danger"
                                 shape="rounded-lg"
                                 className="h-9 px-3"
                                 onClick={() => removeRule(rule.id)}
@@ -484,7 +484,7 @@ export function ScenarioConditionSettingsForm({
 
                                         <div className="min-w-0 xl:justify-self-end">
                                             <Button
-                                                variant="secondary"
+                                                variant="danger"
                                                 shape="rounded-lg"
                                                 className="h-9 px-3"
                                                 onClick={() =>

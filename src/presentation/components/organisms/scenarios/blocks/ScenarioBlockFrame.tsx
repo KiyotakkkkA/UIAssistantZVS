@@ -68,8 +68,9 @@ export function ScenarioBlockFrame({
                         {hasActions ? (
                             <div className="flex items-center gap-2">
                                 <Button
-                                    type="button"
-                                    className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
+                                    variant="secondary"
+                                    shape="rounded-md"
+                                    className="p-1"
                                     onPointerDown={(event) => {
                                         event.stopPropagation();
                                         event.preventDefault();
@@ -84,8 +85,9 @@ export function ScenarioBlockFrame({
                                     />
                                 </Button>
                                 <Button
-                                    type="button"
-                                    className="rounded-md p-1 text-main-300 hover:bg-main-700/70"
+                                    className="p-1"
+                                    shape="rounded-md"
+                                    variant="danger"
                                     onPointerDown={(event) => {
                                         event.stopPropagation();
                                         event.preventDefault();

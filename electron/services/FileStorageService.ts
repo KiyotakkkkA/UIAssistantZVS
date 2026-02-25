@@ -51,6 +51,10 @@ export class FileStorageService {
         return this.databaseService.getFilesByIds(fileIds, this.createdBy);
     }
 
+    getAllFiles(): SavedFileRecord[] {
+        return this.databaseService.getAllFiles(this.createdBy);
+    }
+
     getFileById(fileId: string): SavedFileRecord | null {
         return this.databaseService.getFileById(fileId, this.createdBy);
     }

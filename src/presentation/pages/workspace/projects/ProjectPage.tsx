@@ -10,6 +10,7 @@ import { Button, Modal } from "../../../components/atoms";
 import { ChatHeader, MessageFeed } from "../../../components/organisms/chat";
 import type { SavedFileRecord } from "../../../../types/ElectronApi";
 import { LoadingFallbackPage } from "../../LoadingFallbackPage";
+import { StoredFileCard } from "../../../components/molecules/cards/storage";
 
 export const ProjectPage = observer(function ProjectPage() {
     const { projectId = "" } = useParams();
@@ -31,41 +32,6 @@ export const ProjectPage = observer(function ProjectPage() {
     const [documents, setDocuments] = useState<SavedFileRecord[]>([]);
     const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
     const [isProjectLoading, setIsProjectLoading] = useState(true);
-
-    const formatFileSize = (bytes: number) => {
-        if (!Number.isFinite(bytes) || bytes <= 0) {
-            return "0 B";
-        }
-
-        const units = ["B", "KB", "MB", "GB"];
-        const exponent = Math.min(
-            Math.floor(Math.log(bytes) / Math.log(1024)),
-            units.length - 1,
-        );
-        const value = bytes / 1024 ** exponent;
-
-        return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
-    };
-
-    const formatSavedAt = (savedAt: string) => {
-        if (!savedAt) {
-            return "Дата неизвестна";
-        }
-
-        const parsedDate = new Date(savedAt);
-
-        if (Number.isNaN(parsedDate.getTime())) {
-            return "Дата неизвестна";
-        }
-
-        return parsedDate.toLocaleString("ru-RU", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
 
     useEffect(() => {
         setIsProjectLoading(true);
@@ -214,40 +180,21 @@ export const ProjectPage = observer(function ProjectPage() {
                 {documents.length > 0 ? (
                     <div className="space-y-2">
                         {documents.map((file) => (
-                            <button
+                            <StoredFileCard
                                 key={file.id}
-                                type="button"
-                                className="group flex w-full items-center justify-between gap-3 rounded-xl border border-main-700/70 bg-main-900/55 px-3 py-2.5 text-left transition-colors hover:bg-main-800/70"
+                                file={file}
+                                projectRef={
+                                    activeProject
+                                        ? {
+                                              id: activeProject.id,
+                                              title: activeProject.name,
+                                          }
+                                        : undefined
+                                }
                                 onClick={() => {
                                     void openDocument(file.id);
                                 }}
-                            >
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <Icon
-                                            icon="mdi:file-document-outline"
-                                            className="text-main-300"
-                                            width={18}
-                                            height={18}
-                                        />
-                                        <p className="truncate text-sm font-medium text-main-100">
-                                            {file.originalName}
-                                        </p>
-                                    </div>
-                                    <p className="mt-1 truncate text-xs text-main-400">
-                                        Добавлен: {formatSavedAt(file.savedAt)}
-                                    </p>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2 text-xs text-main-400">
-                                    <span>{formatFileSize(file.size)}</span>
-                                    <Icon
-                                        icon="mdi:open-in-new"
-                                        className="text-main-500 transition-colors group-hover:text-main-300"
-                                        width={16}
-                                        height={16}
-                                    />
-                                </div>
-                            </button>
+                            />
                         ))}
                     </div>
                 ) : (

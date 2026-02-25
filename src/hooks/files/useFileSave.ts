@@ -35,6 +35,16 @@ export const useFileSave = () => {
         return await api(fileIds);
     }, []);
 
+    const getAllFiles = useCallback(async (): Promise<SavedFileRecord[]> => {
+        const api = window.appApi?.files.getAllFiles;
+
+        if (!api) {
+            return [];
+        }
+
+        return await api();
+    }, []);
+
     const openFile = useCallback(async (fileId: string): Promise<boolean> => {
         const api = window.appApi?.files.openFile;
 
@@ -61,6 +71,7 @@ export const useFileSave = () => {
     return {
         isSaving,
         saveFiles,
+        getAllFiles,
         getFilesByIds,
         openFile,
         openPath,

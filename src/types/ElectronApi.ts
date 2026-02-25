@@ -49,6 +49,29 @@ export type SavedFileRecord = FileManifestEntry & {
     id: string;
 };
 
+export type VectorStorageUsedByProject = {
+    id: string;
+    title: string;
+};
+
+export type VectorStorageRecord = {
+    id: string;
+    name: string;
+    size: number;
+    lastActiveAt: string;
+    createdAt: string;
+    fileIds: string[];
+    usedByProjects: VectorStorageUsedByProject[];
+};
+
+export type UpdateVectorStoragePayload = {
+    name?: string;
+    size?: number;
+    lastActiveAt?: string;
+    fileIds?: string[];
+    projectIds?: string[];
+};
+
 export type SaveImageFromSourcePayload = {
     src: string;
     preferredFileName?: string;
@@ -212,6 +235,7 @@ export type AppApiFilesNamespace = {
     saveImageFromSource: (
         payload: SaveImageFromSourcePayload,
     ) => Promise<SaveImageFromSourceResult | null>;
+    getAllFiles: () => Promise<SavedFileRecord[]>;
     getFilesByIds: (fileIds: string[]) => Promise<SavedFileRecord[]>;
     openFile: (fileId: string) => Promise<boolean>;
     openPath: (targetPath: string) => Promise<boolean>;
@@ -235,6 +259,16 @@ export type AppApiScenariosNamespace = {
         payload: UpdateScenarioPayload,
     ) => Promise<Scenario | null>;
     deleteScenario: (scenarioId: string) => Promise<DeleteScenarioResult>;
+};
+
+export type AppApiVectorStoragesNamespace = {
+    getVectorStorages: () => Promise<VectorStorageRecord[]>;
+    createVectorStorage: () => Promise<VectorStorageRecord>;
+    updateVectorStorage: (
+        vectorStorageId: string,
+        payload: UpdateVectorStoragePayload,
+    ) => Promise<VectorStorageRecord | null>;
+    deleteVectorStorage: (vectorStorageId: string) => Promise<boolean>;
 };
 
 export type AppApiCacheNamespace = {
@@ -355,6 +389,7 @@ export type AppApi = {
     files: AppApiFilesNamespace;
     projects: AppApiProjectsNamespace;
     scenarios: AppApiScenariosNamespace;
+    vectorStorages: AppApiVectorStoragesNamespace;
     cache: AppApiCacheNamespace;
     network: AppApiNetworkNamespace;
     llm: AppApiLlmNamespace;
