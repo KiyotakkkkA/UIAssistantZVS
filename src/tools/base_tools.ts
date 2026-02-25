@@ -1,4 +1,5 @@
 import { postOllamaJson } from "../services/api";
+import { projectsStore } from "../stores/projectsStore";
 import { ToolsBuilder } from "../utils/ToolsBuilder";
 
 const postToolRequest = async (
@@ -55,6 +56,87 @@ export const baseToolsPackage = () => {
                 }
 
                 return await api.shell.execShellCommand(command, cwd);
+            },
+        })
+        .addTool({
+            name: "vector_store_search_tool",
+            description:
+                "Ищет релевантные фрагменты в подключённом к текущему проекту векторном хранилище.",
+            parameters: ToolsBuilder.objectSchema({
+                properties: {
+                    query: ToolsBuilder.stringParam(
+                        "Поисковый запрос по векторному хранилищу проекта",
+                    ),
+                    limit: ToolsBuilder.numberParam(
+                        "Максимум результатов (по умолчанию 5, максимум 10)",
+                    ),
+                },
+                required: ["query"],
+            }),
+            outputScheme: {
+                type: "object",
+                properties: {
+                    vectorStorageId: { type: "string" },
+                    hits: {
+                        type: "array",
+                        items: {
+                            type: "object",
+                            properties: {
+                                id: { type: "string" },
+                                text: { type: "string" },
+                                fileId: { type: "string" },
+                                fileName: { type: "string" },
+                                chunkIndex: { type: "number" },
+                                score: { type: "number" },
+                            },
+                        },
+                    },
+                },
+            },
+            execute: async (args) => {
+                const query = typeof args.query === "string" ? args.query : "";
+                const requestedLimit =
+                    typeof args.limit === "number" ? args.limit : 5;
+                const limit = Math.max(
+                    1,
+                    Math.min(10, Math.floor(requestedLimit)),
+                );
+                const activeProjectId = projectsStore.activeProject?.id;
+                const api = window.appApi?.vectorStorages;
+
+                if (!activeProjectId) {
+                    throw new Error(
+                        "vector_store_search_tool доступен только в чате проекта",
+                    );
+                }
+
+                if (!api) {
+                    throw new Error("API векторных хранилищ недоступен");
+                }
+
+                const vectorStorages = await api.getVectorStorages();
+                const connectedStorage = vectorStorages.find((storage) =>
+                    storage.usedByProjects.some(
+                        (projectRef) => projectRef.id === activeProjectId,
+                    ),
+                );
+
+                if (!connectedStorage) {
+                    throw new Error(
+                        "К текущему проекту не подключено векторное хранилище",
+                    );
+                }
+
+                const hits = await api.searchVectorStorage(
+                    connectedStorage.id,
+                    query,
+                    limit,
+                );
+
+                return {
+                    vectorStorageId: connectedStorage.id,
+                    hits,
+                };
             },
         })
         .addTool({

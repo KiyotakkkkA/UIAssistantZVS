@@ -4,7 +4,7 @@ import type {
     JobRealtimeEvent,
 } from "../../../src/types/ElectronApi";
 import { JobsStorage } from "./JobsStorage";
-import { VectorizationService } from "../VectorizationService";
+import { VectorizationService } from "../storage/VectorizationService";
 
 type JobRuntime = {
     abortController: AbortController;

@@ -1012,6 +1012,20 @@ class FileStorageService {
   getFileById(fileId) {
     return this.databaseService.getFileById(fileId, this.createdBy);
   }
+  deleteFileById(fileId) {
+    if (!fileId) {
+      return false;
+    }
+    const file = this.databaseService.getFileById(fileId, this.createdBy);
+    if (!file) {
+      return false;
+    }
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+    this.databaseService.deleteFilesByIds([fileId], this.createdBy);
+    return true;
+  }
   deleteFilesByIds(fileIds) {
     if (!fileIds.length) {
       return;
@@ -2102,6 +2116,13 @@ class UserDataService {
     const currentUserId = this.userProfileService.getCurrentUserId();
     return this.databaseService.getVectorStorages(currentUserId);
   }
+  getVectorStorageById(vectorStorageId) {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.getVectorStorageById(
+      vectorStorageId,
+      currentUserId
+    );
+  }
   createVectorStorage() {
     const currentUserId = this.userProfileService.getCurrentUserId();
     const vectorStorageName = `store_${randomUUID().replace(/-/g, "")}`;
@@ -2127,6 +2148,9 @@ class UserDataService {
   }
   getFileById(fileId) {
     return this.fileStorageService.getFileById(fileId);
+  }
+  deleteFileById(fileId) {
+    return this.fileStorageService.deleteFileById(fileId);
   }
   getBootData() {
     const userProfile = this.userProfileService.getUserProfile();
@@ -3717,13 +3741,13 @@ class Ollama2 extends Ollama$1 {
   }
 }
 new Ollama2();
-class Config {
+let Config$1 = class Config {
   OLLAMA_BASE_URL = "https://ollama.com";
   MIREA_BASE_URL = "https://schedule-of.mirea.ru";
   MISTRAL_BASE_URL = "https://api.mistral.ai";
   TELEGRAM_BOT_BASE_URL = "https://api.telegram.org/bot";
-}
-const Config$1 = new Config();
+};
+const Config2 = new Config$1();
 const LOCAL_OLLAMA_HOST = "http://127.0.0.1:11434";
 class OllamaService {
   cachedHost = "";
@@ -3798,7 +3822,7 @@ class OllamaService {
   }
   async streamChat(payload, token) {
     const stream2 = await this.executeWithAuthFallback(
-      Config$1.OLLAMA_BASE_URL.trim(),
+      Config2.OLLAMA_BASE_URL.trim(),
       token,
       (client) => client.chat({
         model: payload.model,
@@ -15561,6 +15585,26 @@ class LanceDbService {
     } catch {
       await db.createTable(tableName, rows);
     }
+  }
+  async search(vectorStorageId, embedding, limit) {
+    if (!embedding.length) {
+      return [];
+    }
+    const lancedb = await this.getLanceDbModule();
+    const db = await lancedb.connect(this.vectorIndexPath);
+    const tableName = this.toTableName(vectorStorageId);
+    let table;
+    try {
+      table = await db.openTable(tableName);
+    } catch (error) {
+      if (error instanceof Error && /not found|does not exist|no such table/i.test(error.message)) {
+        return [];
+      }
+      throw error;
+    }
+    const limited = Number.isFinite(limit) ? Math.max(1, Math.min(20, Math.floor(limit))) : 5;
+    const results2 = await table.search(embedding).limit(limited).toArray();
+    return Array.isArray(results2) ? results2 : [];
   }
   toTableName(vectorStorageId) {
     const normalized = vectorStorageId.toLowerCase().replace(/[^a-z0-9_]/g, "_");
@@ -27931,7 +27975,7 @@ function requireDeflate$1() {
     }
     return BS_BLOCK_DONE;
   }
-  function Config2(good_length, max_lazy, nice_length, max_chain, func) {
+  function Config3(good_length, max_lazy, nice_length, max_chain, func) {
     this.good_length = good_length;
     this.max_lazy = max_lazy;
     this.nice_length = nice_length;
@@ -27941,25 +27985,25 @@ function requireDeflate$1() {
   var configuration_table;
   configuration_table = [
     /*      good lazy nice chain */
-    new Config2(0, 0, 0, 0, deflate_stored),
+    new Config3(0, 0, 0, 0, deflate_stored),
     /* 0 store only */
-    new Config2(4, 4, 8, 4, deflate_fast),
+    new Config3(4, 4, 8, 4, deflate_fast),
     /* 1 max speed, no lazy matches */
-    new Config2(4, 5, 16, 8, deflate_fast),
+    new Config3(4, 5, 16, 8, deflate_fast),
     /* 2 */
-    new Config2(4, 6, 32, 32, deflate_fast),
+    new Config3(4, 6, 32, 32, deflate_fast),
     /* 3 */
-    new Config2(4, 4, 16, 16, deflate_slow),
+    new Config3(4, 4, 16, 16, deflate_slow),
     /* 4 lazy matches */
-    new Config2(8, 16, 32, 32, deflate_slow),
+    new Config3(8, 16, 32, 32, deflate_slow),
     /* 5 */
-    new Config2(8, 16, 128, 128, deflate_slow),
+    new Config3(8, 16, 128, 128, deflate_slow),
     /* 6 */
-    new Config2(8, 32, 128, 256, deflate_slow),
+    new Config3(8, 32, 128, 256, deflate_slow),
     /* 7 */
-    new Config2(32, 128, 258, 1024, deflate_slow),
+    new Config3(32, 128, 258, 1024, deflate_slow),
     /* 8 */
-    new Config2(32, 258, 258, 4096, deflate_slow)
+    new Config3(32, 258, 258, 4096, deflate_slow)
     /* 9 max compression */
   ];
   function lm_init(s) {
@@ -44989,8 +45033,13 @@ class VectorizationService {
     await this.lanceDbService.addVectors(vectorStorageId, embeddedRows);
     callbacks.onStage("Индексация в LanceDB завершена", "success");
     this.throwIfAborted(signal);
+    const existingStorage = this.userDataService.getVectorStorageById(vectorStorageId);
+    const existingFileIds = existingStorage?.fileIds ?? [];
     const uniqueFileIds = [
-      ...new Set(preparedFiles.map((file) => file.id))
+      .../* @__PURE__ */ new Set([
+        ...existingFileIds,
+        ...preparedFiles.map((file) => file.id)
+      ])
     ];
     await this.userDataService.updateVectorStorage(vectorStorageId, {
       fileIds: uniqueFileIds,
@@ -45678,6 +45727,10 @@ app.whenReady().then(() => {
     () => userDataService.getAllFiles()
   );
   ipcMain.handle(
+    "app:delete-file",
+    (_event, fileId) => userDataService.deleteFileById(fileId)
+  );
+  ipcMain.handle(
     "app:get-vector-storages",
     () => userDataService.getVectorStorages()
   );
@@ -45713,6 +45766,52 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:update-vector-storage",
     (_event, vectorStorageId, payload) => userDataService.updateVectorStorage(vectorStorageId, payload)
+  );
+  ipcMain.handle(
+    "app:search-vector-storage",
+    async (_event, vectorStorageId, query, limit) => {
+      const normalizedStorageId = typeof vectorStorageId === "string" ? vectorStorageId.trim() : "";
+      const normalizedQuery = typeof query === "string" ? query.trim() : "";
+      if (!normalizedStorageId) {
+        throw new Error("Не передан идентификатор vector storage");
+      }
+      if (!normalizedQuery) {
+        throw new Error("Поисковый запрос пуст");
+      }
+      const storage = userDataService.getVectorStorageById(normalizedStorageId);
+      if (!storage) {
+        throw new Error("Vector storage не найден");
+      }
+      const profile = userDataService.getBootData().userProfile;
+      const model = profile.ollamaEmbeddingModel.trim() || profile.ollamaModel.trim();
+      if (!model) {
+        throw new Error("Не задана embedding model");
+      }
+      const embedResult = await ollamaService.getEmbed(
+        {
+          model,
+          input: [normalizedQuery]
+        },
+        profile.ollamaToken
+      );
+      const queryEmbedding = embedResult.embeddings[0] && Array.isArray(embedResult.embeddings[0]) ? embedResult.embeddings[0] : [];
+      if (!queryEmbedding.length) {
+        throw new Error("Не удалось получить embedding запроса");
+      }
+      const rows = await lanceDbService.search(
+        normalizedStorageId,
+        queryEmbedding,
+        typeof limit === "number" ? limit : 5
+      );
+      return rows.map((row) => ({
+        id: row.id,
+        text: row.text,
+        fileId: row.fileId,
+        fileName: row.fileName,
+        chunkIndex: row.chunkIndex,
+        score: typeof row._distance === "number" ? row._distance : typeof row._score === "number" ? row._score : 0
+      }));
+    }
   );
   ipcMain.handle(
     "app:set-cache-entry",

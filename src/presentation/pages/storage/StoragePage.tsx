@@ -37,7 +37,7 @@ export const StoragePage = observer(function StoragePage() {
     const { createJob } = useJobs();
     const { createVectorStorage, deleteVectorStorage } = useVectorStorage();
     const { pickFiles, isUploading } = useUpload();
-    const { openFile } = useFileSave();
+    const { openFile, deleteFile } = useFileSave();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<StorageView>("files");
     const [fileSearchQuery, setFileSearchQuery] = useState("");
@@ -160,6 +160,20 @@ export const StoragePage = observer(function StoragePage() {
         [preparedVectorFiles],
     );
 
+    const containedFiles = (() => {
+        const selectedStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedStorage) {
+            return [];
+        }
+
+        const byId = new Map(files.map((file) => [file.id, file]));
+
+        return selectedStorage.fileIds
+            .map((fileId) => byId.get(fileId))
+            .filter((file): file is (typeof files)[number] => Boolean(file));
+    })();
+
     const openSelectedFile = async () => {
         const selectedFile = storageStore.selectedFile;
 
@@ -192,6 +206,32 @@ export const StoragePage = observer(function StoragePage() {
         }
 
         navigate(`/workspace/projects/${targetProjectId}`);
+    };
+
+    const deleteSelectedFile = async () => {
+        const selectedFile = storageStore.selectedFile;
+
+        if (!selectedFile) {
+            return;
+        }
+
+        const isDeleted = await deleteFile(selectedFile.id);
+
+        if (!isDeleted) {
+            toasts.warning({
+                title: "Не удалось удалить файл",
+                description: "Попробуйте ещё раз.",
+            });
+            return;
+        }
+
+        await storageStore.loadFilesData();
+        await storageStore.loadVectorStoragesData();
+
+        toasts.success({
+            title: "Файл удалён",
+            description: `${selectedFile.originalName} удалён из хранилища.`,
+        });
     };
 
     const openDeleteConfirmModal = () => {
@@ -318,6 +358,8 @@ export const StoragePage = observer(function StoragePage() {
 
         setPreparedVectorFiles([]);
         setPickedStorageFileIds([]);
+        await storageStore.loadFilesData();
+        await storageStore.loadVectorStoragesData();
     };
 
     const isActiveViewLoading =
@@ -443,6 +485,22 @@ export const StoragePage = observer(function StoragePage() {
                                                 />
                                                 <span className="ml-1">
                                                     Открыть проект
+                                                </span>
+                                            </Button>
+                                            <Button
+                                                variant="danger"
+                                                shape="rounded-lg"
+                                                className="h-8 px-3 text-xs"
+                                                onClick={() => {
+                                                    void deleteSelectedFile();
+                                                }}
+                                            >
+                                                <Icon
+                                                    icon="mdi:trash-can-outline"
+                                                    width={16}
+                                                />
+                                                <span className="ml-1">
+                                                    Удалить файл
                                                 </span>
                                             </Button>
                                         </div>
@@ -731,6 +789,33 @@ export const StoragePage = observer(function StoragePage() {
                                                 <div className="flex h-20 items-center justify-center text-xs text-main-400">
                                                     Добавьте PDF/DOCX файлы для
                                                     векторизации.
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 rounded-xl border border-main-700/70 bg-main-900/45 p-3">
+                                        <h4 className="text-sm font-semibold text-main-100">
+                                            Содержащиеся файлы
+                                        </h4>
+                                        <div className="mt-3 space-y-2">
+                                            {containedFiles.length > 0 ? (
+                                                containedFiles.map((file) => (
+                                                    <div
+                                                        key={file.id}
+                                                        className="rounded-lg border border-main-700/70 bg-main-900/55 px-3 py-2"
+                                                    >
+                                                        <p className="truncate text-sm text-main-200">
+                                                            {file.originalName}
+                                                        </p>
+                                                        <p className="text-xs text-main-400">
+                                                            {file.id}
+                                                        </p>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="flex h-16 items-center justify-center text-xs text-main-400">
+                                                    В хранилище пока нет файлов.
                                                 </div>
                                             )}
                                         </div>

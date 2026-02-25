@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createBaseDialog } from "../../static/data";
-import { DatabaseService } from "../DatabaseService";
+import { DatabaseService } from "../storage/DatabaseService";
 import type {
     ChatDialog,
     ChatDialogListItem,

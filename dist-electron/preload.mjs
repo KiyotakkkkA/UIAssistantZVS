@@ -69,6 +69,7 @@ const appApi = {
     saveImageFromSource: (payload) => electron.ipcRenderer.invoke("app:save-image-from-source", payload),
     getAllFiles: () => electron.ipcRenderer.invoke("app:get-all-files"),
     getFilesByIds: (fileIds) => electron.ipcRenderer.invoke("app:get-files-by-ids", fileIds),
+    deleteFile: (fileId) => electron.ipcRenderer.invoke("app:delete-file", fileId),
     openFile: (fileId) => electron.ipcRenderer.invoke("app:open-saved-file", fileId),
     openPath: (targetPath) => electron.ipcRenderer.invoke("app:open-path", targetPath),
     openExternalUrl: (url) => electron.ipcRenderer.invoke("app:open-external-url", url)
@@ -95,7 +96,13 @@ const appApi = {
       vectorStorageId,
       payload
     ),
-    deleteVectorStorage: (vectorStorageId) => electron.ipcRenderer.invoke("app:delete-vector-storage", vectorStorageId)
+    deleteVectorStorage: (vectorStorageId) => electron.ipcRenderer.invoke("app:delete-vector-storage", vectorStorageId),
+    searchVectorStorage: (vectorStorageId, query, limit) => electron.ipcRenderer.invoke(
+      "app:search-vector-storage",
+      vectorStorageId,
+      query,
+      limit
+    )
   },
   cache: {
     getCacheEntry: (key) => electron.ipcRenderer.invoke("app:get-cache-entry", key),

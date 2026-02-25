@@ -104,11 +104,20 @@ class ToolsStore {
     }
 
     get toolDefinitions(): OllamaToolDefinition[] {
-        const userTools = this.allTools.filter((tool) =>
-            this.enabledToolNames.has(tool.schema.function.name),
+        return this.getToolDefinitions();
+    }
+
+    getToolDefinitions(
+        excludeToolNames: string[] = [],
+    ): OllamaToolDefinition[] {
+        const excludedNames = new Set(excludeToolNames);
+        const userTools = this.allTools.filter(
+            (tool) =>
+                this.enabledToolNames.has(tool.schema.function.name) &&
+                !excludedNames.has(tool.schema.function.name),
         );
 
-        return [...userTools].map((tool) => tool.schema);
+        return userTools.map((tool) => tool.schema);
     }
 
     getFilteredPackages(query: string): ToolPackageDescriptor[] {

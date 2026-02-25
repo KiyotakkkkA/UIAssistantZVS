@@ -169,11 +169,39 @@ export function useChat() {
 
             const requestBaseHistory = [...messagesRef.current];
             const isFirstDialogMessage = requestBaseHistory.length === 0;
-            const requiredToolsInstruction =
-                toolsStore.requiredPromptInstruction;
             const activeProject = projectsStore.activeProject;
             const shouldAttachProjectPrompt =
                 activeProject?.dialogId === currentDialog.id;
+            const activeProjectId =
+                shouldAttachProjectPrompt && activeProject?.id
+                    ? activeProject.id
+                    : "";
+
+            let hasConnectedVectorStorage = false;
+            if (activeProjectId) {
+                const vectorStoragesApi = window.appApi?.vectorStorages;
+
+                if (vectorStoragesApi) {
+                    const vectorStorages =
+                        await vectorStoragesApi.getVectorStorages();
+                    hasConnectedVectorStorage = vectorStorages.some(
+                        (vectorStorage) =>
+                            vectorStorage.usedByProjects.some(
+                                (projectRef) =>
+                                    projectRef.id === activeProjectId,
+                            ),
+                    );
+                }
+            }
+
+            const requestTools = hasConnectedVectorStorage
+                ? toolsStore.toolDefinitions
+                : toolsStore.getToolDefinitions(["vector_store_search_tool"]);
+            const allowedToolNames = new Set(
+                requestTools.map((tool) => tool.function.name),
+            );
+            const requiredToolsInstruction =
+                toolsStore.requiredPromptInstruction;
 
             const initialSystemMessages: ChatMessage[] = isFirstDialogMessage
                 ? [
@@ -230,17 +258,29 @@ export function useChat() {
                     : []),
                 userMessage,
             ];
-            const requestConstraintMessages: ChatMessage[] =
-                requiredToolsInstruction
+            const requestConstraintMessages: ChatMessage[] = [
+                ...(requiredToolsInstruction
                     ? [
                           {
                               id: createMessageId(),
-                              author: "system",
+                              author: "system" as const,
                               content: requiredToolsInstruction,
                               timestamp: getTimeStamp(),
                           },
                       ]
-                    : [];
+                    : []),
+                ...(hasConnectedVectorStorage
+                    ? [
+                          {
+                              id: createMessageId(),
+                              author: "system" as const,
+                              content:
+                                  "PROJECT_VECTOR_SEARCH_POLICY: In this project chat you must always use vector_store_search_tool before producing a final answer when the task can depend on project documents or project facts.",
+                              timestamp: getTimeStamp(),
+                          },
+                      ]
+                    : []),
+            ];
 
             const historyForRequest = [
                 ...historyForStorage,
@@ -284,7 +324,7 @@ export function useChat() {
             try {
                 await adapter.send({
                     history: historyForRequest,
-                    tools: toolsStore.toolDefinitions,
+                    tools: requestTools,
                     ...(scenarioFormatHint
                         ? { format: scenarioFormatHint }
                         : {}),
@@ -293,6 +333,12 @@ export function useChat() {
                             ? userProfile.maxToolCallsPerResponse
                             : 1,
                     executeTool: async (toolName, args, meta) => {
+                        if (!allowedToolNames.has(toolName)) {
+                            throw new Error(
+                                `Tool ${toolName} недоступен в текущем чате`,
+                            );
+                        }
+
                         if (toolName !== "command_exec") {
                             return await toolsStore.executeTool(
                                 toolName,

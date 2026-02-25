@@ -5,7 +5,7 @@ import type {
     Project,
     ProjectListItem,
 } from "../../../src/types/Project";
-import { DatabaseService } from "../DatabaseService";
+import { DatabaseService } from "../storage/DatabaseService";
 import path from "node:path";
 
 export class ProjectsService {

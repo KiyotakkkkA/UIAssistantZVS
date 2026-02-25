@@ -5,6 +5,7 @@ import type {
     JobRealtimeEvent,
     JobRecord,
 } from "../types/ElectronApi";
+import { storageStore } from "./storageStore";
 
 class JobsStorage {
     isLoading = false;
@@ -208,6 +209,12 @@ class JobsStorage {
             runInAction(() => {
                 this.upsertJob(event.job);
             });
+
+            if (!event.job.isPending) {
+                void storageStore.loadVectorStoragesData();
+                void storageStore.loadFilesData();
+            }
+
             return;
         }
 

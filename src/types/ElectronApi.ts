@@ -108,6 +108,15 @@ export type VectorStorageRecord = {
     usedByProjects: VectorStorageUsedByProject[];
 };
 
+export type VectorStoreSearchHit = {
+    id: string;
+    text: string;
+    fileId: string;
+    fileName: string;
+    chunkIndex: number;
+    score: number;
+};
+
 export type UpdateVectorStoragePayload = {
     name?: string;
     size?: number;
@@ -281,6 +290,7 @@ export type AppApiFilesNamespace = {
     ) => Promise<SaveImageFromSourceResult | null>;
     getAllFiles: () => Promise<SavedFileRecord[]>;
     getFilesByIds: (fileIds: string[]) => Promise<SavedFileRecord[]>;
+    deleteFile: (fileId: string) => Promise<boolean>;
     openFile: (fileId: string) => Promise<boolean>;
     openPath: (targetPath: string) => Promise<boolean>;
     openExternalUrl: (url: string) => Promise<boolean>;
@@ -313,6 +323,11 @@ export type AppApiVectorStoragesNamespace = {
         payload: UpdateVectorStoragePayload,
     ) => Promise<VectorStorageRecord | null>;
     deleteVectorStorage: (vectorStorageId: string) => Promise<boolean>;
+    searchVectorStorage: (
+        vectorStorageId: string,
+        query: string,
+        limit?: number,
+    ) => Promise<VectorStoreSearchHit[]>;
 };
 
 export type AppApiCacheNamespace = {

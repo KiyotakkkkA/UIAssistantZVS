@@ -104,6 +104,8 @@ const appApi: AppApi = {
         getAllFiles: () => ipcRenderer.invoke("app:get-all-files"),
         getFilesByIds: (fileIds) =>
             ipcRenderer.invoke("app:get-files-by-ids", fileIds),
+        deleteFile: (fileId: string) =>
+            ipcRenderer.invoke("app:delete-file", fileId),
         openFile: (fileId) => ipcRenderer.invoke("app:open-saved-file", fileId),
         openPath: (targetPath: string) =>
             ipcRenderer.invoke("app:open-path", targetPath),
@@ -144,6 +146,17 @@ const appApi: AppApi = {
             ),
         deleteVectorStorage: (vectorStorageId: string) =>
             ipcRenderer.invoke("app:delete-vector-storage", vectorStorageId),
+        searchVectorStorage: (
+            vectorStorageId: string,
+            query: string,
+            limit?: number,
+        ) =>
+            ipcRenderer.invoke(
+                "app:search-vector-storage",
+                vectorStorageId,
+                query,
+                limit,
+            ),
     },
     cache: {
         getCacheEntry: (key: string) =>

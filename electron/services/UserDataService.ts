@@ -37,8 +37,8 @@ import { DialogsService } from "./userData/DialogsService";
 import { ProjectsService } from "./userData/ProjectsService";
 import { ScenariosService } from "./userData/ScenariosService";
 import { MetaService } from "./userData/MetaService";
-import { FileStorageService } from "./FileStorageService";
-import { DatabaseService } from "./DatabaseService";
+import { FileStorageService } from "./storage/FileStorageService";
+import { DatabaseService } from "./storage/DatabaseService";
 
 export class UserDataService {
     private readonly userProfileService: UserProfileService;
@@ -320,6 +320,14 @@ export class UserDataService {
         return this.databaseService.getVectorStorages(currentUserId);
     }
 
+    getVectorStorageById(vectorStorageId: string): VectorStorageRecord | null {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.getVectorStorageById(
+            vectorStorageId,
+            currentUserId,
+        );
+    }
+
     createVectorStorage(): VectorStorageRecord {
         const currentUserId = this.userProfileService.getCurrentUserId();
         const vectorStorageName = `store_${randomUUID().replace(/-/g, "")}`;
@@ -352,6 +360,10 @@ export class UserDataService {
 
     getFileById(fileId: string): SavedFileRecord | null {
         return this.fileStorageService.getFileById(fileId);
+    }
+
+    deleteFileById(fileId: string): boolean {
+        return this.fileStorageService.deleteFileById(fileId);
     }
 
     getBootData(): BootData {

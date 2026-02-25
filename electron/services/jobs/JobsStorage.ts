@@ -4,7 +4,7 @@ import type {
     JobEventTag,
     JobRecord,
 } from "../../../src/types/ElectronApi";
-import { DatabaseService } from "../DatabaseService";
+import { DatabaseService } from "../storage/DatabaseService";
 
 export class JobsStorage {
     constructor(

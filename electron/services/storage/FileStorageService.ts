@@ -5,7 +5,7 @@ import { DatabaseService } from "./DatabaseService";
 import type {
     SavedFileRecord,
     UploadedFileData,
-} from "../../src/types/ElectronApi";
+} from "../../../src/types/ElectronApi";
 
 export class FileStorageService {
     constructor(
@@ -57,6 +57,25 @@ export class FileStorageService {
 
     getFileById(fileId: string): SavedFileRecord | null {
         return this.databaseService.getFileById(fileId, this.createdBy);
+    }
+
+    deleteFileById(fileId: string): boolean {
+        if (!fileId) {
+            return false;
+        }
+
+        const file = this.databaseService.getFileById(fileId, this.createdBy);
+
+        if (!file) {
+            return false;
+        }
+
+        if (fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+        }
+
+        this.databaseService.deleteFilesByIds([fileId], this.createdBy);
+        return true;
     }
 
     deleteFilesByIds(fileIds: string[]): void {

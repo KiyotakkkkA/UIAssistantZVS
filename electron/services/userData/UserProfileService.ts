@@ -7,7 +7,7 @@ import type {
     VoiceRecognitionDriver,
     WorkspaceTab,
 } from "../../../src/types/App";
-import { DatabaseService } from "../DatabaseService";
+import { DatabaseService } from "../storage/DatabaseService";
 import { MetaService } from "./MetaService";
 
 const CHAT_DRIVERS = new Set<ChatDriver>(["ollama", ""]);

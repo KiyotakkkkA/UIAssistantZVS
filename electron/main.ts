@@ -10,8 +10,8 @@ import { CommandExecService } from "./services/CommandExecService";
 import { BrowserService } from "./services/BrowserService";
 import { OllamaService } from "./services/agents/OllamaService";
 import { MistralService } from "./services/agents/MistralService";
-import { LanceDbService } from "./services/LanceDbService";
-import { VectorizationService } from "./services/VectorizationService";
+import { LanceDbService } from "./services/storage/LanceDbService";
+import { VectorizationService } from "./services/storage/VectorizationService";
 import { JobsStorage } from "./services/jobs/JobsStorage";
 import { JobService } from "./services/jobs/JobService";
 import { createElectronPaths } from "./paths";
@@ -300,6 +300,9 @@ app.whenReady()
         ipcMain.handle("app:get-all-files", () =>
             userDataService.getAllFiles(),
         );
+        ipcMain.handle("app:delete-file", (_event, fileId: string) =>
+            userDataService.deleteFileById(fileId),
+        );
         ipcMain.handle("app:get-vector-storages", () =>
             userDataService.getVectorStorages(),
         );
@@ -334,6 +337,84 @@ app.whenReady()
                 vectorStorageId: string,
                 payload: UpdateVectorStoragePayload,
             ) => userDataService.updateVectorStorage(vectorStorageId, payload),
+        );
+        ipcMain.handle(
+            "app:search-vector-storage",
+            async (
+                _event,
+                vectorStorageId: string,
+                query: string,
+                limit?: number,
+            ) => {
+                const normalizedStorageId =
+                    typeof vectorStorageId === "string"
+                        ? vectorStorageId.trim()
+                        : "";
+                const normalizedQuery =
+                    typeof query === "string" ? query.trim() : "";
+
+                if (!normalizedStorageId) {
+                    throw new Error("Не передан идентификатор vector storage");
+                }
+
+                if (!normalizedQuery) {
+                    throw new Error("Поисковый запрос пуст");
+                }
+
+                const storage =
+                    userDataService.getVectorStorageById(normalizedStorageId);
+
+                if (!storage) {
+                    throw new Error("Vector storage не найден");
+                }
+
+                const profile = userDataService.getBootData().userProfile;
+                const model =
+                    profile.ollamaEmbeddingModel.trim() ||
+                    profile.ollamaModel.trim();
+
+                if (!model) {
+                    throw new Error("Не задана embedding model");
+                }
+
+                const embedResult = await ollamaService.getEmbed(
+                    {
+                        model,
+                        input: [normalizedQuery],
+                    },
+                    profile.ollamaToken,
+                );
+
+                const queryEmbedding =
+                    embedResult.embeddings[0] &&
+                    Array.isArray(embedResult.embeddings[0])
+                        ? embedResult.embeddings[0]
+                        : [];
+
+                if (!queryEmbedding.length) {
+                    throw new Error("Не удалось получить embedding запроса");
+                }
+
+                const rows = await lanceDbService.search(
+                    normalizedStorageId,
+                    queryEmbedding,
+                    typeof limit === "number" ? limit : 5,
+                );
+
+                return rows.map((row) => ({
+                    id: row.id,
+                    text: row.text,
+                    fileId: row.fileId,
+                    fileName: row.fileName,
+                    chunkIndex: row.chunkIndex,
+                    score:
+                        typeof row._distance === "number"
+                            ? row._distance
+                            : typeof row._score === "number"
+                              ? row._score
+                              : 0,
+                }));
+            },
         );
         ipcMain.handle(
             "app:set-cache-entry",

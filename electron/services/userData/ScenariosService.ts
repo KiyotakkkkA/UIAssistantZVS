@@ -5,7 +5,7 @@ import type {
     ScenarioListItem,
     UpdateScenarioPayload,
 } from "../../../src/types/Scenario";
-import { DatabaseService } from "../DatabaseService";
+import { DatabaseService } from "../storage/DatabaseService";
 
 export class ScenariosService {
     constructor(

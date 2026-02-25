@@ -3,13 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
-import { UserDataService } from "./UserDataService";
+import { UserDataService } from "../UserDataService";
 import { LanceDbService } from "./LanceDbService";
-import { OllamaService } from "./agents/OllamaService";
+import { OllamaService } from "../agents/OllamaService";
 import type {
     CreateJobPayload,
     SavedFileRecord,
-} from "../../src/types/ElectronApi";
+} from "../../../src/types/ElectronApi";
 
 type VectorizationStageTag = "info" | "success" | "warning" | "error";
 
@@ -87,8 +87,14 @@ export class VectorizationService {
 
         this.throwIfAborted(signal);
 
+        const existingStorage =
+            this.userDataService.getVectorStorageById(vectorStorageId);
+        const existingFileIds = existingStorage?.fileIds ?? [];
         const uniqueFileIds = [
-            ...new Set(preparedFiles.map((file) => file.id)),
+            ...new Set([
+                ...existingFileIds,
+                ...preparedFiles.map((file) => file.id),
+            ]),
         ];
         await this.userDataService.updateVectorStorage(vectorStorageId, {
             fileIds: uniqueFileIds,

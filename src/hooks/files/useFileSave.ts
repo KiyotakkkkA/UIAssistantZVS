@@ -55,6 +55,16 @@ export const useFileSave = () => {
         return await api(fileId);
     }, []);
 
+    const deleteFile = useCallback(async (fileId: string): Promise<boolean> => {
+        const api = window.appApi?.files.deleteFile;
+
+        if (!api) {
+            return false;
+        }
+
+        return await api(fileId);
+    }, []);
+
     const openPath = useCallback(
         async (targetPath: string): Promise<boolean> => {
             const api = window.appApi?.files.openPath;
@@ -73,6 +83,7 @@ export const useFileSave = () => {
         saveFiles,
         getAllFiles,
         getFilesByIds,
+        deleteFile,
         openFile,
         openPath,
     };

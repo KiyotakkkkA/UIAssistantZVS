@@ -9,7 +9,7 @@ import type {
     UpdateVectorStoragePayload,
     VectorStorageRecord,
     VectorStorageUsedByProject,
-} from "../../src/types/ElectronApi";
+} from "../../../src/types/ElectronApi";
 
 type CacheEntry = {
     collectedAt: number;
