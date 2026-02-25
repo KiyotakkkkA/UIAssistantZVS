@@ -61,10 +61,10 @@ export const StoredFileCard = ({
     return (
         <button
             type="button"
-            className={`group flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors cursor-pointer ${
+            className={`group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors cursor-pointer ${
                 selected
-                    ? "border-main-500/70 bg-main-800/80"
-                    : "border-main-700/70 bg-main-900/55 hover:bg-main-800/70"
+                    ? " bg-main-800/80"
+                    : "bg-main-900/55 hover:bg-main-800/70"
             }`}
             onClick={onClick}
         >

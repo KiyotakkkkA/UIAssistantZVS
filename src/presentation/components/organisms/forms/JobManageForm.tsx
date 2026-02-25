@@ -194,7 +194,7 @@ export const JobManageForm = () => {
 
     return (
         <div className="grid h-full min-h-[68vh] grid-cols-[420px_1fr] gap-4">
-            <aside className="flex min-h-0 flex-col rounded-2xl border border-main-700/70 bg-main-900/40 p-3">
+            <aside className="flex min-h-0 flex-col rounded-2xl bg-main-900/40">
                 <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-main-100">
@@ -299,7 +299,7 @@ export const JobManageForm = () => {
                 </div>
             </aside>
 
-            <section className="flex min-h-0 flex-col rounded-2xl border border-main-700/70 bg-main-900/40 p-4">
+            <section className="flex min-h-0 flex-col border-l border-main-700/70 bg-main-900/40 p-4">
                 {selectedJob ? (
                     <>
                         <div className="mb-4 flex items-center justify-between gap-3">

@@ -1,11 +1,16 @@
 {
     "name": "assistant-zvs",
     "private": true,
-    "version": "0.0.0",
+    "version": "0.1.0",
+    "description": "Desktop AI assistant with project chats, tools, and vector storage.",
+    "author": "ZVS Team",
     "type": "module",
     "scripts": {
         "dev": "vite --host",
-        "build": "tsc && vite build && electron-builder",
+        "typecheck": "tsc --noEmit && tsc --project tsconfig.node.json --noEmit",
+        "build:app": "vite build",
+        "build": "npm run typecheck && npm run build:app && electron-builder",
+        "release:win": "npm run typecheck && npm run build:app && electron-builder --win --x64",
         "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
         "deps:rebuild": "npx electron-rebuild -f -w better-sqlite3",
         "preview": "vite preview"

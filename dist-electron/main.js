@@ -2193,6 +2193,7 @@ class UserDataService {
     this.databaseService.setCacheEntry(key, entry);
   }
 }
+const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const decodeOutput = (buffer) => {
   const utf82 = buffer.toString("utf8");
   if (process.platform !== "win32") {
@@ -2226,22 +2227,55 @@ class CommandExecService {
       });
       const stdoutChunks = [];
       const stderrChunks = [];
+      let stdoutBytes = 0;
+      let stderrBytes = 0;
+      let stdoutTruncated = false;
+      let stderrTruncated = false;
+      const appendChunk = (chunks, chunk, bytes) => {
+        if (bytes >= MAX_OUTPUT_BYTES) {
+          return {
+            nextBytes: bytes,
+            truncated: true
+          };
+        }
+        const remaining = MAX_OUTPUT_BYTES - bytes;
+        if (chunk.byteLength <= remaining) {
+          chunks.push(chunk);
+          return {
+            nextBytes: bytes + chunk.byteLength,
+            truncated: false
+          };
+        }
+        chunks.push(chunk.subarray(0, remaining));
+        return {
+          nextBytes: MAX_OUTPUT_BYTES,
+          truncated: true
+        };
+      };
       child.stdout.on("data", (chunk) => {
-        stdoutChunks.push(
-          Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
-        );
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        const result = appendChunk(stdoutChunks, buffer, stdoutBytes);
+        stdoutBytes = result.nextBytes;
+        stdoutTruncated = stdoutTruncated || result.truncated;
       });
       child.stderr.on("data", (chunk) => {
-        stderrChunks.push(
-          Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
-        );
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+        const result = appendChunk(stderrChunks, buffer, stderrBytes);
+        stderrBytes = result.nextBytes;
+        stderrTruncated = stderrTruncated || result.truncated;
       });
       child.on("error", (error) => {
         reject(error);
       });
       child.on("close", (code) => {
-        const stdout = decodeOutput(Buffer.concat(stdoutChunks));
-        const stderr = decodeOutput(Buffer.concat(stderrChunks));
+        const stdoutBase = decodeOutput(Buffer.concat(stdoutChunks));
+        const stderrBase = decodeOutput(Buffer.concat(stderrChunks));
+        const stdout = stdoutTruncated ? `${stdoutBase}
+
+[output truncated to ${MAX_OUTPUT_BYTES} bytes]` : stdoutBase;
+        const stderr = stderrTruncated ? `${stderrBase}
+
+[output truncated to ${MAX_OUTPUT_BYTES} bytes]` : stderrBase;
         resolve2({
           command: trimmedCommand,
           cwd: resolvedCwd,
@@ -3741,13 +3775,13 @@ class Ollama2 extends Ollama$1 {
   }
 }
 new Ollama2();
-let Config$1 = class Config {
+class Config {
   OLLAMA_BASE_URL = "https://ollama.com";
   MIREA_BASE_URL = "https://schedule-of.mirea.ru";
   MISTRAL_BASE_URL = "https://api.mistral.ai";
   TELEGRAM_BOT_BASE_URL = "https://api.telegram.org/bot";
-};
-const Config2 = new Config$1();
+}
+const Config$1 = new Config();
 const LOCAL_OLLAMA_HOST = "http://127.0.0.1:11434";
 class OllamaService {
   cachedHost = "";
@@ -3822,7 +3856,7 @@ class OllamaService {
   }
   async streamChat(payload, token) {
     const stream2 = await this.executeWithAuthFallback(
-      Config2.OLLAMA_BASE_URL.trim(),
+      Config$1.OLLAMA_BASE_URL.trim(),
       token,
       (client) => client.chat({
         model: payload.model,
@@ -27975,7 +28009,7 @@ function requireDeflate$1() {
     }
     return BS_BLOCK_DONE;
   }
-  function Config3(good_length, max_lazy, nice_length, max_chain, func) {
+  function Config2(good_length, max_lazy, nice_length, max_chain, func) {
     this.good_length = good_length;
     this.max_lazy = max_lazy;
     this.nice_length = nice_length;
@@ -27985,25 +28019,25 @@ function requireDeflate$1() {
   var configuration_table;
   configuration_table = [
     /*      good lazy nice chain */
-    new Config3(0, 0, 0, 0, deflate_stored),
+    new Config2(0, 0, 0, 0, deflate_stored),
     /* 0 store only */
-    new Config3(4, 4, 8, 4, deflate_fast),
+    new Config2(4, 4, 8, 4, deflate_fast),
     /* 1 max speed, no lazy matches */
-    new Config3(4, 5, 16, 8, deflate_fast),
+    new Config2(4, 5, 16, 8, deflate_fast),
     /* 2 */
-    new Config3(4, 6, 32, 32, deflate_fast),
+    new Config2(4, 6, 32, 32, deflate_fast),
     /* 3 */
-    new Config3(4, 4, 16, 16, deflate_slow),
+    new Config2(4, 4, 16, 16, deflate_slow),
     /* 4 lazy matches */
-    new Config3(8, 16, 32, 32, deflate_slow),
+    new Config2(8, 16, 32, 32, deflate_slow),
     /* 5 */
-    new Config3(8, 16, 128, 128, deflate_slow),
+    new Config2(8, 16, 128, 128, deflate_slow),
     /* 6 */
-    new Config3(8, 32, 128, 256, deflate_slow),
+    new Config2(8, 32, 128, 256, deflate_slow),
     /* 7 */
-    new Config3(32, 128, 258, 1024, deflate_slow),
+    new Config2(32, 128, 258, 1024, deflate_slow),
     /* 8 */
-    new Config3(32, 258, 258, 4096, deflate_slow)
+    new Config2(32, 258, 258, 4096, deflate_slow)
     /* 9 max compression */
   ];
   function lm_init(s) {
@@ -45493,6 +45527,7 @@ process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+const APP_ID = "com.zvs.assistant";
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 let win;
 let userDataService;
@@ -45501,6 +45536,17 @@ let browserService;
 let ollamaService;
 let mistralService;
 let jobService;
+app.setAppUserModelId(APP_ID);
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+}
+process.on("uncaughtException", (error) => {
+  console.error("[main] uncaughtException", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[main] unhandledRejection", reason);
+});
 const mimeByExtension = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -45590,6 +45636,16 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+app.on("second-instance", () => {
+  if (!win) {
+    createWindow();
+    return;
+  }
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  win.focus();
 });
 app.whenReady().then(() => {
   const appPaths = createElectronPaths(app.getPath("userData"));

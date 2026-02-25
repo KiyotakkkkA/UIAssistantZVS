@@ -1,30 +1,53 @@
-# React + TypeScript + Vite
+# ZVS Assistant
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Desktop AI assistant (Electron + React + TypeScript) with:
 
-Currently, two official plugins are available:
+- project-oriented chats,
+- tool calling,
+- background jobs,
+- vector storage and document vectorization.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Requirements
 
-## Expanding the ESLint configuration
+- Node.js 20+
+- npm 10+
+- Windows/macOS/Linux
+- For embeddings/vectorization: local Ollama on `http://127.0.0.1:11434`
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+## Development
 
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
+```bash
+npm install
+npm run dev
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+## Quality gates
+
+```bash
+npm run typecheck
+npm run lint
+```
+
+## Build
+
+```bash
+npm run build
+```
+
+Windows-only release build:
+
+```bash
+npm run release:win
+```
+
+## Release checklist
+
+- Verify `electron-builder.json5` values (`appId`, `productName`, artifacts)
+- Ensure native deps are available for packaging (`better-sqlite3`, `@lancedb/lancedb`)
+- Run `npm run typecheck` and `npm run lint`
+- Run `npm run build` on target platform
+- Smoke-test packaged app:
+    - chat streaming,
+    - tool execution,
+    - job creation/cancel,
+    - vectorization + vector search.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import { Icon } from "@iconify/react";
 import { useJobs, useToasts, useVectorStorage } from "../../../hooks";
@@ -538,7 +538,7 @@ export const StoragePage = observer(function StoragePage() {
                     </div>
                 </div>
             ) : (
-                <div className="min-h-0 flex-1 rounded-2xl border border-main-700/70 bg-main-900/60 p-3">
+                <div className="min-h-0 flex-1 rounded-2xl bg-main-900/60">
                     <div className="grid h-full min-h-0 grid-cols-[360px_1fr] gap-3">
                         <aside className="flex min-h-0 flex-col gap-3 border-r border-main-700/70 pr-3">
                             <InputSmall
@@ -556,11 +556,11 @@ export const StoragePage = observer(function StoragePage() {
                                             <button
                                                 key={vectorStorage.id}
                                                 type="button"
-                                                className={`w-full rounded-xl border px-3 py-3 text-left transition-colors cursor-pointer ${
+                                                className={`w-full rounded-xl px-3 py-3 text-left transition-colors cursor-pointer ${
                                                     vectorStorage.id ===
                                                     storageStore.selectedVectorStorageId
-                                                        ? "border-main-500/70 bg-main-800/80"
-                                                        : "border-main-700/70 bg-main-900/55 hover:bg-main-800/70"
+                                                        ? " bg-main-800/80"
+                                                        : "bg-main-900/55 hover:bg-main-800/70"
                                                 }`}
                                                 onClick={() => {
                                                     storageStore.setSelectedVectorStorageId(
@@ -603,23 +603,27 @@ export const StoragePage = observer(function StoragePage() {
                                             ?.name || "Без названия"}
                                     </h3>
                                 </div>
-                                <div className="space-x-4">
+                                <div className="space-x-2">
                                     <Button
-                                        variant="primary"
-                                        shape="rounded-lg"
+                                        variant="success"
+                                        shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
-                                            void createVectorStorage();
+                                            void runVectorization();
                                         }}
                                     >
-                                        <Icon icon="mdi:plus" width={16} />
-                                        <span className="ml-1">
-                                            Создать новое
+                                        <Icon
+                                            icon="mdi:play-circle-outline"
+                                            className="text-main-900"
+                                            width={16}
+                                        />
+                                        <span className="ml-1 text-main-900">
+                                            Индекс
                                         </span>
                                     </Button>
                                     <Button
                                         variant="secondary"
-                                        shape="rounded-lg"
+                                        shape="rounded-l-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             void addFilesFromExplorer();
@@ -636,7 +640,7 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="secondary"
-                                        shape="rounded-lg"
+                                        shape="rounded-r-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             setPickedStorageFileIds(
@@ -655,21 +659,20 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="primary"
-                                        shape="rounded-lg"
+                                        shape="rounded-l-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
-                                            void runVectorization();
+                                            void createVectorStorage();
                                         }}
                                     >
-                                        <Icon
-                                            icon="mdi:play-circle-outline"
-                                            width={16}
-                                        />
-                                        <span className="ml-1">Запустить</span>
+                                        <Icon icon="mdi:plus" width={16} />
+                                        <span className="ml-1">
+                                            Создать новое
+                                        </span>
                                     </Button>
                                     <Button
                                         variant="danger"
-                                        shape="rounded-lg"
+                                        shape="rounded-r-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             openDeleteConfirmModal();
@@ -679,9 +682,6 @@ export const StoragePage = observer(function StoragePage() {
                                             icon="mdi:trash-can-outline"
                                             width={16}
                                         />
-                                        <span className="ml-1">
-                                            Удалить текущее
-                                        </span>
                                     </Button>
                                 </div>
                             </div>
@@ -723,7 +723,12 @@ export const StoragePage = observer(function StoragePage() {
                                         </p>
                                     </div>
 
-                                    <div className="mt-4 rounded-xl border border-main-600/70 bg-main-800/45 p-3 text-sm text-main-200">
+                                    <div className="mt-4 rounded-xl border border-yellow-600/70 bg-yellow-800/45 p-3 text-sm text-yellow-200">
+                                        <Icon
+                                            icon="mdi:warning-outline"
+                                            width={20}
+                                            className="inline-block mr-3"
+                                        />
                                         Для векторизации должна быть запущена
                                         локальная Ollama-модель
                                         <span className="font-semibold">
@@ -825,15 +830,50 @@ export const StoragePage = observer(function StoragePage() {
                                         <h4 className="text-sm font-semibold text-main-100">
                                             Используется в проектах
                                         </h4>
-                                        <div className="mt-3 flex h-20 items-center justify-center text-xs text-main-400">
+                                        <div className="mt-3 flex h-20 items-center text-xs text-main-400">
                                             {storageStore.selectedVectorStorage
                                                 .usedByProjects.length > 0
-                                                ? storageStore.selectedVectorStorage.usedByProjects
-                                                      .map(
-                                                          (project) =>
-                                                              project.title,
-                                                      )
-                                                      .join(", ")
+                                                ? storageStore.selectedVectorStorage.usedByProjects.map(
+                                                      (project) => {
+                                                          return (
+                                                              <Link
+                                                                  key={
+                                                                      project.id
+                                                                  }
+                                                                  to={`/workspace/projects/${project.id}`}
+                                                                  className="rounded-lg border gap-2 items-center flex border-main-700/70 bg-main-900/55 px-3 py-2 transition-colors group hover:bg-indigo-400 hover:text-main-900"
+                                                              >
+                                                                  <div className="block group-hover:hidden">
+                                                                      <Icon
+                                                                          icon="mdi:folder"
+                                                                          width={
+                                                                              18
+                                                                          }
+                                                                          height={
+                                                                              18
+                                                                          }
+                                                                      />
+                                                                  </div>
+                                                                  <div className="hidden group-hover:block">
+                                                                      <Icon
+                                                                          icon="mdi:open-in-new"
+                                                                          width={
+                                                                              18
+                                                                          }
+                                                                          height={
+                                                                              18
+                                                                          }
+                                                                      />
+                                                                  </div>
+                                                                  <span className="truncate capitalize">
+                                                                      {
+                                                                          project.title
+                                                                      }
+                                                                  </span>
+                                                              </Link>
+                                                          );
+                                                      },
+                                                  )
                                                 : "Не используется ни в одном проекте."}
                                         </div>
                                     </div>

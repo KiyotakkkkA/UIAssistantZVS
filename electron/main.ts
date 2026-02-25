@@ -51,6 +51,8 @@ export const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
 export const MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 
+const APP_ID = "com.zvs.assistant";
+
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
     ? path.join(process.env.APP_ROOT, "public")
     : RENDERER_DIST;
@@ -62,6 +64,22 @@ let browserService: BrowserService;
 let ollamaService: OllamaService;
 let mistralService: MistralService;
 let jobService: JobService;
+
+app.setAppUserModelId(APP_ID);
+
+const singleInstanceLock = app.requestSingleInstanceLock();
+
+if (!singleInstanceLock) {
+    app.quit();
+}
+
+process.on("uncaughtException", (error) => {
+    console.error("[main] uncaughtException", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+    console.error("[main] unhandledRejection", reason);
+});
 
 const mimeByExtension: Record<string, string> = {
     ".png": "image/png",
@@ -170,6 +188,19 @@ app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
+
+app.on("second-instance", () => {
+    if (!win) {
+        createWindow();
+        return;
+    }
+
+    if (win.isMinimized()) {
+        win.restore();
+    }
+
+    win.focus();
 });
 
 app.whenReady()
