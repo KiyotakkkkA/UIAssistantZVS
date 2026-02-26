@@ -374,9 +374,25 @@ app.whenReady()
                         : undefined;
 
                 if (normalizedDataPath !== undefined) {
-                    const sizeFromDataPath = normalizedDataPath
-                        ? await lanceDbService.getDataPathSizeBytes(
+                    const resolvedDataPathReference = normalizedDataPath
+                        ? await lanceDbService.resolveDataPathReference(
                               normalizedDataPath,
+                          )
+                        : null;
+
+                    if (normalizedDataPath && !resolvedDataPathReference) {
+                        throw new Error(
+                            "Путь должен указывать на папку таблицы .lance или директорию с единственной таблицей .lance",
+                        );
+                    }
+
+                    const effectiveDataPath = normalizedDataPath
+                        ? resolvedDataPathReference!.dataPath
+                        : "";
+
+                    const sizeFromDataPath = effectiveDataPath
+                        ? await lanceDbService.getDataPathSizeBytes(
+                              effectiveDataPath,
                           )
                         : 0;
 
@@ -384,7 +400,7 @@ app.whenReady()
                         vectorStorageId,
                         {
                             ...payload,
-                            dataPath: normalizedDataPath,
+                            dataPath: effectiveDataPath,
                             size: sizeFromDataPath,
                             lastActiveAt: new Date().toISOString(),
                         },
@@ -427,6 +443,14 @@ app.whenReady()
                     throw new Error("Vector storage не найден");
                 }
 
+                const dataPath = storage.dataPath.trim();
+
+                if (!dataPath) {
+                    throw new Error(
+                        "Для векторного хранилища не задан путь к индексу",
+                    );
+                }
+
                 const profile = userDataService.getBootData().userProfile;
                 const model =
                     profile.ollamaEmbeddingModel.trim() ||
@@ -455,10 +479,9 @@ app.whenReady()
                 }
 
                 const rows = await lanceDbService.search(
-                    normalizedStorageId,
+                    dataPath,
                     queryEmbedding,
                     typeof limit === "number" ? limit : 5,
-                    storage.dataPath,
                 );
 
                 return rows.map((row) => ({

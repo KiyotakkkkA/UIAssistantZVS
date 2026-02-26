@@ -37,6 +37,17 @@ export class VectorizationService {
             throw new Error("Не передан идентификатор векторного хранилища");
         }
 
+        const storage =
+            this.userDataService.getVectorStorageById(vectorStorageId);
+
+        if (!storage) {
+            throw new Error("Векторное хранилище не найдено");
+        }
+
+        const activeDataPath =
+            storage.dataPath.trim() ||
+            this.lanceDbService.getDefaultDataPath(vectorStorageId);
+
         this.throwIfAborted(signal);
 
         callbacks.onStage("Стадия подготовки файлов начата", "info");
@@ -80,14 +91,12 @@ export class VectorizationService {
             `Передача ${embeddedRows.length} векторов в индекс LanceDB`,
             "info",
         );
-        await this.lanceDbService.addVectors(vectorStorageId, embeddedRows);
+        await this.lanceDbService.addVectors(activeDataPath, embeddedRows);
         callbacks.onStage("Индексация в LanceDB завершена", "success");
 
         this.throwIfAborted(signal);
 
-        const existingStorage =
-            this.userDataService.getVectorStorageById(vectorStorageId);
-        const existingFileIds = existingStorage?.fileIds ?? [];
+        const existingFileIds = storage.fileIds ?? [];
         const preparedPersistedFileIds = preparedFiles
             .map((file) => file.persistedFileId)
             .filter((fileId): fileId is string => Boolean(fileId));
@@ -95,15 +104,11 @@ export class VectorizationService {
             ...new Set([...existingFileIds, ...preparedPersistedFileIds]),
         ];
         const vectorStorageSizeBytes =
-            await this.lanceDbService.getStorageDataSizeBytes(vectorStorageId);
-        const resolvedIndexDataPath =
-            await this.lanceDbService.resolveStorageDataPath(vectorStorageId);
+            await this.lanceDbService.getDataPathSizeBytes(activeDataPath);
         await this.userDataService.updateVectorStorage(vectorStorageId, {
             fileIds: uniqueFileIds,
             size: vectorStorageSizeBytes,
-            ...(resolvedIndexDataPath
-                ? { dataPath: resolvedIndexDataPath }
-                : {}),
+            dataPath: activeDataPath,
             lastActiveAt: new Date().toISOString(),
         });
 

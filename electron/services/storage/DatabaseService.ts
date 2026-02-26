@@ -733,9 +733,17 @@ export class DatabaseService {
         return rows.map((row) => row.id);
     }
 
-    createVectorStorage(createdBy: string, name: string): VectorStorageRecord {
+    createVectorStorage(
+        createdBy: string,
+        name: string,
+        dataPath: string,
+        vectorStorageId?: string,
+    ): VectorStorageRecord {
         const now = new Date().toISOString();
-        const vectorStorageId = `vs_${randomUUID().replace(/-/g, "")}`;
+        const normalizedVectorStorageId =
+            typeof vectorStorageId === "string" && vectorStorageId.trim()
+                ? vectorStorageId.trim()
+                : `vs_${randomUUID().replace(/-/g, "")}`;
 
         this.database
             .prepare(
@@ -753,9 +761,18 @@ export class DatabaseService {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `,
             )
-            .run(vectorStorageId, name, 0, "", now, now, now, createdBy);
+            .run(
+                normalizedVectorStorageId,
+                name,
+                0,
+                typeof dataPath === "string" ? dataPath.trim() : "",
+                now,
+                now,
+                now,
+                createdBy,
+            );
 
-        return this.getVectorStorageById(vectorStorageId, createdBy)!;
+        return this.getVectorStorageById(normalizedVectorStorageId, createdBy)!;
     }
 
     deleteVectorStorage(vectorStorageId: string, createdBy: string): boolean {

@@ -12,17 +12,17 @@ export class LanceDbService {
 
     constructor(private readonly vectorIndexPath: string) {}
 
-    async addVectors(
-        vectorStorageId: string,
-        rows: LanceVectorRow[],
-    ): Promise<void> {
+    async addVectors(dataPath: string, rows: LanceVectorRow[]): Promise<void> {
         if (!rows.length) {
             return;
         }
 
+        const normalizedPath = this.normalizeDataPath(dataPath);
+        const { databasePath, tableName } =
+            await this.getDataPathReferenceOrThrow(normalizedPath);
+
         const lancedb = await this.getLanceDbModule();
-        const db = await lancedb.connect(this.vectorIndexPath);
-        const tableName = this.toTableName(vectorStorageId);
+        const db = await lancedb.connect(databasePath);
 
         try {
             const table = await db.openTable(tableName);
@@ -34,29 +34,20 @@ export class LanceDbService {
     }
 
     async search(
-        vectorStorageId: string,
+        dataPath: string,
         embedding: number[],
         limit: number,
-        dataPath?: string,
     ): Promise<LanceSearchResultRow[]> {
         if (!embedding.length) {
             return [];
         }
 
-        let table: unknown;
-
-        try {
-            table = await this.openSearchTable(vectorStorageId, dataPath);
-        } catch (error) {
-            if (
-                error instanceof Error &&
-                /not found|does not exist|no such table/i.test(error.message)
-            ) {
-                return [];
-            }
-
-            throw error;
-        }
+        const normalizedPath = this.normalizeDataPath(dataPath);
+        const { databasePath, tableName } =
+            await this.getDataPathReferenceOrThrow(normalizedPath);
+        const lancedb = await this.getLanceDbModule();
+        const db = await lancedb.connect(databasePath);
+        const table = await db.openTable(tableName);
 
         const limited = Number.isFinite(limit)
             ? Math.max(1, Math.min(20, Math.floor(limit)))
@@ -78,23 +69,9 @@ export class LanceDbService {
         return Array.isArray(results) ? results : [];
     }
 
-    async resolveStorageDataPath(vectorStorageId: string): Promise<string> {
-        const candidatePaths =
-            await this.findStorageCandidatePaths(vectorStorageId);
-
-        if (!candidatePaths.length) {
-            return "";
-        }
-
-        const candidatesWithStats = await Promise.all(
-            candidatePaths.map(async (candidatePath) => ({
-                path: candidatePath,
-                size: await this.getPathSizeBytes(candidatePath),
-            })),
-        );
-
-        candidatesWithStats.sort((left, right) => right.size - left.size);
-        return candidatesWithStats[0]?.path ?? "";
+    getDefaultDataPath(vectorStorageId: string): string {
+        const normalized = this.toTableName(vectorStorageId);
+        return path.join(this.vectorIndexPath, `${normalized}.lance`);
     }
 
     async getDataPathSizeBytes(dataPath: string): Promise<number> {
@@ -107,21 +84,73 @@ export class LanceDbService {
         return this.getPathSizeBytes(normalized);
     }
 
-    async getStorageDataSizeBytes(vectorStorageId: string): Promise<number> {
-        const candidatePaths =
-            await this.findStorageCandidatePaths(vectorStorageId);
+    async resolveDataPathReference(dataPath: string): Promise<{
+        databasePath: string;
+        tableName: string;
+        dataPath: string;
+    } | null> {
+        const normalized = this.normalizeDataPath(dataPath);
 
-        if (!candidatePaths.length) {
-            return 0;
+        if (!normalized) {
+            return null;
         }
 
-        const sizes = await Promise.all(
-            candidatePaths.map((candidatePath) =>
-                this.getPathSizeBytes(candidatePath),
-            ),
-        );
+        let stats;
 
-        return sizes.reduce((sum, current) => sum + current, 0);
+        try {
+            stats = await fs.stat(normalized);
+        } catch {
+            return null;
+        }
+
+        if (!stats.isDirectory()) {
+            return null;
+        }
+
+        const baseName = path.basename(normalized);
+
+        if (/\.lance$/i.test(baseName)) {
+            return {
+                databasePath: path.dirname(normalized),
+                tableName: baseName.replace(/\.lance$/i, ""),
+                dataPath: normalized,
+            };
+        }
+
+        let entries: Array<{
+            name: string;
+            isDirectory: () => boolean;
+        }> = [];
+
+        try {
+            entries = await fs.readdir(normalized, { withFileTypes: true });
+        } catch {
+            return null;
+        }
+
+        const tableDirs = entries
+            .filter(
+                (entry) => entry.isDirectory() && /\.lance$/i.test(entry.name),
+            )
+            .map((entry) => entry.name);
+
+        if (!tableDirs.length) {
+            return null;
+        }
+
+        if (tableDirs.length > 1) {
+            return null;
+        }
+
+        const selectedTableDirName = tableDirs[0];
+
+        const selectedDataPath = path.join(normalized, selectedTableDirName);
+
+        return {
+            databasePath: normalized,
+            tableName: selectedTableDirName.replace(/\.lance$/i, ""),
+            dataPath: selectedDataPath,
+        };
     }
 
     private toTableName(vectorStorageId: string): string {
@@ -183,66 +212,23 @@ export class LanceDbService {
         return nestedSizes.reduce((sum, current) => sum + current, 0);
     }
 
-    private async findStorageCandidatePaths(
-        vectorStorageId: string,
-    ): Promise<string[]> {
-        const normalized = this.toTableName(vectorStorageId);
-
-        let entries: Array<{
-            name: string;
-            isFile: () => boolean;
-            isDirectory: () => boolean;
-        }> = [];
-
-        try {
-            entries = await fs.readdir(this.vectorIndexPath, {
-                withFileTypes: true,
-            });
-        } catch {
-            return [];
-        }
-
-        return entries
-            .filter((entry) => {
-                const lowerName = entry.name.toLowerCase();
-
-                return (
-                    lowerName === normalized ||
-                    lowerName === `${normalized}.lance` ||
-                    lowerName.startsWith(`${normalized}_`) ||
-                    lowerName.startsWith(`${normalized}.`)
-                );
-            })
-            .map((entry) => path.join(this.vectorIndexPath, entry.name));
+    private normalizeDataPath(dataPath: string): string {
+        return typeof dataPath === "string" ? dataPath.trim() : "";
     }
 
-    private async openSearchTable(
-        vectorStorageId: string,
-        dataPath?: string,
-    ): Promise<unknown> {
-        const lancedb = await this.getLanceDbModule();
-        const normalizedDataPath =
-            typeof dataPath === "string" ? dataPath.trim() : "";
+    private async getDataPathReferenceOrThrow(dataPath: string): Promise<{
+        databasePath: string;
+        tableName: string;
+        dataPath: string;
+    }> {
+        const resolved = await this.resolveDataPathReference(dataPath);
 
-        if (normalizedDataPath) {
-            const tableNameFromPath = path
-                .basename(normalizedDataPath)
-                .replace(/\.lance$/i, "")
-                .trim();
-            const databasePathFromDataPath = path.dirname(normalizedDataPath);
-
-            if (tableNameFromPath && databasePathFromDataPath) {
-                try {
-                    const db = await lancedb.connect(databasePathFromDataPath);
-                    return await db.openTable(tableNameFromPath);
-                } catch {
-                    // fallback to default storage root and id-based table name
-                }
-            }
+        if (!resolved) {
+            throw new Error(
+                "Некорректный путь vector storage: укажите папку таблицы .lance или директорию с единственной таблицей .lance",
+            );
         }
 
-        const db = await lancedb.connect(this.vectorIndexPath);
-        const tableName = this.toTableName(vectorStorageId);
-        return db.openTable(tableName);
+        return resolved;
     }
 }

@@ -31,6 +31,7 @@ import type {
     UpdateScenarioPayload,
 } from "../../src/types/Scenario";
 import type { ElectronPaths } from "../paths";
+import path from "node:path";
 import { UserProfileService } from "./userData/UserProfileService";
 import { ThemesService } from "./userData/ThemesService";
 import { DialogsService } from "./userData/DialogsService";
@@ -49,9 +50,11 @@ export class UserDataService {
     private readonly fileStorageService: FileStorageService;
     private readonly databaseService: DatabaseService;
     private readonly defaultProjectsDirectory: string;
+    private readonly vectorIndexPath: string;
 
     constructor(paths: ElectronPaths) {
         this.defaultProjectsDirectory = paths.defaultProjectsDirectory;
+        this.vectorIndexPath = paths.vectorIndexPath;
 
         this.databaseService = new DatabaseService(paths.databasePath);
         const metaService = new MetaService(paths.metaPath);
@@ -332,9 +335,17 @@ export class UserDataService {
         const currentUserId = this.userProfileService.getCurrentUserId();
         const vectorStorageName = `store_${randomUUID().replace(/-/g, "")}`;
 
+        const vectorStorageId = `vs_${randomUUID().replace(/-/g, "")}`;
+        const defaultDataPath = path.join(
+            this.vectorIndexPath,
+            `${vectorStorageId}.lance`,
+        );
+
         return this.databaseService.createVectorStorage(
             currentUserId,
             vectorStorageName,
+            defaultDataPath,
+            vectorStorageId,
         );
     }
 
