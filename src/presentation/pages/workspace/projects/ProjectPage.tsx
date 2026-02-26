@@ -84,21 +84,7 @@ export const ProjectPage = observer(function ProjectPage() {
         void storageStore.loadVectorStoragesData();
     }, [isDocumentsOpen]);
 
-    const linkedVectorStorage = (() => {
-        const projectId = activeProject?.id;
-
-        if (!projectId) {
-            return null;
-        }
-
-        return (
-            storageStore.vectorStorages.find((vectorStorage) =>
-                vectorStorage.usedByProjects.some(
-                    (projectRef) => projectRef.id === projectId,
-                ),
-            ) ?? null
-        );
-    })();
+    const linkedVectorStorage = activeProject?.linkedVectorStorage ?? null;
 
     useEffect(() => {
         if (!isDocumentsOpen) {
@@ -208,6 +194,7 @@ export const ProjectPage = observer(function ProjectPage() {
             }
 
             await storageStore.loadVectorStoragesData();
+            await switchProject(projectId);
             setSelectedVectorStorageId(selectedVectorStorageId);
 
             toasts.success({

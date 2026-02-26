@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import type {
     CreateProjectPayload,
+    ProjectLinkedVectorStorage,
     Project,
     ProjectListItem,
 } from "../../../src/types/Project";
@@ -22,7 +23,13 @@ export class ProjectsService {
 
     getProjectById(projectId: string): Project | null {
         const projects = this.readProjects();
-        return projects.find((project) => project.id === projectId) ?? null;
+        const project = projects.find((item) => item.id === projectId) ?? null;
+
+        if (!project) {
+            return null;
+        }
+
+        return this.attachLinkedVectorStorage(project);
     }
 
     createProject(
@@ -43,12 +50,13 @@ export class ProjectsService {
             dialogId: payload.dialogId,
             fileUUIDs: this.normalizeFileIds(payload.fileUUIDs),
             requiredTools: this.normalizeRequiredTools(payload.requiredTools),
+            linkedVectorStorage: null,
             createdAt: now,
             updatedAt: now,
         };
 
         this.writeProject(project);
-        return project;
+        return this.attachLinkedVectorStorage(project);
     }
 
     deleteProject(projectId: string): Project | null {
@@ -163,6 +171,7 @@ export class ProjectsService {
                 requiredTools: this.normalizeRequiredTools(
                     parsed.requiredTools,
                 ),
+                linkedVectorStorage: null,
                 createdAt:
                     typeof parsed.createdAt === "string" && parsed.createdAt
                         ? parsed.createdAt
@@ -200,6 +209,30 @@ export class ProjectsService {
             }),
             updatedAt: project.updatedAt,
             dialogId: project.dialogId,
+        };
+    }
+
+    private attachLinkedVectorStorage(project: Project): Project {
+        const vectorStorages = this.databaseService.getVectorStorages(
+            this.createdBy,
+        );
+        const linkedStorage = vectorStorages.find((vectorStorage) =>
+            vectorStorage.usedByProjects.some(
+                (projectRef) => projectRef.id === project.id,
+            ),
+        );
+
+        const linkedVectorStorage: ProjectLinkedVectorStorage | null =
+            linkedStorage
+                ? {
+                      id: linkedStorage.id,
+                      name: linkedStorage.name,
+                  }
+                : null;
+
+        return {
+            ...project,
+            linkedVectorStorage,
         };
     }
 }

@@ -6,16 +6,14 @@ import mammoth from "mammoth";
 import { UserDataService } from "../UserDataService";
 import { LanceDbService } from "./LanceDbService";
 import { OllamaService } from "../agents/OllamaService";
+import type { CreateJobPayload } from "../../../src/types/ElectronApi";
 import type {
-    CreateJobPayload,
-    SavedFileRecord,
-} from "../../../src/types/ElectronApi";
-
-type VectorizationStageTag = "info" | "success" | "warning" | "error";
-
-type VectorizationCallbacks = {
-    onStage: (message: string, tag?: VectorizationStageTag) => void;
-};
+    LanceVectorRow,
+    VectorizationCallbacks,
+    VectorizationChunk,
+    VectorizationDocument,
+    VectorizationSourceFile,
+} from "../../../src/types/Storage";
 
 const SUPPORTED_FILE_EXTENSIONS = new Set([".pdf", ".docx"]);
 const CHUNK_SIZE = 1200;
@@ -42,7 +40,7 @@ export class VectorizationService {
         this.throwIfAborted(signal);
 
         callbacks.onStage("Стадия подготовки файлов начата", "info");
-        const preparedFiles = this.prepareFiles(payload, callbacks);
+        const preparedFiles = await this.prepareFiles(payload, callbacks);
         callbacks.onStage(
             `Подготовка завершена. Файлов к обработке: ${preparedFiles.length}`,
             "success",
@@ -90,15 +88,22 @@ export class VectorizationService {
         const existingStorage =
             this.userDataService.getVectorStorageById(vectorStorageId);
         const existingFileIds = existingStorage?.fileIds ?? [];
+        const preparedPersistedFileIds = preparedFiles
+            .map((file) => file.persistedFileId)
+            .filter((fileId): fileId is string => Boolean(fileId));
         const uniqueFileIds = [
-            ...new Set([
-                ...existingFileIds,
-                ...preparedFiles.map((file) => file.id),
-            ]),
+            ...new Set([...existingFileIds, ...preparedPersistedFileIds]),
         ];
+        const vectorStorageSizeBytes =
+            await this.lanceDbService.getStorageDataSizeBytes(vectorStorageId);
+        const resolvedIndexDataPath =
+            await this.lanceDbService.resolveStorageDataPath(vectorStorageId);
         await this.userDataService.updateVectorStorage(vectorStorageId, {
             fileIds: uniqueFileIds,
-            size: uniqueFileIds.length,
+            size: vectorStorageSizeBytes,
+            ...(resolvedIndexDataPath
+                ? { dataPath: resolvedIndexDataPath }
+                : {}),
             lastActiveAt: new Date().toISOString(),
         });
 
@@ -109,10 +114,10 @@ export class VectorizationService {
         };
     }
 
-    private prepareFiles(
+    private async prepareFiles(
         payload: CreateJobPayload,
         callbacks: VectorizationCallbacks,
-    ): SavedFileRecord[] {
+    ): Promise<VectorizationSourceFile[]> {
         const sourceFileIds = Array.isArray(payload.sourceFileIds)
             ? payload.sourceFileIds
             : [];
@@ -140,15 +145,56 @@ export class VectorizationService {
             );
         }
 
-        const merged = [...existingFiles, ...savedFromUploads];
+        const sourceDirectoryPath =
+            typeof payload.sourceDirectoryPath === "string"
+                ? payload.sourceDirectoryPath.trim()
+                : "";
+        const filesFromDirectory = sourceDirectoryPath
+            ? await this.collectSupportedFilesFromDirectory(
+                  sourceDirectoryPath,
+                  callbacks,
+              )
+            : [];
 
-        if (!merged.length) {
-            throw new Error("Не выбраны файлы для векторизации");
+        if (filesFromDirectory.length) {
+            callbacks.onStage(
+                `Файлов из папки данных получено: ${filesFromDirectory.length}`,
+                "info",
+            );
         }
 
-        const deduplicated = new Map<string, SavedFileRecord>();
+        const preparedFromStorage = existingFiles.map((file) => ({
+            id: file.id,
+            path: file.path,
+            originalName: file.originalName,
+            size: file.size,
+            persistedFileId: file.id,
+        }));
+
+        const preparedFromUploads = savedFromUploads.map((file) => ({
+            id: file.id,
+            path: file.path,
+            originalName: file.originalName,
+            size: file.size,
+            persistedFileId: file.id,
+        }));
+
+        const merged = [
+            ...preparedFromStorage,
+            ...preparedFromUploads,
+            ...filesFromDirectory,
+        ];
+
+        if (!merged.length) {
+            throw new Error(
+                "Не выбраны файлы для векторизации и не задана папка данных",
+            );
+        }
+
+        const deduplicated = new Map<string, VectorizationSourceFile>();
         for (const file of merged) {
-            deduplicated.set(file.id, file);
+            const dedupeKey = `${file.path.toLowerCase()}::${file.persistedFileId || ""}`;
+            deduplicated.set(dedupeKey, file);
         }
 
         const validated = [...deduplicated.values()];
@@ -161,21 +207,11 @@ export class VectorizationService {
     }
 
     private async readSupportedDocuments(
-        files: SavedFileRecord[],
+        files: VectorizationSourceFile[],
         signal: AbortSignal,
         callbacks: VectorizationCallbacks,
-    ): Promise<
-        Array<{
-            fileId: string;
-            fileName: string;
-            text: string;
-        }>
-    > {
-        const documents: Array<{
-            fileId: string;
-            fileName: string;
-            text: string;
-        }> = [];
+    ): Promise<VectorizationDocument[]> {
+        const documents: VectorizationDocument[] = [];
 
         for (const file of files) {
             this.throwIfAborted(signal);
@@ -225,7 +261,7 @@ export class VectorizationService {
             );
 
             documents.push({
-                fileId: file.id,
+                fileId: this.resolveDocumentFileId(file),
                 fileName: file.originalName,
                 text: normalizedText,
             });
@@ -238,12 +274,75 @@ export class VectorizationService {
         return documents;
     }
 
+    private async collectSupportedFilesFromDirectory(
+        directoryPath: string,
+        callbacks: VectorizationCallbacks,
+    ): Promise<VectorizationSourceFile[]> {
+        let rootStats;
+
+        try {
+            rootStats = await fs.stat(directoryPath);
+        } catch {
+            throw new Error("Папка данных для индексации недоступна");
+        }
+
+        if (!rootStats.isDirectory()) {
+            throw new Error("Путь данных должен указывать на папку");
+        }
+
+        callbacks.onStage(`Сканирую папку данных: ${directoryPath}`, "info");
+
+        const collected: VectorizationSourceFile[] = [];
+
+        const walk = async (currentDirectory: string): Promise<void> => {
+            const entries = await fs.readdir(currentDirectory, {
+                withFileTypes: true,
+            });
+
+            for (const entry of entries) {
+                const fullPath = path.join(currentDirectory, entry.name);
+
+                if (entry.isDirectory()) {
+                    await walk(fullPath);
+                    continue;
+                }
+
+                if (!entry.isFile()) {
+                    continue;
+                }
+
+                const extension = path.extname(entry.name).toLowerCase();
+
+                if (!SUPPORTED_FILE_EXTENSIONS.has(extension)) {
+                    continue;
+                }
+
+                const fileStats = await fs.stat(fullPath);
+
+                collected.push({
+                    id: `dir_${randomUUID().replace(/-/g, "")}`,
+                    path: fullPath,
+                    originalName: entry.name,
+                    size: fileStats.size,
+                });
+            }
+        };
+
+        await walk(directoryPath);
+
+        return collected;
+    }
+
+    private resolveDocumentFileId(file: VectorizationSourceFile): string {
+        if (typeof file.persistedFileId === "string" && file.persistedFileId) {
+            return file.persistedFileId;
+        }
+
+        return `path:${file.path}`;
+    }
+
     private async embedDocuments(
-        documents: Array<{
-            fileId: string;
-            fileName: string;
-            text: string;
-        }>,
+        documents: VectorizationDocument[],
         vectorStorageId: string,
         signal: AbortSignal,
         callbacks: VectorizationCallbacks,
@@ -265,13 +364,7 @@ export class VectorizationService {
 
         const token = profile.ollamaToken;
 
-        const chunks: Array<{
-            id: string;
-            text: string;
-            fileId: string;
-            fileName: string;
-            chunkIndex: number;
-        }> = [];
+        const chunks: VectorizationChunk[] = [];
 
         for (const document of documents) {
             const documentChunks = this.chunkText(document.text, CHUNK_SIZE);
@@ -297,16 +390,7 @@ export class VectorizationService {
             "info",
         );
 
-        const rows: Array<{
-            id: string;
-            vector: number[];
-            text: string;
-            fileId: string;
-            fileName: string;
-            chunkIndex: number;
-            vectorStorageId: string;
-            createdAt: string;
-        }> = [];
+        const rows: LanceVectorRow[] = [];
 
         for (let offset = 0; offset < chunks.length; offset += MAX_BATCH_SIZE) {
             this.throwIfAborted(signal);

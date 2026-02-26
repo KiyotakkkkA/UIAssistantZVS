@@ -77,6 +77,7 @@ export type CreateJobPayload = {
     description?: string;
     kind?: "generic" | "vectorization";
     vectorStorageId?: string;
+    sourceDirectoryPath?: string;
     sourceFileIds?: string[];
     uploadedFiles?: UploadedFileData[];
     totalSteps?: number;
@@ -102,6 +103,7 @@ export type VectorStorageRecord = {
     id: string;
     name: string;
     size: number;
+    dataPath: string;
     lastActiveAt: string;
     createdAt: string;
     fileIds: string[];
@@ -120,6 +122,7 @@ export type VectorStoreSearchHit = {
 export type UpdateVectorStoragePayload = {
     name?: string;
     size?: number;
+    dataPath?: string;
     lastActiveAt?: string;
     fileIds?: string[];
     projectIds?: string[];

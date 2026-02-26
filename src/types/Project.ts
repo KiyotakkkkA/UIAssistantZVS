@@ -1,3 +1,8 @@
+export type ProjectLinkedVectorStorage = {
+    id: string;
+    name: string;
+};
+
 export type Project = {
     id: string;
     name: string;
@@ -6,6 +11,7 @@ export type Project = {
     dialogId: string;
     fileUUIDs: string[];
     requiredTools: string[];
+    linkedVectorStorage: ProjectLinkedVectorStorage | null;
     createdAt: string;
     updatedAt: string;
 };

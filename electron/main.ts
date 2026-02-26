@@ -363,11 +363,39 @@ app.whenReady()
         );
         ipcMain.handle(
             "app:update-vector-storage",
-            (
+            async (
                 _event,
                 vectorStorageId: string,
                 payload: UpdateVectorStoragePayload,
-            ) => userDataService.updateVectorStorage(vectorStorageId, payload),
+            ) => {
+                const normalizedDataPath =
+                    typeof payload.dataPath === "string"
+                        ? payload.dataPath.trim()
+                        : undefined;
+
+                if (normalizedDataPath !== undefined) {
+                    const sizeFromDataPath = normalizedDataPath
+                        ? await lanceDbService.getDataPathSizeBytes(
+                              normalizedDataPath,
+                          )
+                        : 0;
+
+                    return userDataService.updateVectorStorage(
+                        vectorStorageId,
+                        {
+                            ...payload,
+                            dataPath: normalizedDataPath,
+                            size: sizeFromDataPath,
+                            lastActiveAt: new Date().toISOString(),
+                        },
+                    );
+                }
+
+                return userDataService.updateVectorStorage(
+                    vectorStorageId,
+                    payload,
+                );
+            },
         );
         ipcMain.handle(
             "app:search-vector-storage",
@@ -430,6 +458,7 @@ app.whenReady()
                     normalizedStorageId,
                     queryEmbedding,
                     typeof limit === "number" ? limit : 5,
+                    storage.dataPath,
                 );
 
                 return rows.map((row) => ({

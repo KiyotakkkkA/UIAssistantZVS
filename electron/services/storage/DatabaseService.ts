@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type {
+    AppCacheEntry,
     FileManifestEntry,
     JobEventRecord,
     JobEventTag,
@@ -10,13 +11,6 @@ import type {
     VectorStorageRecord,
     VectorStorageUsedByProject,
 } from "../../../src/types/ElectronApi";
-
-type CacheEntry = {
-    collectedAt: number;
-    ttlSeconds: number;
-    expiresAt: number;
-    data: unknown;
-};
 
 export class DatabaseService {
     private readonly database: Database.Database;
@@ -750,15 +744,16 @@ export class DatabaseService {
                     id,
                     name,
                     size,
+                    data_path,
                     last_active_at,
                     created_at,
                     updated_at,
                     created_by
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `,
             )
-            .run(vectorStorageId, name, 0, now, now, now, createdBy);
+            .run(vectorStorageId, name, 0, "", now, now, now, createdBy);
 
         return this.getVectorStorageById(vectorStorageId, createdBy)!;
     }
@@ -784,7 +779,7 @@ export class DatabaseService {
         const existing = this.database
             .prepare(
                 `
-                SELECT id, name, size, last_active_at
+                                SELECT id, name, size, data_path, last_active_at
                 FROM vector_storages
                 WHERE id = ? AND created_by = ?
                 `,
@@ -794,6 +789,7 @@ export class DatabaseService {
                   id: string;
                   name: string;
                   size: number;
+                  data_path: string;
                   last_active_at: string;
               }
             | undefined;
@@ -810,6 +806,10 @@ export class DatabaseService {
             typeof payload.size === "number" && Number.isFinite(payload.size)
                 ? Math.max(0, payload.size)
                 : existing.size;
+        const nextDataPath =
+            typeof payload.dataPath === "string"
+                ? payload.dataPath.trim()
+                : existing.data_path;
         const nextLastActiveAt =
             typeof payload.lastActiveAt === "string" && payload.lastActiveAt
                 ? payload.lastActiveAt
@@ -821,6 +821,7 @@ export class DatabaseService {
                 UPDATE vector_storages
                 SET name = ?,
                     size = ?,
+                    data_path = ?,
                     last_active_at = ?,
                     updated_at = ?
                 WHERE id = ? AND created_by = ?
@@ -829,6 +830,7 @@ export class DatabaseService {
             .run(
                 nextName,
                 nextSize,
+                nextDataPath,
                 nextLastActiveAt,
                 new Date().toISOString(),
                 vectorStorageId,
@@ -858,7 +860,7 @@ export class DatabaseService {
         const storageRows = this.database
             .prepare(
                 `
-                SELECT id, name, size, last_active_at, created_at
+                SELECT id, name, size, data_path, last_active_at, created_at
                 FROM vector_storages
                 WHERE created_by = ?
                 ORDER BY created_at DESC
@@ -868,6 +870,7 @@ export class DatabaseService {
             id: string;
             name: string;
             size: number;
+            data_path: string;
             last_active_at: string;
             created_at: string;
         }>;
@@ -942,6 +945,7 @@ export class DatabaseService {
             id: row.id,
             name: row.name,
             size: row.size,
+            dataPath: row.data_path,
             lastActiveAt: row.last_active_at,
             createdAt: row.created_at,
             fileIds: fileIdsByStorageId.get(row.id) ?? [],
@@ -1020,7 +1024,7 @@ export class DatabaseService {
         }
     }
 
-    getCacheEntry(key: string): CacheEntry | null {
+    getCacheEntry(key: string): AppCacheEntry | null {
         const row = this.database
             .prepare(
                 `SELECT collected_at, ttl_seconds, expires_at, data_json
@@ -1054,7 +1058,7 @@ export class DatabaseService {
         };
     }
 
-    setCacheEntry(key: string, entry: CacheEntry): void {
+    setCacheEntry(key: string, entry: AppCacheEntry): void {
         this.database
             .prepare(
                 `
@@ -1160,6 +1164,7 @@ export class DatabaseService {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 size INTEGER NOT NULL DEFAULT 0,
+                data_path TEXT NOT NULL DEFAULT '',
                 last_active_at TEXT NOT NULL,
                 expires_at TEXT,
                 created_at TEXT NOT NULL,
@@ -1205,6 +1210,26 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_jobs_events_job_id ON jobs_events(job_id);
             CREATE INDEX IF NOT EXISTS idx_jobs_events_created_at ON jobs_events(created_at DESC);
         `);
+
+        this.ensureVectorStoragesDataPathColumn();
+    }
+
+    private ensureVectorStoragesDataPathColumn(): void {
+        const columns = this.database
+            .prepare(`PRAGMA table_info(vector_storages)`)
+            .all() as Array<{ name: string }>;
+
+        const hasDataPath = columns.some(
+            (column) => column.name === "data_path",
+        );
+
+        if (hasDataPath) {
+            return;
+        }
+
+        this.database.exec(
+            `ALTER TABLE vector_storages ADD COLUMN data_path TEXT NOT NULL DEFAULT ''`,
+        );
     }
 
     private sanitizeScenarioPayload(

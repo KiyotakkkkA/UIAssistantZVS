@@ -36,7 +36,7 @@ export const StoragePage = observer(function StoragePage() {
     const toasts = useToasts();
     const { createJob } = useJobs();
     const { createVectorStorage, deleteVectorStorage } = useVectorStorage();
-    const { pickFiles, isUploading } = useUpload();
+    const { pickFiles, pickPath, isUploading, isPickingPath } = useUpload();
     const { openFile, deleteFile } = useFileSave();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<StorageView>("files");
@@ -362,6 +362,46 @@ export const StoragePage = observer(function StoragePage() {
         await storageStore.loadVectorStoragesData();
     };
 
+    const changeVectorStorageDataPath = async () => {
+        const selectedVectorStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedVectorStorage) {
+            toasts.info({
+                title: "Стор не выбран",
+                description: "Выберите векторное хранилище.",
+            });
+            return;
+        }
+
+        const pickedDirectory = await pickPath({ forFolders: true });
+
+        if (!pickedDirectory) {
+            return;
+        }
+
+        const updated = await storageStore.updateVectorStorage(
+            selectedVectorStorage.id,
+            {
+                dataPath: pickedDirectory,
+            },
+        );
+
+        if (!updated) {
+            toasts.warning({
+                title: "Не удалось обновить путь",
+                description: "Попробуйте ещё раз.",
+            });
+            return;
+        }
+
+        await storageStore.loadVectorStoragesData();
+
+        toasts.success({
+            title: "Путь данных обновлён",
+            description: "Путь к индексу был изменён.",
+        });
+    };
+
     const isActiveViewLoading =
         activeView === "files"
             ? storageStore.isFilesLoading
@@ -658,6 +698,23 @@ export const StoragePage = observer(function StoragePage() {
                                         </span>
                                     </Button>
                                     <Button
+                                        variant="secondary"
+                                        shape="rounded-full"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => {
+                                            void changeVectorStorageDataPath();
+                                        }}
+                                        disabled={isPickingPath}
+                                    >
+                                        <Icon
+                                            icon="mdi:folder-edit-outline"
+                                            width={16}
+                                        />
+                                        <span className="ml-1">
+                                            Изменить путь к данным
+                                        </span>
+                                    </Button>
+                                    <Button
                                         variant="primary"
                                         shape="rounded-l-full"
                                         className="h-8 px-3 text-xs"
@@ -702,6 +759,13 @@ export const StoragePage = observer(function StoragePage() {
                                                 storageStore
                                                     .selectedVectorStorage.size,
                                             )}
+                                        </p>
+                                        <p className="text-main-400">
+                                            Файл индекса
+                                        </p>
+                                        <p className="break-all text-main-200">
+                                            {storageStore.selectedVectorStorage
+                                                .dataPath || "Не указана"}
                                         </p>
                                         <p className="text-main-400">
                                             Последняя активность

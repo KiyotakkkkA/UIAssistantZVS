@@ -1,20 +1,7 @@
 import { Ollama, type ChatRequest } from "ollama";
 import { Config } from "../../../src/config";
-import type {
-    OllamaChatChunk,
-    OllamaRole,
-    OllamaToolDefinition,
-    OllamaMessage,
-    OllamaResponseFormat,
-} from "../../../src/types/Chat";
-
-type StreamOllamaChatPayload = {
-    model: string;
-    messages: OllamaMessage[];
-    tools?: OllamaToolDefinition[];
-    format?: OllamaResponseFormat;
-    think?: boolean;
-};
+import type { OllamaChatChunk, OllamaRole } from "../../../src/types/Chat";
+import type { StreamOllamaChatPayload } from "../../../src/types/ElectronApi";
 
 type GetEmbedPayload = {
     model: string;

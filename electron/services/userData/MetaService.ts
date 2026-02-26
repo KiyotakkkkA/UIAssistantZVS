@@ -1,8 +1,5 @@
 import fs from "node:fs";
-
-type MetaPayload = {
-    currentUserId: string;
-};
+import type { MetaPayload } from "../../../src/types/UserData";
 
 const defaultMeta: MetaPayload = {
     currentUserId: "",

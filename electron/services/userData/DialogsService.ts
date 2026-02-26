@@ -7,11 +7,7 @@ import type {
     ChatMessage,
     DeleteDialogResult,
 } from "../../../src/types/Chat";
-
-type ActiveDialogContextUpdater = (payload: {
-    activeDialogId: string;
-    activeProjectId: string | null;
-}) => void;
+import type { ActiveDialogContextUpdater } from "../../../src/types/UserData";
 
 const ASSISTANT_MESSAGE_AUTHORS = new Set(["assistant", "user", "system"]);
 const ASSISTANT_STAGES = new Set([

@@ -692,7 +692,11 @@ class ProjectsService {
   }
   getProjectById(projectId) {
     const projects = this.readProjects();
-    return projects.find((project) => project.id === projectId) ?? null;
+    const project = projects.find((item) => item.id === projectId) ?? null;
+    if (!project) {
+      return null;
+    }
+    return this.attachLinkedVectorStorage(project);
   }
   createProject(payload) {
     const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -707,11 +711,12 @@ class ProjectsService {
       dialogId: payload.dialogId,
       fileUUIDs: this.normalizeFileIds(payload.fileUUIDs),
       requiredTools: this.normalizeRequiredTools(payload.requiredTools),
+      linkedVectorStorage: null,
       createdAt: now,
       updatedAt: now
     };
     this.writeProject(project);
-    return project;
+    return this.attachLinkedVectorStorage(project);
   }
   deleteProject(projectId) {
     const project = this.getProjectById(projectId);
@@ -791,6 +796,7 @@ class ProjectsService {
         requiredTools: this.normalizeRequiredTools(
           parsed.requiredTools
         ),
+        linkedVectorStorage: null,
         createdAt: typeof parsed.createdAt === "string" && parsed.createdAt ? parsed.createdAt : now,
         updatedAt: typeof parsed.updatedAt === "string" && parsed.updatedAt ? parsed.updatedAt : now
       });
@@ -818,6 +824,24 @@ class ProjectsService {
       }),
       updatedAt: project.updatedAt,
       dialogId: project.dialogId
+    };
+  }
+  attachLinkedVectorStorage(project) {
+    const vectorStorages = this.databaseService.getVectorStorages(
+      this.createdBy
+    );
+    const linkedStorage = vectorStorages.find(
+      (vectorStorage) => vectorStorage.usedByProjects.some(
+        (projectRef) => projectRef.id === project.id
+      )
+    );
+    const linkedVectorStorage = linkedStorage ? {
+      id: linkedStorage.id,
+      name: linkedStorage.name
+    } : null;
+    return {
+      ...project,
+      linkedVectorStorage
     };
   }
 }
@@ -1524,14 +1548,15 @@ class DatabaseService {
                     id,
                     name,
                     size,
+                    data_path,
                     last_active_at,
                     created_at,
                     updated_at,
                     created_by
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 `
-    ).run(vectorStorageId, name, 0, now, now, now, createdBy);
+    ).run(vectorStorageId, name, 0, "", now, now, now, createdBy);
     return this.getVectorStorageById(vectorStorageId, createdBy);
   }
   deleteVectorStorage(vectorStorageId, createdBy) {
@@ -1546,7 +1571,7 @@ class DatabaseService {
   updateVectorStorage(vectorStorageId, payload, createdBy) {
     const existing = this.database.prepare(
       `
-                SELECT id, name, size, last_active_at
+                                SELECT id, name, size, data_path, last_active_at
                 FROM vector_storages
                 WHERE id = ? AND created_by = ?
                 `
@@ -1556,12 +1581,14 @@ class DatabaseService {
     }
     const nextName = typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : existing.name;
     const nextSize = typeof payload.size === "number" && Number.isFinite(payload.size) ? Math.max(0, payload.size) : existing.size;
+    const nextDataPath = typeof payload.dataPath === "string" ? payload.dataPath.trim() : existing.data_path;
     const nextLastActiveAt = typeof payload.lastActiveAt === "string" && payload.lastActiveAt ? payload.lastActiveAt : existing.last_active_at;
     this.database.prepare(
       `
                 UPDATE vector_storages
                 SET name = ?,
                     size = ?,
+                    data_path = ?,
                     last_active_at = ?,
                     updated_at = ?
                 WHERE id = ? AND created_by = ?
@@ -1569,6 +1596,7 @@ class DatabaseService {
     ).run(
       nextName,
       nextSize,
+      nextDataPath,
       nextLastActiveAt,
       (/* @__PURE__ */ new Date()).toISOString(),
       vectorStorageId,
@@ -1593,7 +1621,7 @@ class DatabaseService {
   getVectorStorages(createdBy) {
     const storageRows = this.database.prepare(
       `
-                SELECT id, name, size, last_active_at, created_at
+                SELECT id, name, size, data_path, last_active_at, created_at
                 FROM vector_storages
                 WHERE created_by = ?
                 ORDER BY created_at DESC
@@ -1642,6 +1670,7 @@ class DatabaseService {
       id: row.id,
       name: row.name,
       size: row.size,
+      dataPath: row.data_path,
       lastActiveAt: row.last_active_at,
       createdAt: row.created_at,
       fileIds: fileIdsByStorageId.get(row.id) ?? [],
@@ -1818,6 +1847,7 @@ class DatabaseService {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 size INTEGER NOT NULL DEFAULT 0,
+                data_path TEXT NOT NULL DEFAULT '',
                 last_active_at TEXT NOT NULL,
                 expires_at TEXT,
                 created_at TEXT NOT NULL,
@@ -1863,6 +1893,19 @@ class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_jobs_events_job_id ON jobs_events(job_id);
             CREATE INDEX IF NOT EXISTS idx_jobs_events_created_at ON jobs_events(created_at DESC);
         `);
+    this.ensureVectorStoragesDataPathColumn();
+  }
+  ensureVectorStoragesDataPathColumn() {
+    const columns = this.database.prepare(`PRAGMA table_info(vector_storages)`).all();
+    const hasDataPath = columns.some(
+      (column) => column.name === "data_path"
+    );
+    if (hasDataPath) {
+      return;
+    }
+    this.database.exec(
+      `ALTER TABLE vector_storages ADD COLUMN data_path TEXT NOT NULL DEFAULT ''`
+    );
   }
   sanitizeScenarioPayload(payloadRecord) {
     const content = payloadRecord.content && typeof payloadRecord.content === "object" && !Array.isArray(payloadRecord.content) ? {
@@ -15620,16 +15663,13 @@ class LanceDbService {
       await db.createTable(tableName, rows);
     }
   }
-  async search(vectorStorageId, embedding, limit) {
+  async search(vectorStorageId, embedding, limit, dataPath) {
     if (!embedding.length) {
       return [];
     }
-    const lancedb = await this.getLanceDbModule();
-    const db = await lancedb.connect(this.vectorIndexPath);
-    const tableName = this.toTableName(vectorStorageId);
     let table;
     try {
-      table = await db.openTable(tableName);
+      table = await this.openSearchTable(vectorStorageId, dataPath);
     } catch (error) {
       if (error instanceof Error && /not found|does not exist|no such table/i.test(error.message)) {
         return [];
@@ -15640,9 +15680,42 @@ class LanceDbService {
     const results2 = await table.search(embedding).limit(limited).toArray();
     return Array.isArray(results2) ? results2 : [];
   }
+  async resolveStorageDataPath(vectorStorageId) {
+    const candidatePaths = await this.findStorageCandidatePaths(vectorStorageId);
+    if (!candidatePaths.length) {
+      return "";
+    }
+    const candidatesWithStats = await Promise.all(
+      candidatePaths.map(async (candidatePath) => ({
+        path: candidatePath,
+        size: await this.getPathSizeBytes(candidatePath)
+      }))
+    );
+    candidatesWithStats.sort((left, right) => right.size - left.size);
+    return candidatesWithStats[0]?.path ?? "";
+  }
+  async getDataPathSizeBytes(dataPath) {
+    const normalized = typeof dataPath === "string" ? dataPath.trim() : "";
+    if (!normalized) {
+      return 0;
+    }
+    return this.getPathSizeBytes(normalized);
+  }
+  async getStorageDataSizeBytes(vectorStorageId) {
+    const candidatePaths = await this.findStorageCandidatePaths(vectorStorageId);
+    if (!candidatePaths.length) {
+      return 0;
+    }
+    const sizes = await Promise.all(
+      candidatePaths.map(
+        (candidatePath) => this.getPathSizeBytes(candidatePath)
+      )
+    );
+    return sizes.reduce((sum, current) => sum + current, 0);
+  }
   toTableName(vectorStorageId) {
     const normalized = vectorStorageId.toLowerCase().replace(/[^a-z0-9_]/g, "_");
-    return `vs_${normalized}`;
+    return `${normalized}`;
   }
   async getLanceDbModule() {
     if (this.lancedbModule) {
@@ -15650,6 +15723,68 @@ class LanceDbService {
     }
     this.lancedbModule = await import("@lancedb/lancedb");
     return this.lancedbModule;
+  }
+  async getPathSizeBytes(targetPath) {
+    let stats;
+    try {
+      stats = await fs$1.stat(targetPath);
+    } catch {
+      return 0;
+    }
+    if (stats.isFile()) {
+      return stats.size;
+    }
+    if (!stats.isDirectory()) {
+      return 0;
+    }
+    let entries = [];
+    try {
+      entries = await fs$1.readdir(targetPath, { withFileTypes: true });
+    } catch {
+      return 0;
+    }
+    if (!entries.length) {
+      return 0;
+    }
+    const nestedSizes = await Promise.all(
+      entries.map(
+        (entry) => this.getPathSizeBytes(path.join(targetPath, entry.name))
+      )
+    );
+    return nestedSizes.reduce((sum, current) => sum + current, 0);
+  }
+  async findStorageCandidatePaths(vectorStorageId) {
+    const normalized = this.toTableName(vectorStorageId);
+    let entries = [];
+    try {
+      entries = await fs$1.readdir(this.vectorIndexPath, {
+        withFileTypes: true
+      });
+    } catch {
+      return [];
+    }
+    return entries.filter((entry) => {
+      const lowerName = entry.name.toLowerCase();
+      return lowerName === normalized || lowerName === `${normalized}.lance` || lowerName.startsWith(`${normalized}_`) || lowerName.startsWith(`${normalized}.`);
+    }).map((entry) => path.join(this.vectorIndexPath, entry.name));
+  }
+  async openSearchTable(vectorStorageId, dataPath) {
+    const lancedb = await this.getLanceDbModule();
+    const normalizedDataPath = typeof dataPath === "string" ? dataPath.trim() : "";
+    if (normalizedDataPath) {
+      const tableNameFromPath = path.basename(normalizedDataPath).replace(/\.lance$/i, "").trim();
+      const databasePathFromDataPath = path.dirname(normalizedDataPath);
+      if (tableNameFromPath && databasePathFromDataPath) {
+        try {
+          const db2 = await lancedb.connect(databasePathFromDataPath);
+          return await db2.openTable(tableNameFromPath);
+        } catch {
+        }
+      }
+    }
+    const db = await lancedb.connect(this.vectorIndexPath);
+    const tableName = this.toTableName(vectorStorageId);
+    return db.openTable(tableName);
   }
 }
 var lib$5 = {};
@@ -45030,7 +45165,7 @@ class VectorizationService {
     }
     this.throwIfAborted(signal);
     callbacks.onStage("Стадия подготовки файлов начата", "info");
-    const preparedFiles = this.prepareFiles(payload, callbacks);
+    const preparedFiles = await this.prepareFiles(payload, callbacks);
     callbacks.onStage(
       `Подготовка завершена. Файлов к обработке: ${preparedFiles.length}`,
       "success"
@@ -45069,15 +45204,16 @@ class VectorizationService {
     this.throwIfAborted(signal);
     const existingStorage = this.userDataService.getVectorStorageById(vectorStorageId);
     const existingFileIds = existingStorage?.fileIds ?? [];
+    const preparedPersistedFileIds = preparedFiles.map((file) => file.persistedFileId).filter((fileId) => Boolean(fileId));
     const uniqueFileIds = [
-      .../* @__PURE__ */ new Set([
-        ...existingFileIds,
-        ...preparedFiles.map((file) => file.id)
-      ])
+      .../* @__PURE__ */ new Set([...existingFileIds, ...preparedPersistedFileIds])
     ];
+    const vectorStorageSizeBytes = await this.lanceDbService.getStorageDataSizeBytes(vectorStorageId);
+    const resolvedIndexDataPath = await this.lanceDbService.resolveStorageDataPath(vectorStorageId);
     await this.userDataService.updateVectorStorage(vectorStorageId, {
       fileIds: uniqueFileIds,
-      size: uniqueFileIds.length,
+      size: vectorStorageSizeBytes,
+      ...resolvedIndexDataPath ? { dataPath: resolvedIndexDataPath } : {},
       lastActiveAt: (/* @__PURE__ */ new Date()).toISOString()
     });
     callbacks.onStage("Пайплайн векторизации завершён", "success");
@@ -45085,7 +45221,7 @@ class VectorizationService {
       totalFiles: uniqueFileIds.length
     };
   }
-  prepareFiles(payload, callbacks) {
+  async prepareFiles(payload, callbacks) {
     const sourceFileIds = Array.isArray(payload.sourceFileIds) ? payload.sourceFileIds : [];
     const existingFiles = this.userDataService.getFilesByIds(sourceFileIds);
     callbacks.onStage(
@@ -45104,13 +45240,45 @@ class VectorizationService {
         "success"
       );
     }
-    const merged = [...existingFiles, ...savedFromUploads];
+    const sourceDirectoryPath = typeof payload.sourceDirectoryPath === "string" ? payload.sourceDirectoryPath.trim() : "";
+    const filesFromDirectory = sourceDirectoryPath ? await this.collectSupportedFilesFromDirectory(
+      sourceDirectoryPath,
+      callbacks
+    ) : [];
+    if (filesFromDirectory.length) {
+      callbacks.onStage(
+        `Файлов из папки данных получено: ${filesFromDirectory.length}`,
+        "info"
+      );
+    }
+    const preparedFromStorage = existingFiles.map((file) => ({
+      id: file.id,
+      path: file.path,
+      originalName: file.originalName,
+      size: file.size,
+      persistedFileId: file.id
+    }));
+    const preparedFromUploads = savedFromUploads.map((file) => ({
+      id: file.id,
+      path: file.path,
+      originalName: file.originalName,
+      size: file.size,
+      persistedFileId: file.id
+    }));
+    const merged = [
+      ...preparedFromStorage,
+      ...preparedFromUploads,
+      ...filesFromDirectory
+    ];
     if (!merged.length) {
-      throw new Error("Не выбраны файлы для векторизации");
+      throw new Error(
+        "Не выбраны файлы для векторизации и не задана папка данных"
+      );
     }
     const deduplicated = /* @__PURE__ */ new Map();
     for (const file of merged) {
-      deduplicated.set(file.id, file);
+      const dedupeKey = `${file.path.toLowerCase()}::${file.persistedFileId || ""}`;
+      deduplicated.set(dedupeKey, file);
     }
     const validated = [...deduplicated.values()];
     if (!validated.length) {
@@ -45158,7 +45326,7 @@ class VectorizationService {
         "success"
       );
       documents2.push({
-        fileId: file.id,
+        fileId: this.resolveDocumentFileId(file),
         fileName: file.originalName,
         text: normalizedText
       });
@@ -45167,6 +45335,53 @@ class VectorizationService {
       throw new Error("Не удалось извлечь текст из выбранных файлов");
     }
     return documents2;
+  }
+  async collectSupportedFilesFromDirectory(directoryPath, callbacks) {
+    let rootStats;
+    try {
+      rootStats = await fs$1.stat(directoryPath);
+    } catch {
+      throw new Error("Папка данных для индексации недоступна");
+    }
+    if (!rootStats.isDirectory()) {
+      throw new Error("Путь данных должен указывать на папку");
+    }
+    callbacks.onStage(`Сканирую папку данных: ${directoryPath}`, "info");
+    const collected = [];
+    const walk = async (currentDirectory) => {
+      const entries = await fs$1.readdir(currentDirectory, {
+        withFileTypes: true
+      });
+      for (const entry of entries) {
+        const fullPath = path.join(currentDirectory, entry.name);
+        if (entry.isDirectory()) {
+          await walk(fullPath);
+          continue;
+        }
+        if (!entry.isFile()) {
+          continue;
+        }
+        const extension2 = path.extname(entry.name).toLowerCase();
+        if (!SUPPORTED_FILE_EXTENSIONS.has(extension2)) {
+          continue;
+        }
+        const fileStats = await fs$1.stat(fullPath);
+        collected.push({
+          id: `dir_${randomUUID().replace(/-/g, "")}`,
+          path: fullPath,
+          originalName: entry.name,
+          size: fileStats.size
+        });
+      }
+    };
+    await walk(directoryPath);
+    return collected;
+  }
+  resolveDocumentFileId(file) {
+    if (typeof file.persistedFileId === "string" && file.persistedFileId) {
+      return file.persistedFileId;
+    }
+    return `path:${file.path}`;
   }
   async embedDocuments(documents2, vectorStorageId, signal, callbacks) {
     const profile = this.userDataService.getBootData().userProfile;
@@ -45821,7 +46036,27 @@ app.whenReady().then(() => {
   );
   ipcMain.handle(
     "app:update-vector-storage",
-    (_event, vectorStorageId, payload) => userDataService.updateVectorStorage(vectorStorageId, payload)
+    async (_event, vectorStorageId, payload) => {
+      const normalizedDataPath = typeof payload.dataPath === "string" ? payload.dataPath.trim() : void 0;
+      if (normalizedDataPath !== void 0) {
+        const sizeFromDataPath = normalizedDataPath ? await lanceDbService.getDataPathSizeBytes(
+          normalizedDataPath
+        ) : 0;
+        return userDataService.updateVectorStorage(
+          vectorStorageId,
+          {
+            ...payload,
+            dataPath: normalizedDataPath,
+            size: sizeFromDataPath,
+            lastActiveAt: (/* @__PURE__ */ new Date()).toISOString()
+          }
+        );
+      }
+      return userDataService.updateVectorStorage(
+        vectorStorageId,
+        payload
+      );
+    }
   );
   ipcMain.handle(
     "app:search-vector-storage",
@@ -45857,7 +46092,8 @@ app.whenReady().then(() => {
       const rows = await lanceDbService.search(
         normalizedStorageId,
         queryEmbedding,
-        typeof limit === "number" ? limit : 5
+        typeof limit === "number" ? limit : 5,
+        storage.dataPath
       );
       return rows.map((row) => ({
         id: row.id,

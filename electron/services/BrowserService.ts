@@ -1,59 +1,13 @@
 import { BrowserWindow } from "electron";
-
-type BrowserRedirect = {
-    from: string;
-    to: string;
-};
-
-export type BrowserNavigateResult = {
-    success: boolean;
-    requestedUrl: string;
-    finalUrl: string;
-    title: string;
-    redirected: boolean;
-    redirects: BrowserRedirect[];
-    statusCode: number | null;
-    loadTimeMs: number;
-    error?: string;
-};
-
-export type BrowserSnapshotElement = {
-    id: string;
-    tag: string;
-    role: string;
-    text: string;
-    href: string;
-    type: string;
-    placeholder: string;
-    selector: string;
-};
-
-export type BrowserPageSnapshot = {
-    url: string;
-    title: string;
-    headings: string[];
-    elements: BrowserSnapshotElement[];
-    textPreview: string;
-    capturedAt: string;
-};
-
-export type BrowserInteractAction = "click" | "type";
-
-export type BrowserInteractResult = {
-    success: boolean;
-    action: BrowserInteractAction;
-    selector: string;
-    elementTag?: string;
-    url: string;
-    title: string;
-    waitedMs: number;
-    error?: string;
-};
-
-export type BrowserCloseResult = {
-    success: boolean;
-    hadSession: boolean;
-};
+import type {
+    BrowserCloseResult,
+    BrowserInteractAction,
+    BrowserInteractParams,
+    BrowserInteractResult,
+    BrowserNavigateResult,
+    BrowserPageSnapshot,
+    BrowserRedirect,
+} from "../../src/types/ElectronApi";
 
 const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
 const BROWSER_ACTIONS = new Set<BrowserInteractAction>(["click", "type"]);
@@ -419,13 +373,9 @@ export class BrowserService {
         return snapshot as BrowserPageSnapshot;
     }
 
-    async interactWith(params: {
-        action: BrowserInteractAction;
-        selector: string;
-        text?: string;
-        submit?: boolean;
-        waitForNavigationMs?: number;
-    }): Promise<BrowserInteractResult> {
+    async interactWith(
+        params: BrowserInteractParams,
+    ): Promise<BrowserInteractResult> {
         const browserWindow = this.ensureWindow();
         const webContents = browserWindow.webContents;
 
