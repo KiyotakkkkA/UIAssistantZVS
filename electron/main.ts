@@ -340,6 +340,12 @@ app.whenReady()
         ipcMain.handle("app:create-vector-storage", () =>
             userDataService.createVectorStorage(),
         );
+        ipcMain.handle("app:get-vector-tags", () =>
+            userDataService.getVectorTags(),
+        );
+        ipcMain.handle("app:create-vector-tag", (_event, name: string) =>
+            userDataService.createVectorTag(name),
+        );
         ipcMain.handle(
             "app:delete-vector-storage",
             (_event, vectorStorageId: string) =>

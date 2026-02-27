@@ -91,6 +91,8 @@ const appApi = {
   vectorStorages: {
     getVectorStorages: () => electron.ipcRenderer.invoke("app:get-vector-storages"),
     createVectorStorage: () => electron.ipcRenderer.invoke("app:create-vector-storage"),
+    getVectorTags: () => electron.ipcRenderer.invoke("app:get-vector-tags"),
+    createVectorTag: (name) => electron.ipcRenderer.invoke("app:create-vector-tag", name),
     updateVectorStorage: (vectorStorageId, payload) => electron.ipcRenderer.invoke(
       "app:update-vector-storage",
       vectorStorageId,

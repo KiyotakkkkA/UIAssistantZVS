@@ -2,6 +2,7 @@ import { makeAutoObservable, runInAction } from "mobx";
 import type {
     SavedFileRecord,
     UpdateVectorStoragePayload,
+    VectorTagRecord,
     VectorStorageRecord,
 } from "../types/ElectronApi";
 
@@ -13,14 +14,17 @@ export type StorageFileProjectRef = {
 class StorageStore {
     isFilesLoading = false;
     isVectorStoragesLoading = false;
+    isVectorTagsLoading = false;
     files: SavedFileRecord[] = [];
     selectedFileId: string | null = null;
     vectorStorages: VectorStorageRecord[] = [];
+    vectorTags: VectorTagRecord[] = [];
     selectedVectorStorageId: string | null = null;
     projectRefByFileId: Record<string, StorageFileProjectRef> = {};
 
     private isLoadingFiles = false;
     private isLoadingVectorStorages = false;
+    private isLoadingVectorTags = false;
 
     constructor() {
         makeAutoObservable(this, {}, { autoBind: true });
@@ -149,6 +153,41 @@ class StorageStore {
         }
     }
 
+    async loadVectorTagsData(): Promise<void> {
+        if (this.isLoadingVectorTags) {
+            return;
+        }
+
+        this.isLoadingVectorTags = true;
+
+        runInAction(() => {
+            this.isVectorTagsLoading = true;
+        });
+
+        try {
+            const api = window.appApi;
+
+            if (!api) {
+                runInAction(() => {
+                    this.vectorTags = [];
+                });
+                return;
+            }
+
+            const tags = await api.vectorStorages.getVectorTags();
+
+            runInAction(() => {
+                this.vectorTags = tags;
+            });
+        } finally {
+            runInAction(() => {
+                this.isVectorTagsLoading = false;
+            });
+
+            this.isLoadingVectorTags = false;
+        }
+    }
+
     setSelectedFileId(fileId: string): void {
         this.selectedFileId = fileId;
     }
@@ -179,6 +218,29 @@ class StorageStore {
         });
 
         return createdVectorStorage;
+    }
+
+    async createVectorTag(name: string): Promise<VectorTagRecord | null> {
+        const api = window.appApi;
+
+        if (!api) {
+            return null;
+        }
+
+        const createdTag = await api.vectorStorages.createVectorTag(name);
+
+        if (!createdTag) {
+            return null;
+        }
+
+        runInAction(() => {
+            const withoutSameId = this.vectorTags.filter(
+                (tag) => tag.id !== createdTag.id,
+            );
+            this.vectorTags = [createdTag, ...withoutSameId];
+        });
+
+        return createdTag;
     }
 
     async updateVectorStorage(

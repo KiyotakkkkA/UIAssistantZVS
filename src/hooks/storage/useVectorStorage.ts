@@ -47,8 +47,26 @@ export const useVectorStorage = () => {
         [toasts],
     );
 
+    const createVectorTag = useCallback(
+        async (name: string) => {
+            const createdTag = await storageStore.createVectorTag(name);
+
+            if (!createdTag) {
+                toasts.warning({
+                    title: "Не удалось создать тег",
+                    description: "Проверьте название тега и повторите попытку.",
+                });
+                return null;
+            }
+
+            return createdTag;
+        },
+        [toasts],
+    );
+
     return {
         createVectorStorage,
         deleteVectorStorage,
+        createVectorTag,
     };
 };

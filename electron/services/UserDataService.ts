@@ -15,6 +15,7 @@ import type { AppCacheEntry } from "../../src/types/ElectronApi";
 import type { SavedFileRecord } from "../../src/types/ElectronApi";
 import type {
     UpdateVectorStoragePayload,
+    VectorTagRecord,
     VectorStorageRecord,
 } from "../../src/types/ElectronApi";
 import type {
@@ -347,6 +348,16 @@ export class UserDataService {
             defaultDataPath,
             vectorStorageId,
         );
+    }
+
+    getVectorTags(): VectorTagRecord[] {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.getVectorTags(currentUserId);
+    }
+
+    createVectorTag(name: string): VectorTagRecord | null {
+        const currentUserId = this.userProfileService.getCurrentUserId();
+        return this.databaseService.createVectorTag(currentUserId, name);
     }
 
     updateVectorStorage(

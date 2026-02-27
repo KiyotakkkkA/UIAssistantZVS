@@ -1568,6 +1568,65 @@ class DatabaseService {
     );
     return this.getVectorStorageById(normalizedVectorStorageId, createdBy);
   }
+  getVectorTags(createdBy) {
+    const rows = this.database.prepare(
+      `
+                SELECT id, name, created_at, updated_at
+                FROM vector_tags
+                WHERE created_by = ?
+                ORDER BY updated_at DESC
+                `
+    ).all(createdBy);
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  }
+  createVectorTag(createdBy, name) {
+    const normalizedName = typeof name === "string" ? name.trim() : "";
+    if (!normalizedName) {
+      return null;
+    }
+    const existing = this.database.prepare(
+      `
+                SELECT id, name, created_at, updated_at
+                FROM vector_tags
+                WHERE created_by = ?
+                  AND lower(name) = lower(?)
+                LIMIT 1
+                `
+    ).get(createdBy, normalizedName);
+    if (existing) {
+      return {
+        id: existing.id,
+        name: existing.name,
+        createdAt: existing.created_at,
+        updatedAt: existing.updated_at
+      };
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const tagId = `vt_${randomUUID().replace(/-/g, "")}`;
+    this.database.prepare(
+      `
+                INSERT INTO vector_tags (
+                    id,
+                    name,
+                    created_at,
+                    updated_at,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?)
+                `
+    ).run(tagId, normalizedName, now, now, createdBy);
+    return {
+      id: tagId,
+      name: normalizedName,
+      createdAt: now,
+      updatedAt: now
+    };
+  }
   deleteVectorStorage(vectorStorageId, createdBy) {
     const result = this.database.prepare(
       `
@@ -1625,6 +1684,13 @@ class DatabaseService {
         createdBy
       );
     }
+    if (Array.isArray(payload.tagIds)) {
+      this.replaceVectorStorageTags(
+        vectorStorageId,
+        payload.tagIds,
+        createdBy
+      );
+    }
     return this.getVectorStorageById(vectorStorageId, createdBy);
   }
   getVectorStorages(createdBy) {
@@ -1658,6 +1724,16 @@ class DatabaseService {
                   AND vsp.vector_storage_id IN (${placeholders})
                 `
     ).all(createdBy, ...storageIds);
+    const tagRelationRows = this.database.prepare(
+      `
+                SELECT vst.vector_storage_id, t.id AS tag_id, t.name AS tag_name, t.created_at, t.updated_at
+                FROM vector_storage_tags vst
+                JOIN vector_tags t ON t.id = vst.tag_id AND t.created_by = vst.created_by
+                WHERE vst.created_by = ?
+                  AND vst.vector_storage_id IN (${placeholders})
+                ORDER BY t.name COLLATE NOCASE ASC
+                `
+    ).all(createdBy, ...storageIds);
     const fileIdsByStorageId = /* @__PURE__ */ new Map();
     for (const row of fileRelationRows) {
       const current = fileIdsByStorageId.get(row.vector_storage_id) ?? [];
@@ -1675,6 +1751,17 @@ class DatabaseService {
       });
       projectRefsByStorageId.set(row.vector_storage_id, current);
     }
+    const tagsByStorageId = /* @__PURE__ */ new Map();
+    for (const row of tagRelationRows) {
+      const current = tagsByStorageId.get(row.vector_storage_id) ?? [];
+      current.push({
+        id: row.tag_id,
+        name: row.tag_name,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      });
+      tagsByStorageId.set(row.vector_storage_id, current);
+    }
     return storageRows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -1683,6 +1770,7 @@ class DatabaseService {
       lastActiveAt: row.last_active_at,
       createdAt: row.created_at,
       fileIds: fileIdsByStorageId.get(row.id) ?? [],
+      tags: tagsByStorageId.get(row.id) ?? [],
       usedByProjects: projectRefsByStorageId.get(row.id) ?? []
     }));
   }
@@ -1731,6 +1819,49 @@ class DatabaseService {
     );
     for (const projectId of projectIds) {
       insertStmt.run(vectorStorageId, projectId, createdBy);
+    }
+  }
+  replaceVectorStorageTags(vectorStorageId, tagIds, createdBy) {
+    this.database.prepare(
+      `
+                DELETE FROM vector_storage_tags
+                WHERE vector_storage_id = ? AND created_by = ?
+                `
+    ).run(vectorStorageId, createdBy);
+    const normalizedTagIds = [
+      ...new Set(
+        tagIds.map(
+          (tagId) => typeof tagId === "string" ? tagId.trim() : ""
+        ).filter((tagId) => tagId.length > 0)
+      )
+    ];
+    if (!normalizedTagIds.length) {
+      return;
+    }
+    const placeholders = normalizedTagIds.map(() => "?").join(", ");
+    const existingTagRows = this.database.prepare(
+      `
+                SELECT id
+                FROM vector_tags
+                WHERE created_by = ?
+                  AND id IN (${placeholders})
+                `
+    ).all(createdBy, ...normalizedTagIds);
+    if (!existingTagRows.length) {
+      return;
+    }
+    const insertStmt = this.database.prepare(
+      `
+            INSERT OR IGNORE INTO vector_storage_tags (
+                vector_storage_id,
+                tag_id,
+                created_by
+            )
+            VALUES (?, ?, ?)
+            `
+    );
+    for (const row of existingTagRows) {
+      insertStmt.run(vectorStorageId, row.id, createdBy);
     }
   }
   getCacheEntry(key) {
@@ -1885,6 +2016,26 @@ class DatabaseService {
                 FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS vector_tags (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE,
+                UNIQUE(created_by, name)
+            );
+
+            CREATE TABLE IF NOT EXISTS vector_storage_tags (
+                vector_storage_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                PRIMARY KEY(vector_storage_id, tag_id),
+                FOREIGN KEY(vector_storage_id) REFERENCES vector_storages(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES vector_tags(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_dialogs_created_by ON dialogs(created_by);
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
@@ -1896,6 +2047,8 @@ class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_vector_storages_updated_at ON vector_storages(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_vector_storage_files_created_by ON vector_storage_files(created_by);
             CREATE INDEX IF NOT EXISTS idx_vector_storage_projects_created_by ON vector_storage_projects(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_tags_created_by ON vector_tags(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_storage_tags_created_by ON vector_storage_tags(created_by);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
             CREATE INDEX IF NOT EXISTS idx_jobs_created_by ON jobs(created_by);
             CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at DESC);
@@ -2191,6 +2344,14 @@ class UserDataService {
       defaultDataPath,
       vectorStorageId
     );
+  }
+  getVectorTags() {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.getVectorTags(currentUserId);
+  }
+  createVectorTag(name) {
+    const currentUserId = this.userProfileService.getCurrentUserId();
+    return this.databaseService.createVectorTag(currentUserId, name);
   }
   updateVectorStorage(vectorStorageId, payload) {
     const currentUserId = this.userProfileService.getCurrentUserId();
@@ -46028,6 +46189,14 @@ app.whenReady().then(() => {
   ipcMain.handle(
     "app:create-vector-storage",
     () => userDataService.createVectorStorage()
+  );
+  ipcMain.handle(
+    "app:get-vector-tags",
+    () => userDataService.getVectorTags()
+  );
+  ipcMain.handle(
+    "app:create-vector-tag",
+    (_event, name) => userDataService.createVectorTag(name)
   );
   ipcMain.handle(
     "app:delete-vector-storage",

@@ -8,6 +8,7 @@ import type {
     JobRecord,
     SavedFileRecord,
     UpdateVectorStoragePayload,
+    VectorTagRecord,
     VectorStorageRecord,
     VectorStorageUsedByProject,
 } from "../../../src/types/ElectronApi";
@@ -775,6 +776,92 @@ export class DatabaseService {
         return this.getVectorStorageById(normalizedVectorStorageId, createdBy)!;
     }
 
+    getVectorTags(createdBy: string): VectorTagRecord[] {
+        const rows = this.database
+            .prepare(
+                `
+                SELECT id, name, created_at, updated_at
+                FROM vector_tags
+                WHERE created_by = ?
+                ORDER BY updated_at DESC
+                `,
+            )
+            .all(createdBy) as Array<{
+            id: string;
+            name: string;
+            created_at: string;
+            updated_at: string;
+        }>;
+
+        return rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+        }));
+    }
+
+    createVectorTag(createdBy: string, name: string): VectorTagRecord | null {
+        const normalizedName = typeof name === "string" ? name.trim() : "";
+
+        if (!normalizedName) {
+            return null;
+        }
+
+        const existing = this.database
+            .prepare(
+                `
+                SELECT id, name, created_at, updated_at
+                FROM vector_tags
+                WHERE created_by = ?
+                  AND lower(name) = lower(?)
+                LIMIT 1
+                `,
+            )
+            .get(createdBy, normalizedName) as
+            | {
+                  id: string;
+                  name: string;
+                  created_at: string;
+                  updated_at: string;
+              }
+            | undefined;
+
+        if (existing) {
+            return {
+                id: existing.id,
+                name: existing.name,
+                createdAt: existing.created_at,
+                updatedAt: existing.updated_at,
+            };
+        }
+
+        const now = new Date().toISOString();
+        const tagId = `vt_${randomUUID().replace(/-/g, "")}`;
+
+        this.database
+            .prepare(
+                `
+                INSERT INTO vector_tags (
+                    id,
+                    name,
+                    created_at,
+                    updated_at,
+                    created_by
+                )
+                VALUES (?, ?, ?, ?, ?)
+                `,
+            )
+            .run(tagId, normalizedName, now, now, createdBy);
+
+        return {
+            id: tagId,
+            name: normalizedName,
+            createdAt: now,
+            updatedAt: now,
+        };
+    }
+
     deleteVectorStorage(vectorStorageId: string, createdBy: string): boolean {
         const result = this.database
             .prepare(
@@ -870,6 +957,14 @@ export class DatabaseService {
             );
         }
 
+        if (Array.isArray(payload.tagIds)) {
+            this.replaceVectorStorageTags(
+                vectorStorageId,
+                payload.tagIds,
+                createdBy,
+            );
+        }
+
         return this.getVectorStorageById(vectorStorageId, createdBy);
     }
 
@@ -929,6 +1024,25 @@ export class DatabaseService {
             payload_json: string;
         }>;
 
+        const tagRelationRows = this.database
+            .prepare(
+                `
+                SELECT vst.vector_storage_id, t.id AS tag_id, t.name AS tag_name, t.created_at, t.updated_at
+                FROM vector_storage_tags vst
+                JOIN vector_tags t ON t.id = vst.tag_id AND t.created_by = vst.created_by
+                WHERE vst.created_by = ?
+                  AND vst.vector_storage_id IN (${placeholders})
+                ORDER BY t.name COLLATE NOCASE ASC
+                `,
+            )
+            .all(createdBy, ...storageIds) as Array<{
+            vector_storage_id: string;
+            tag_id: string;
+            tag_name: string;
+            created_at: string;
+            updated_at: string;
+        }>;
+
         const fileIdsByStorageId = new Map<string, string[]>();
         for (const row of fileRelationRows) {
             const current = fileIdsByStorageId.get(row.vector_storage_id) ?? [];
@@ -958,6 +1072,18 @@ export class DatabaseService {
             projectRefsByStorageId.set(row.vector_storage_id, current);
         }
 
+        const tagsByStorageId = new Map<string, VectorTagRecord[]>();
+        for (const row of tagRelationRows) {
+            const current = tagsByStorageId.get(row.vector_storage_id) ?? [];
+            current.push({
+                id: row.tag_id,
+                name: row.tag_name,
+                createdAt: row.created_at,
+                updatedAt: row.updated_at,
+            });
+            tagsByStorageId.set(row.vector_storage_id, current);
+        }
+
         return storageRows.map((row) => ({
             id: row.id,
             name: row.name,
@@ -966,6 +1092,7 @@ export class DatabaseService {
             lastActiveAt: row.last_active_at,
             createdAt: row.created_at,
             fileIds: fileIdsByStorageId.get(row.id) ?? [],
+            tags: tagsByStorageId.get(row.id) ?? [],
             usedByProjects: projectRefsByStorageId.get(row.id) ?? [],
         }));
     }
@@ -1038,6 +1165,66 @@ export class DatabaseService {
 
         for (const projectId of projectIds) {
             insertStmt.run(vectorStorageId, projectId, createdBy);
+        }
+    }
+
+    private replaceVectorStorageTags(
+        vectorStorageId: string,
+        tagIds: string[],
+        createdBy: string,
+    ): void {
+        this.database
+            .prepare(
+                `
+                DELETE FROM vector_storage_tags
+                WHERE vector_storage_id = ? AND created_by = ?
+                `,
+            )
+            .run(vectorStorageId, createdBy);
+
+        const normalizedTagIds = [
+            ...new Set(
+                tagIds
+                    .map((tagId) =>
+                        typeof tagId === "string" ? tagId.trim() : "",
+                    )
+                    .filter((tagId) => tagId.length > 0),
+            ),
+        ];
+
+        if (!normalizedTagIds.length) {
+            return;
+        }
+
+        const placeholders = normalizedTagIds.map(() => "?").join(", ");
+        const existingTagRows = this.database
+            .prepare(
+                `
+                SELECT id
+                FROM vector_tags
+                WHERE created_by = ?
+                  AND id IN (${placeholders})
+                `,
+            )
+            .all(createdBy, ...normalizedTagIds) as Array<{ id: string }>;
+
+        if (!existingTagRows.length) {
+            return;
+        }
+
+        const insertStmt = this.database.prepare(
+            `
+            INSERT OR IGNORE INTO vector_storage_tags (
+                vector_storage_id,
+                tag_id,
+                created_by
+            )
+            VALUES (?, ?, ?)
+            `,
+        );
+
+        for (const row of existingTagRows) {
+            insertStmt.run(vectorStorageId, row.id, createdBy);
         }
     }
 
@@ -1210,6 +1397,26 @@ export class DatabaseService {
                 FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS vector_tags (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE,
+                UNIQUE(created_by, name)
+            );
+
+            CREATE TABLE IF NOT EXISTS vector_storage_tags (
+                vector_storage_id TEXT NOT NULL,
+                tag_id TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                PRIMARY KEY(vector_storage_id, tag_id),
+                FOREIGN KEY(vector_storage_id) REFERENCES vector_storages(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES vector_tags(id) ON DELETE CASCADE,
+                FOREIGN KEY(created_by) REFERENCES profiles(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_dialogs_created_by ON dialogs(created_by);
             CREATE INDEX IF NOT EXISTS idx_dialogs_updated_at ON dialogs(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
@@ -1221,6 +1428,8 @@ export class DatabaseService {
             CREATE INDEX IF NOT EXISTS idx_vector_storages_updated_at ON vector_storages(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_vector_storage_files_created_by ON vector_storage_files(created_by);
             CREATE INDEX IF NOT EXISTS idx_vector_storage_projects_created_by ON vector_storage_projects(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_tags_created_by ON vector_tags(created_by);
+            CREATE INDEX IF NOT EXISTS idx_vector_storage_tags_created_by ON vector_storage_tags(created_by);
             CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
             CREATE INDEX IF NOT EXISTS idx_jobs_created_by ON jobs(created_by);
             CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at DESC);

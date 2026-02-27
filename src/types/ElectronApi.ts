@@ -99,6 +99,13 @@ export type VectorStorageUsedByProject = {
     title: string;
 };
 
+export type VectorTagRecord = {
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+};
+
 export type VectorStorageRecord = {
     id: string;
     name: string;
@@ -107,6 +114,7 @@ export type VectorStorageRecord = {
     lastActiveAt: string;
     createdAt: string;
     fileIds: string[];
+    tags: VectorTagRecord[];
     usedByProjects: VectorStorageUsedByProject[];
 };
 
@@ -126,6 +134,7 @@ export type UpdateVectorStoragePayload = {
     lastActiveAt?: string;
     fileIds?: string[];
     projectIds?: string[];
+    tagIds?: string[];
 };
 
 export type SaveImageFromSourcePayload = {
@@ -321,6 +330,8 @@ export type AppApiScenariosNamespace = {
 export type AppApiVectorStoragesNamespace = {
     getVectorStorages: () => Promise<VectorStorageRecord[]>;
     createVectorStorage: () => Promise<VectorStorageRecord>;
+    getVectorTags: () => Promise<VectorTagRecord[]>;
+    createVectorTag: (name: string) => Promise<VectorTagRecord | null>;
     updateVectorStorage: (
         vectorStorageId: string,
         payload: UpdateVectorStoragePayload,

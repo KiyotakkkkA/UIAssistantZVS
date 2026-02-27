@@ -5,6 +5,7 @@ import { Icon } from "@iconify/react";
 import { useJobs, useToasts, useVectorStorage } from "../../../hooks";
 import { useFileSave, useUpload } from "../../../hooks/files";
 import {
+    AutoFillSelector,
     Button,
     InputCheckbox,
     InputSmall,
@@ -15,6 +16,7 @@ import { StoredFileCard } from "../../components/molecules/cards/storage";
 import { LoadingFallbackPage } from "../LoadingFallbackPage";
 import { storageStore } from "../../../stores/storageStore";
 import type { UploadedFileData } from "../../../types/ElectronApi";
+import { PrettyBR } from "../../components/atoms/PrettyBR";
 
 type StorageView = "files" | "vector-stores";
 
@@ -35,13 +37,15 @@ const STORAGE_VIEW_OPTIONS: { value: StorageView; label: string }[] = [
 export const StoragePage = observer(function StoragePage() {
     const toasts = useToasts();
     const { createJob } = useJobs();
-    const { createVectorStorage, deleteVectorStorage } = useVectorStorage();
+    const { createVectorStorage, createVectorTag, deleteVectorStorage } =
+        useVectorStorage();
     const { pickFiles, pickPath, isUploading, isPickingPath } = useUpload();
-    const { openFile, deleteFile } = useFileSave();
+    const { openFile, deleteFile, openPath } = useFileSave();
     const navigate = useNavigate();
     const [activeView, setActiveView] = useState<StorageView>("files");
     const [fileSearchQuery, setFileSearchQuery] = useState("");
     const [vectorSearchQuery, setVectorSearchQuery] = useState("");
+    const [vectorTagFilters, setVectorTagFilters] = useState<string[]>([]);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [isStorageFilesPickOpen, setIsStorageFilesPickOpen] = useState(false);
     const [storageFilesSearchQuery, setStorageFilesSearchQuery] = useState("");
@@ -51,13 +55,25 @@ export const StoragePage = observer(function StoragePage() {
     const [preparedVectorFiles, setPreparedVectorFiles] = useState<
         PreparedVectorFile[]
     >([]);
+    const [editableVectorStorageName, setEditableVectorStorageName] =
+        useState("");
+    const [isVectorStorageNameSaving, setIsVectorStorageNameSaving] =
+        useState(false);
+    const [newVectorTagName, setNewVectorTagName] = useState("");
+    const [isVectorTagSaving, setIsVectorTagSaving] = useState(false);
     const files = storageStore.files;
     const vectorStorages = storageStore.vectorStorages;
+    const selectedVectorStorage = storageStore.selectedVectorStorage;
 
     useEffect(() => {
         void storageStore.loadFilesData();
         void storageStore.loadVectorStoragesData();
+        void storageStore.loadVectorTagsData();
     }, []);
+
+    useEffect(() => {
+        setEditableVectorStorageName(selectedVectorStorage?.name ?? "");
+    }, [selectedVectorStorage?.id, selectedVectorStorage?.name]);
 
     const formatFileSize = (bytes: number) => {
         if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -108,17 +124,41 @@ export const StoragePage = observer(function StoragePage() {
 
     const filteredVectorStorages = useMemo(() => {
         const normalizedQuery = vectorSearchQuery.trim().toLowerCase();
-
-        if (!normalizedQuery) {
-            return vectorStorages;
-        }
+        const selectedTagIds = new Set(vectorTagFilters);
 
         return vectorStorages.filter((vectorStorage) => {
+            if (selectedTagIds.size > 0) {
+                const storageTagIds = new Set(
+                    (vectorStorage.tags ?? []).map((tag) => tag.id),
+                );
+
+                const hasAllTags = Array.from(selectedTagIds).every((tagId) =>
+                    storageTagIds.has(tagId),
+                );
+
+                if (!hasAllTags) {
+                    return false;
+                }
+            }
+
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            const tagsText = vectorStorage.tags
+                ? vectorStorage.tags.map((tag) => tag.name).join(" ")
+                : "";
             const haystack =
-                `${vectorStorage.name} ${vectorStorage.id}`.toLowerCase();
+                `${vectorStorage.name} ${vectorStorage.id} ${tagsText}`.toLowerCase();
             return haystack.includes(normalizedQuery);
         });
-    }, [vectorSearchQuery, vectorStorages]);
+    }, [vectorSearchQuery, vectorStorages, vectorTagFilters]);
+
+    const vectorTagOptions = storageStore.vectorTags.map((tag) => ({
+        value: tag.id,
+        label: tag.name,
+        description: tag.id,
+    }));
 
     const filteredStorageFilesForPick = useMemo(() => {
         const normalizedQuery = storageFilesSearchQuery.trim().toLowerCase();
@@ -402,6 +442,132 @@ export const StoragePage = observer(function StoragePage() {
         });
     };
 
+    const openVectorStorageFolder = async () => {
+        const selectedVectorStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedVectorStorage) {
+            toasts.info({
+                title: "Стор не выбран",
+                description: "Выберите векторное хранилище.",
+            });
+            return;
+        }
+
+        const dataPath = selectedVectorStorage.dataPath.trim();
+
+        if (!dataPath) {
+            toasts.warning({
+                title: "Путь к данным не задан",
+                description: "У этого хранилища нет пути к индексу.",
+            });
+            return;
+        }
+
+        const isOpened = await openPath(dataPath);
+
+        if (isOpened) {
+            return;
+        }
+
+        toasts.warning({
+            title: "Не удалось открыть папку",
+            description: "Папка недоступна или была перемещена.",
+        });
+    };
+
+    const saveVectorStorageName = async () => {
+        const selectedVectorStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedVectorStorage) {
+            return;
+        }
+
+        const normalizedName = editableVectorStorageName.trim();
+
+        if (!normalizedName) {
+            toasts.info({
+                title: "Название пустое",
+                description: "Введите название хранилища.",
+            });
+            return;
+        }
+
+        if (normalizedName === selectedVectorStorage.name) {
+            return;
+        }
+
+        try {
+            setIsVectorStorageNameSaving(true);
+            const updated = await storageStore.updateVectorStorage(
+                selectedVectorStorage.id,
+                {
+                    name: normalizedName,
+                },
+            );
+
+            toasts.success({
+                title: "Успех!",
+                description: "Название хранилища было обновлено.",
+            });
+
+            if (!updated) {
+                toasts.warning({
+                    title: "Не удалось обновить название",
+                    description: "Попробуйте ещё раз.",
+                });
+            }
+        } finally {
+            setIsVectorStorageNameSaving(false);
+        }
+    };
+
+    const createStorageTag = async () => {
+        const normalizedName = newVectorTagName.trim();
+
+        if (!normalizedName) {
+            toasts.info({
+                title: "Название тега пустое",
+                description: "Введите название тега.",
+            });
+            return;
+        }
+
+        try {
+            setIsVectorTagSaving(true);
+            const created = await createVectorTag(normalizedName);
+
+            if (!created) {
+                return;
+            }
+
+            setNewVectorTagName("");
+        } finally {
+            setIsVectorTagSaving(false);
+        }
+    };
+
+    const updateSelectedStorageTags = async (tagIds: string[]) => {
+        const selectedVectorStorage = storageStore.selectedVectorStorage;
+
+        if (!selectedVectorStorage) {
+            return;
+        }
+
+        const updated = await storageStore.updateVectorStorage(
+            selectedVectorStorage.id,
+            {
+                tagIds,
+            },
+        );
+
+        if (!updated) {
+            toasts.warning({
+                title: "Не удалось обновить теги",
+                description: "Попробуйте ещё раз.",
+            });
+        }
+    };
+
     const isActiveViewLoading =
         activeView === "files"
             ? storageStore.isFilesLoading
@@ -588,6 +754,12 @@ export const StoragePage = observer(function StoragePage() {
                                 }
                                 placeholder="Поиск векторного хранилища..."
                             />
+                            <AutoFillSelector
+                                options={vectorTagOptions}
+                                value={vectorTagFilters}
+                                onChange={setVectorTagFilters}
+                                placeholder="Фильтр по тегам"
+                            />
 
                             <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                                 {filteredVectorStorages.length > 0 ? (
@@ -643,7 +815,7 @@ export const StoragePage = observer(function StoragePage() {
                                             ?.name || "Без названия"}
                                     </h3>
                                 </div>
-                                <div className="space-x-2">
+                                <div className="flex flex-wrap items-center justify-end gap-2">
                                     <Button
                                         variant="success"
                                         shape="rounded-full"
@@ -663,7 +835,7 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="secondary"
-                                        shape="rounded-l-full"
+                                        shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             void addFilesFromExplorer();
@@ -680,7 +852,7 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="secondary"
-                                        shape="rounded-r-full"
+                                        shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             setPickedStorageFileIds(
@@ -702,6 +874,22 @@ export const StoragePage = observer(function StoragePage() {
                                         shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
+                                            void openVectorStorageFolder();
+                                        }}
+                                    >
+                                        <Icon
+                                            icon="mdi:folder-open-outline"
+                                            width={16}
+                                        />
+                                        <span className="ml-1">
+                                            Открыть папку
+                                        </span>
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        shape="rounded-full"
+                                        className="h-8 px-3 text-xs"
+                                        onClick={() => {
                                             void changeVectorStorageDataPath();
                                         }}
                                         disabled={isPickingPath}
@@ -716,7 +904,7 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="primary"
-                                        shape="rounded-l-full"
+                                        shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             void createVectorStorage();
@@ -729,7 +917,7 @@ export const StoragePage = observer(function StoragePage() {
                                     </Button>
                                     <Button
                                         variant="danger"
-                                        shape="rounded-r-full"
+                                        shape="rounded-full"
                                         className="h-8 px-3 text-xs"
                                         onClick={() => {
                                             openDeleteConfirmModal();
@@ -745,6 +933,85 @@ export const StoragePage = observer(function StoragePage() {
 
                             {storageStore.selectedVectorStorage ? (
                                 <>
+                                    <div className="rounded-xl bg-main-900/45">
+                                        <p className="text-xs text-main-400">
+                                            Название хранилища
+                                        </p>
+                                        <div className="mt-2 flex items-center gap-2">
+                                            <InputSmall
+                                                value={
+                                                    editableVectorStorageName
+                                                }
+                                                onChange={(event) =>
+                                                    setEditableVectorStorageName(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                placeholder="Введите название"
+                                            />
+                                            <Button
+                                                variant="primary"
+                                                shape="rounded-lg"
+                                                className="h-9 px-3 text-xs shrink-0"
+                                                onClick={() => {
+                                                    void saveVectorStorageName();
+                                                }}
+                                                disabled={
+                                                    isVectorStorageNameSaving
+                                                }
+                                            >
+                                                Сохранить
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <PrettyBR label="Теги" icon="mdi:tag" />
+
+                                    <div className="mt-4 rounded-xl bg-main-900/45">
+                                        <div className="mt-3 flex items-center gap-2">
+                                            <InputSmall
+                                                value={newVectorTagName}
+                                                onChange={(event) =>
+                                                    setNewVectorTagName(
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                placeholder="Новый тег"
+                                            />
+                                            <Button
+                                                variant="secondary"
+                                                shape="rounded-lg"
+                                                className="h-9 px-3 text-xs shrink-0"
+                                                onClick={() => {
+                                                    void createStorageTag();
+                                                }}
+                                                disabled={isVectorTagSaving}
+                                            >
+                                                Добавить тег
+                                            </Button>
+                                        </div>
+                                        <AutoFillSelector
+                                            className="mt-3"
+                                            options={vectorTagOptions}
+                                            value={(
+                                                storageStore
+                                                    .selectedVectorStorage
+                                                    .tags ?? []
+                                            ).map((tag) => tag.id)}
+                                            onChange={(nextTagIds) => {
+                                                void updateSelectedStorageTags(
+                                                    nextTagIds,
+                                                );
+                                            }}
+                                            placeholder="Назначьте теги хранилищу"
+                                        />
+                                    </div>
+
+                                    <PrettyBR
+                                        label="Детали хранилища"
+                                        icon="mdi:information-outline"
+                                    />
+
                                     <div className="grid grid-cols-[180px_1fr] gap-y-2 text-sm">
                                         <p className="text-main-400">ID</p>
                                         <p className="text-main-200">
@@ -807,7 +1074,12 @@ export const StoragePage = observer(function StoragePage() {
                                         .
                                     </div>
 
-                                    <div className="mt-8 rounded-xl border border-main-700/70 bg-main-900/45 p-3">
+                                    <PrettyBR
+                                        label="Содержимое хранилища"
+                                        icon="mdi:database"
+                                    />
+
+                                    <div className="mt-4 rounded-xl border border-main-700/70 bg-main-900/45 p-3">
                                         <h4 className="text-sm font-semibold text-main-100">
                                             Подготовленные файлы
                                         </h4>

@@ -138,6 +138,9 @@ const appApi: AppApi = {
         getVectorStorages: () => ipcRenderer.invoke("app:get-vector-storages"),
         createVectorStorage: () =>
             ipcRenderer.invoke("app:create-vector-storage"),
+        getVectorTags: () => ipcRenderer.invoke("app:get-vector-tags"),
+        createVectorTag: (name: string) =>
+            ipcRenderer.invoke("app:create-vector-tag", name),
         updateVectorStorage: (vectorStorageId: string, payload) =>
             ipcRenderer.invoke(
                 "app:update-vector-storage",
